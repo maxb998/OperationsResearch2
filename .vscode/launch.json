@@ -1,0 +1,26 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type":"cppdbg",
+            "name": "Launch Debug",
+            "preLaunchTask": "Build Debug",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/debug/main",
+            "args": ["--file", "data/att48.tsp", "--seed", "2023", "--threads", "4"],
+            "cwd": "${workspaceFolder}"
+       },
+       {
+        "type":"cppdbg",
+        "name": "Launch Exec",
+        "preLaunchTask": "Build Exec",
+        "request": "launch",
+        "program": "${workspaceFolder}/bin/x64/main",
+        "args": ["--file", "data/att48.tsp", "--seed", "2023", "--threads", "4"],
+        "cwd": "${workspaceFolder}"
+        }
+    ]
+}
