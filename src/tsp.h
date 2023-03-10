@@ -10,10 +10,8 @@
 #include <pthread.h>    // for multithreadin
 #include <immintrin.h>  // for avx simd instructions
 
-//#define VERBOSE 10
-const int VERBOSE = 150; // printing level  (=10 only incumbent, =20 little output, =50-60 good, =70 verbose, >=100 cplex log)
-const double smallX = 1e-6;
-const double epsilon = 1e-9;
+#define SMALLX 1e-6
+#define EPSILON 1e-9
 
 // data structures
 typedef struct
