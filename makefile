@@ -29,7 +29,7 @@ utilities.o_DEBUG: src/utilities.c src/utilities.h
 
 # build options when testing performance
 buildExec: main.o_EXEC utilities.o_EXEC
-	$(CC) $(CFLAGS_EXEC) $(OBJ_EXEC)/main.o $(OBJ_EXEC)/utilities.o -o $(BIN_EXEC)/main
+	$(CC) $(LDFLAGS_EXEC) $(OBJ_EXEC)/main.o $(OBJ_EXEC)/utilities.o -o $(BIN_EXEC)/main
 
 main.o_EXEC: src/main.c $(HEADERS)
 	$(CC) $(CFLAGS_EXEC) src/main.c -o $(OBJ_EXEC)/main.o
@@ -40,5 +40,5 @@ utilities.o_EXEC: src/utilities.c src/utilities.h
 
 # delete all gcc output files
 clean:
-	rm -f $(BIN_DEBUG)/* $(BIN_EXEC)/*
+	rm -f $(BIN_DEBUG)/main $(BIN_EXEC)/main
 	rm -f $(OBJ_DEBUG)/*.o $(OBJ_EXEC)/*.o

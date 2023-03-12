@@ -8,11 +8,12 @@
 #include <time.h>
 #include <string.h>
 #include <getopt.h>
+#include <limits.h>
  
 #include "tsp.h"
 
 enum logLevel{
-	LOG_LVL_NONE, // 0
+	LOG_LVL_ERROR, // 0
 	LOG_LVL_CRITICAL, // 1
 	LOG_LVL_WARNING, // 2
 	LOG_LVL_NOTICE, // 3
