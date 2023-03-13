@@ -47,13 +47,12 @@ typedef struct
     int edgeWeightType;
     int randomSeed;
     char inputFile[1000];
-    int threadsCount;
+    size_t threadsCount;
     int useAVX;
 } Parameters;
 
 typedef struct
 {
-    pthread_mutex_t mutex;
     double bestCost;    // best solution found cost
     int *bestSolution;  // array containing sequence of nodes representing the optimal solution
 } GlobalData;
@@ -97,9 +96,12 @@ void readFile (Instance *d);
 
 #endif //TSP_UTILITIES
 
-#ifndef TSP_COMMON_FUNCTIONS
-#define TSP_COMMON_FUNCTIONS
+#ifndef TSP
+#define TSP
 
-int computeDistanceMatrix(Instance *d);
+#define MAX_THREADS 255
+#define AVX_VEC_SIZE 4
 
-#endif //TSP_COMMON_FUNCTIONS
+int computeSquaredDistanceMatrix(Instance *d);
+
+#endif //TSP

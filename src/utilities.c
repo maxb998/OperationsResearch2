@@ -116,7 +116,7 @@ void parseArgs (Instance *d, int argc, char *argv[])
             break;
         
         case 't':
-            d->params.threadsCount = atoi(optarg);
+            d->params.threadsCount = strtoul(optarg, NULL, 10);
             break;
 
         case 'a':
