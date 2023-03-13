@@ -1,14 +1,25 @@
-#ifndef TSP_H
-#define TSP_H
+#ifndef TSP_INCLUDES
+#define TSP_INCLUDES
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
-#include <stdlib.h>
-#include <string.h> 
-#include <stdio.h>
+#include <unistd.h>
+#include <time.h>
+#include <string.h>
+
+#include <stdarg.h> // used for logger va_list
+#include <getopt.h> // args parsing by POSIX
+#include <limits.h> // used to get hard limits mainly to do error checking(like overflows and such)
 
 #include <pthread.h>    // for multithreadin
 #include <immintrin.h>  // for avx simd instructions
+
+#endif //TSP_INCLUDES
+
+
+#ifndef TSP_DATA_STRUCTURES
+#define TSP_DATA_STRUCTURES
 
 #define SMALLX 1e-6
 #define EPSILON 1e-9
@@ -42,6 +53,7 @@ typedef struct
 
 typedef struct
 {
+    pthread_mutex_t mutex;
     double bestCost;    // best solution found cost
     int *bestSolution;  // array containing sequence of nodes representing the optimal solution
 } GlobalData;
@@ -62,6 +74,32 @@ typedef struct
     
 } Instance;
 
+#endif //TSP_DATA_STRUCTURES
 
+#ifndef TSP_UTILITIES
+#define TSP_UTILITIES
 
-#endif //TSP_H
+enum logLevel{
+	LOG_LVL_ERROR, // 0
+	LOG_LVL_CRITICAL, // 1
+	LOG_LVL_WARNING, // 2
+	LOG_LVL_NOTICE, // 3
+	LOG_LVL_LOG, // 4
+	LOG_LVL_DEBUG, // 5
+	LOG_LVL_EVERYTHING // 6
+};
+
+int LOG (enum logLevel lvl, char * line, ...);
+
+void parseArgs (Instance *d, int argc, char *argv[]);
+
+void readFile (Instance *d);
+
+#endif //TSP_UTILITIES
+
+#ifndef TSP_COMMON_FUNCTIONS
+#define TSP_COMMON_FUNCTIONS
+
+int computeDistanceMatrix(Instance *d);
+
+#endif //TSP_COMMON_FUNCTIONS

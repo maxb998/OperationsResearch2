@@ -1,4 +1,4 @@
-#include "utilities.h"
+#include "tsp.h"
 
 static enum logLevel globLVL = LOG_LVL_EVERYTHING;
 
@@ -133,7 +133,6 @@ void parseArgs (Instance *d, int argc, char *argv[])
     LOG(LOG_LVL_NOTICE,"    Filename     = %s", d->params.inputFile);
     LOG(LOG_LVL_NOTICE,"    Thread Count = %d", d->params.threadsCount);
 }
-
 
 
 void readFile (Instance *d)
