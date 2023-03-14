@@ -270,9 +270,9 @@ void readFile (Instance *d)
             LOG(LOG_LVL_ERROR, "Important keyword \"%s\" has not been found/detected in the tsp file. Check the .tsp file", keywords[i]);
 
     // allocate memory
-    size_t memAllcSizeForAvx = (d->nodesCount + (4 - d->nodesCount % 4)) * sizeof(double);    // 4 is the number of elements contained in the 256bits vector of AVX2. Using double 64 bits it's possible to fit 4 numbers
-    d->X = aligned_alloc(32, memAllcSizeForAvx);
-    d->Y = aligned_alloc(32, memAllcSizeForAvx);
+    size_t memElemsToAlloc = d->nodesCount + AVX_VEC_SIZE - d->nodesCount % AVX_VEC_SIZE;
+    d->X = aligned_alloc(32, memElemsToAlloc * sizeof(double));
+    d->Y = aligned_alloc(32, memElemsToAlloc * sizeof(double));
 
     // fill the memory with data
     size_t i = 0;
