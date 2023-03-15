@@ -288,7 +288,16 @@ void readFile (Instance *d)
 
 void getNameFromFile(char * line, int lineSize, char out[])
 {
-    //char * nameBegin = strtok
+    memset(out, 0, 200); // set name array to 0
+
+    char * nameBegin = strchr(line, ':');
+    if (*(nameBegin+1) == ' ') 
+        nameBegin += 2;
+
+    int nameLen = lineSize + line - nameBegin - 1;
+    if (nameLen > 200)
+        LOG(LOG_LVL_ERROR, "Name lenght exceeds 200 characters");
+    memcpy(out, nameBegin, nameLen);
 }
 
 void checkFileType(char * line, int lineSize)
