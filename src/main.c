@@ -2,7 +2,7 @@
 
 int main (int argc, char *argv[])
 {
-    Instance d; d.params.useAVX = 0;    // avx disabled by default
+    Instance d;
     parseArgs(&d, argc, argv);
     readFile(&d);
 
@@ -12,7 +12,7 @@ int main (int argc, char *argv[])
     
     LOG(LOG_LVL_LOG, "Distance Matrix Done");
 
-    printDistanceMatrix(&d, 1);
+    //printDistanceMatrix(&d, 1);
 
     return EXIT_SUCCESS;
 }

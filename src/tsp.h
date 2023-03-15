@@ -44,12 +44,11 @@ enum edgeWeightType{
 // data structures
 typedef struct
 {
-    //int computeDistFirst;
     int edgeWeightType;
     int randomSeed;
     char inputFile[1000];
+	char name[200];
     size_t threadsCount;
-    int useAVX;
 } Parameters;
 
 typedef struct
@@ -73,7 +72,6 @@ typedef struct
     double *Y;
     //double *coords;     // all x first and then the y
     EdgeCostMatStruct edgeCost;   // matrix with the cost of all edges (can use -1 if edge does not exists)
-	
 
     Parameters params;
     
