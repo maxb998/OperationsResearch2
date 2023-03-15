@@ -285,6 +285,86 @@ void readFile (Instance *d)
         LOG(LOG_LVL_DEBUG, "Node %3lu: [%.2lf, %.2lf]", i+1, d->X[i], d->Y[i]);
 }
 
+
+void getNameFromFile(char * line, int lineSize, char out[])
+{
+    //char * nameBegin = strtok
+}
+
+void checkFileType(char * line, int lineSize)
+{
+    // here check if last 3 charaters(excludiing the '\n') are "TSP"
+    char substr[3] = {0};
+    memcpy(substr, &line[lineSize - 4], 3); // generate substring of 3 chars for logging/debugging purposes
+    LOG(LOG_LVL_EVERYTHING, "Checking file TYPE keyword: comparing \"TSP\" with what is found at the of the line which is:%s", substr);
+    if (strncmp(&line[lineSize - 4], "TSP", 3) != 0)
+        LOG(LOG_LVL_ERROR, "The file is either not of type TSP, or there are some characters (even blank spaces) after \"TSP\" and before the next line. \n\
+                                     Check that the file used in input is of the correct type and correctly formatted. Only \"TSP\" files are currently supported");
+}
+
+size_t getDimensionFromLine(char * line, int lineSize)
+{
+    // first find the pointer to the first number part of line and then convert it to integer checking for all errors
+    char *numberFirstChar = strchr(line, ':');
+
+    if (*(numberFirstChar + 1) == ' ')
+        numberFirstChar += 2;
+    else
+        numberFirstChar++;
+    // now numberFirstChar should be pointing to the first character that makes the decimal number in line
+    LOG(LOG_LVL_EVERYTHING, "Getting the number of nodes from file: the first character of the number is:%c", *numberFirstChar);
+
+    char *endPtr = NULL;
+    size_t dimension = strtoul(numberFirstChar, &endPtr, 10);
+
+    // check for errors on conversion
+    if (endPtr == numberFirstChar)
+        LOG(LOG_LVL_ERROR, "Converting dimension number from file: first character that was supposed to be a number is not a number. \n\
+                                        Dimension line in file is supposed to look like \"DIMENSION : <NUMBER>\" with just one separator \':\' and at most a \' \' after it before the numeric value");
+    if (endPtr != &line[lineSize - 1])
+        LOG(LOG_LVL_ERROR, "Converting dimension number from file: there are unrecognized character before end of line with keyword DIMENSION");
+
+    // check for error on converted number
+    if (dimension == 0)
+        LOG(LOG_LVL_ERROR, "Could not properly convert dimension number in tsp file");
+    if (dimension == ULONG_MAX)
+        LOG(LOG_LVL_ERROR, "Dimension value in file is too great. Either too much data(unlikely) or the dimension value is wrong");
+
+    return dimension;
+}
+
+size_t getEdgeWeightTypeFromLine(char * line, int lineSize)
+{
+    // first find the pointer to the weight type descriptor
+    char *firstWgtTypePtr = strchr(line, ':');
+
+    if (*(firstWgtTypePtr + 1) == ' ')
+        firstWgtTypePtr += 2;
+    else
+        firstWgtTypePtr++;
+
+    // now firstEdgeTypePtr should be pointing to the first character that describes the weight type
+    LOG(LOG_LVL_EVERYTHING, "Getting the edge weight type from file: the first character of the weight type is:%c", *firstWgtTypePtr);
+
+    int foundEdgeWeightTypeID = -1;
+    for (size_t i = 0; i < EDGE_WEIGHT_TYPES_COUNT; i++)
+    {
+        size_t wgtTypeStrLen = strlen(wgtTypeStr[i]);
+
+        if (strncmp(firstWgtTypePtr, wgtTypeStr[i], wgtTypeStrLen) == 0)
+        {
+            foundEdgeWeightTypeID = i;
+            break;
+        }
+    }
+
+    // check if no match has been found
+    if (foundEdgeWeightTypeID == -1)
+        LOG(LOG_LVL_ERROR, "Getting the edge weight type from file: Could not identify the \"EDGE_WEIGTH_TYPE property\"");
+
+    return foundEdgeWeightTypeID;
+}
+
 void saveSolution(Instance *d)
 {  
     // create file for the solution
