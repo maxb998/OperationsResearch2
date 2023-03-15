@@ -1,22 +1,42 @@
 #include "tsp.h"
 
-
-// MAX_THWORKSPACE MUST BE A MULTIPLE OF 4 (the 64 is chosen arbitrarly)
-#define MAX_THWORSKPACE 4 * 64
-
 typedef struct
 {
     Instance *d;
     pthread_mutex_t mutex;
-    size_t nextRow;
-    //size_t thWorkspace;
+    size_t nextRow; // only value that needs critical region, used to select the row on which the thread will work on
 } ThreadedInstance;
+
+
 
 
 //int distMatIntegerW(Instance *d);
 
+
 // method to compute edges weights with multiple threads using AVX2 instructions
 static void * computeSqDistMatThread(void * d);
+
+
+
+
+
+
+// #############################################################################################################
+// DISTANCE FUNCTIONS
+
+#define euclideanDist2D(x1,y1,xDiff,yDiff,dist,i) xDiff = _mm256_sub_ps(x1, _mm256_load_ps(&th->d->X[i]));\
+            yDiff = _mm256_sub_ps(y1, _mm256_load_ps(&th->d->Y[i]));\
+            dist = _mm256_add_ps(_mm256_mul_ps(xDiff, xDiff), _mm256_mul_ps(yDiff, yDiff));
+
+#define euclideanDist3D(x1,y1,z1,xDiff,yDiff,zDiff,dist,i) xDiff = _mm256_sub_ps(x1, _mm256_load_ps(&th->d->X[i]));\
+            yDiff = _mm256_sub_ps(y1, _mm256_load_ps(&th->d->Y[i]));\
+            zDiff = _mm256_sub_ps(z1, _mm256_load_ps(&th->d->Z[i]));\
+            dist = _mm256_add_ps(_mm256_mul_ps(xDiff, xDiff), _mm256_mul_ps(yDiff, yDiff));\
+            dist = _mm256_add_ps(dist, _mm256_mul_ps(zDiff, zDiff));
+
+
+// #############################################################################################################
+
 
 
 
@@ -39,6 +59,8 @@ void printDistanceMatrix(Instance *d, int showEndRowPlaceholder)
             printf("%.2e ", d->edgeCost.mat[row * d->edgeCost.rowSizeMem + col]);
         printf("\n");
     }
+
+    
     
 }
 
@@ -57,9 +79,13 @@ int computeSquaredDistanceMatrix(Instance *d)
 
     // allocate memory
     size_t n = d->nodesCount;
-    //d->edgeCostMat = aligned_alloc(32, n * n * sizeof(double));
-    d->edgeCost.rowSizeMem = n + AVX_VEC_SIZE - n % AVX_VEC_SIZE;   // way easier to work with avx instructions if each row start pointer is alligned
-    d->edgeCost.mat = aligned_alloc(32, d->edgeCost.rowSizeMem * n * sizeof(double));
+
+    if (n % AVX_VEC_SIZE > 0)
+        d->edgeCost.rowSizeMem = n + AVX_VEC_SIZE - n % AVX_VEC_SIZE;   // way easier to work with avx instructions if each row start pointer is alligned
+    else
+        d->edgeCost.rowSizeMem = n;
+
+    d->edgeCost.mat = aligned_alloc(32, d->edgeCost.rowSizeMem * n * sizeof(float));
 
     // init data structure to pass to threads
     ThreadedInstance thInst = { .d = d, .nextRow = 0 };
@@ -96,34 +122,30 @@ static void * computeSqDistMatThread(void* arg)
     int pthreadMutexErrorID = 0;  // check for mutex errors
     while ( (pthreadMutexErrorID = pthread_mutex_lock(&th->mutex) == 0) && (th->nextRow < th->d->nodesCount) )    // lock mutex before checking nextRow
     {
-        // CRITICAL REGION STARTED(INCLUDING WHILE CONDITION)
+        // CRITICAL REGION STARTED(INCLUDING WHILE CONDITION) ######################
         // here thread gets it's workspace
 
         size_t row = th->nextRow;
         th->nextRow++; // prevent other threads threads to access this thread working row
 
         pthreadMutexErrorID = pthread_mutex_unlock (&th->mutex);
-        // CRITICAL REGION END
+        // CRITICAL REGION END #####################################################
 
         // check errors with mutex
         if (pthreadMutexErrorID != 0) break;
 
         // now the thread can compute the distance matrix inside it's workspace (row)
-        register __m256d x1, y1, xDiff, yDiff, dist;
+        register __m256 x1, y1, xDiff, yDiff, dist;
 
-        x1 = _mm256_set1_pd(th->d->X[row]);
-        y1 = _mm256_set1_pd(th->d->Y[row]);
+        x1 = _mm256_set1_ps(th->d->X[row]);
+        y1 = _mm256_set1_ps(th->d->Y[row]);
 
         for (size_t i = 0; i < n; i += AVX_VEC_SIZE)
         {
-            xDiff = _mm256_sub_pd(x1, _mm256_load_pd(&th->d->X[i]));
-            yDiff = _mm256_sub_pd(y1, _mm256_load_pd(&th->d->Y[i]));
-
-            // square and sum
-            dist = _mm256_add_pd(_mm256_mul_pd(xDiff, xDiff), _mm256_mul_pd(yDiff, yDiff));
+            euclideanDist2D(x1,y1,xDiff,yDiff,dist,i)
 
             // store result in memory
-            _mm256_store_pd(&th->d->edgeCost.mat[row * th->d->edgeCost.rowSizeMem + i], dist);
+            _mm256_store_ps(&th->d->edgeCost.mat[row * th->d->edgeCost.rowSizeMem + i], dist);
         }
         
         // set last elements of the row (the ones that prevents a lot of headackes with avx) to max value of double(so it never gets picked in greedy algorithms)

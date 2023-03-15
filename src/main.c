@@ -2,7 +2,7 @@
 
 int main (int argc, char *argv[])
 {
-    Instance d;
+    Instance d; initInstance(&d);
     parseArgs(&d, argc, argv);
     readFile(&d);
 
@@ -22,9 +22,11 @@ int main (int argc, char *argv[])
         fakeSolution[i] = i;
     }
     d.solution.bestSolution = fakeSolution;
-    saveSolution(&d);
-    plotSolution(&d);    
+    //saveSolution(&d);
+    //plotSolution(&d);    
     //###########################################
+
+    freeInstance(&d);
 
     return EXIT_SUCCESS;
 }

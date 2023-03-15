@@ -21,7 +21,12 @@
 #ifndef TSP_DATA_STRUCTURES
 #define TSP_DATA_STRUCTURES
 
-#define DOUBLE_MAX ((double)1.79769313486231570e+308)
+#define MAX_THREADS 255
+
+// size of avx vector. 4 is vector of doubles 64bits, 8 is vector of floats 32bits
+#define AVX_VEC_SIZE 8
+
+#define DOUBLE_MAX 1.79769313486231570e+308
 #define SMALLX 1e-6
 #define EPSILON 1e-9
 
@@ -53,13 +58,16 @@ typedef struct
 
 typedef struct
 {
-    double bestCost;    // best solution found cost
+    float bestCost;    // best solution found cost
+	int bestRoundedSol;
     int *bestSolution;  // array containing sequence of nodes representing the optimal solution
 } Solution;
 
 typedef struct
 {
-	double * mat;
+	// if we require rounded weights mat will be NULL and roundedMat will point to the allocated matrix
+	float * mat;
+	int * roundedMat;
 	size_t rowSizeMem;
 } EdgeCostMatStruct;
 
@@ -68,8 +76,8 @@ typedef struct
 {
     // data
     size_t nodesCount;
-    double *X;
-    double *Y;
+    float *X;
+    float *Y;
     //double *coords;     // all x first and then the y
     EdgeCostMatStruct edgeCost;   // matrix with the cost of all edges (can use -1 if edge does not exists)
 
@@ -94,6 +102,9 @@ enum logLevel{
 	LOG_LVL_EVERYTHING // 6
 };
 
+void initInstance(Instance *d);
+void freeInstance(Instance *d);
+
 int LOG (enum logLevel lvl, char * line, ...);
 
 void parseArgs (Instance *d, int argc, char *argv[]);
@@ -106,14 +117,11 @@ void plotSolution(Instance *d);
 
 #endif //TSP_UTILITIES
 
-#ifndef TSP
-#define TSP
-
-#define MAX_THREADS 255
-#define AVX_VEC_SIZE 4
+#ifndef DISTANCE_MATRIX
+#define DISTANCE_MATRIX
 
 void printDistanceMatrix(Instance *d, int showEndRowPlaceholder);
 
 int computeSquaredDistanceMatrix(Instance *d);
 
-#endif //TSP
+#endif //DISTANCE_MATRIX

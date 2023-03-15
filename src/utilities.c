@@ -50,11 +50,35 @@ const char * wgtTypeStr[] = {
 #define EDGE_WEIGHT_TYPES_COUNT 12
 
 // file parsing functions
+// gets the string specified in the "NAME" keyword in the file
 void getNameFromFile(char * line, int lineSize, char out[]);
+// checks that the file type is "TSP"
 void checkFileType(char * line, int lineSize);
+// get the value related with the keyword "DIMENSION" and returns it as a size_t
 size_t getDimensionFromLine(char * line, int lineSize);
+// check that the string associated with "EDGE_WEIGHT_TYPE" is correct and return it as a number
 size_t getEdgeWeightTypeFromLine(char * line, int lineSize);
 
+
+void initInstance(Instance *d)
+{
+    d->X = d->Y = d->edgeCost.mat = NULL;
+    d->edgeCost.roundedMat = d->solution.bestSolution = NULL;
+}
+
+void freeInstance(Instance *d)
+{
+    // points
+    if (d->X) free(d->X);
+    if (d->Y) free(d->Y);
+
+    // cost matrix
+    if (d->edgeCost.mat) free(d->edgeCost.mat);
+    if (d->edgeCost.roundedMat) free(d->edgeCost.roundedMat);
+
+    // solution
+    if (d->solution.bestSolution) free(d->solution.bestSolution);
+}
 
 int LOG (enum logLevel lvl, char * line, ...)
 {
@@ -102,7 +126,7 @@ void parseArgs (Instance *d, int argc, char *argv[])
         switch (opt)
         {
         case 's':
-            d->params.randomSeed = atof(optarg);
+            d->params.randomSeed = (int)strtol(optarg, NULL, 10);
             break;
 
         case 'f':
@@ -211,9 +235,9 @@ void readFile (Instance *d)
             LOG(LOG_LVL_ERROR, "Important keyword \"%s\" has not been found/detected in the tsp file. Check the .tsp file", keywords[i]);
 
     // allocate memory
-    size_t memElemsToAlloc = d->nodesCount + AVX_VEC_SIZE - d->nodesCount % AVX_VEC_SIZE;
-    d->X = aligned_alloc(32, memElemsToAlloc * sizeof(double));
-    d->Y = aligned_alloc(32, memElemsToAlloc * sizeof(double));
+    size_t memElemsToAlloc = d->nodesCount + AVX_VEC_SIZE; // allocate more than needed to avoid errors when reading with avx
+    d->X = aligned_alloc(32, memElemsToAlloc * sizeof(float));
+    d->Y = aligned_alloc(32, memElemsToAlloc * sizeof(float));
 
     // fill the memory with data
     size_t i = 0;
@@ -247,32 +271,28 @@ void readFile (Instance *d)
         if (!separatorPtr)
             LOG(LOG_LVL_ERROR, "Space separator at line %lu of file has not been found");
 
-        d->X[i] = strtod(xCoordStrPtr, &endPtr);
+        d->X[i] = strtof(xCoordStrPtr, &endPtr);
 
         if (xCoordStrPtr == endPtr)
             LOG(LOG_LVL_ERROR, "Conversion of X coordinate at line %lu has gone wrong. Check the .tsp file", keywordsLinesCount + i + 1);
         if (endPtr != separatorPtr)
             LOG(LOG_LVL_ERROR, "Conversion of X coordinate at line %lu has gone wrong. There are unwanted characters at the end ", keywordsLinesCount + i + 1);
-        if (d->X[i] == HUGE_VAL)
+        if (fabsf(d->X[i]) == HUGE_VALF)
             LOG(LOG_LVL_ERROR, "Coordinate X at line %lu has caused overflow", keywordsLinesCount + i + 1);
-        if (d->X[i] == __DBL_MIN__)
-            LOG(LOG_LVL_ERROR, "Coordinate X at line %lu has caused underflow", keywordsLinesCount + i + 1);
 
         char * yCoordStrPtr = separatorPtr + 1;
         separatorPtr = strchr(yCoordStrPtr, '\n');
         if (!separatorPtr)
             LOG(LOG_LVL_ERROR, "'\n' at line %lu of file has not been found");
         
-        d->Y[i] = strtod(yCoordStrPtr, &endPtr);
+        d->Y[i] = strtof(yCoordStrPtr, &endPtr);
 
         if (yCoordStrPtr == endPtr)
             LOG(LOG_LVL_ERROR, "Conversion of Y coordinate at line %lu has gone wrong. Check the .tsp file", keywordsLinesCount + i + 1);
         if (endPtr != separatorPtr)
             LOG(LOG_LVL_ERROR, "Conversion of Y coordinate at line %lu has gone wrong. There are unwanted characters at the end ", keywordsLinesCount + i + 1);
-        if (d->Y[i] == HUGE_VAL)
+        if (fabsf(d->Y[i]) == HUGE_VAL)
             LOG(LOG_LVL_ERROR, "Coordinate Y at line %lu has caused overflow", keywordsLinesCount + i + 1);
-        if (d->Y[i] == __DBL_MIN__)
-            LOG(LOG_LVL_ERROR, "Coordinate Y at line %lu has caused underflow", keywordsLinesCount + i + 1);
 
         i++;
     }
@@ -373,6 +393,7 @@ size_t getEdgeWeightTypeFromLine(char * line, int lineSize)
 
     return foundEdgeWeightTypeID;
 }
+
 
 void saveSolution(Instance *d)
 {  
