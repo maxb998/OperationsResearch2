@@ -55,7 +55,7 @@ typedef struct
 {
     double bestCost;    // best solution found cost
     int *bestSolution;  // array containing sequence of nodes representing the optimal solution
-} GlobalData;
+} Solution;
 
 
 typedef struct
@@ -69,7 +69,7 @@ typedef struct
 
     Parameters params;
     
-    GlobalData global;
+    Solution solution;
     
 } Instance;
 
@@ -93,6 +93,10 @@ int LOG (enum logLevel lvl, char * line, ...);
 void parseArgs (Instance *d, int argc, char *argv[]);
 
 void readFile (Instance *d);
+
+void saveSolution(Instance *d);
+
+void plotSolution(Instance *d);
 
 #endif //TSP_UTILITIES
 

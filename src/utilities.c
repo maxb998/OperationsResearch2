@@ -47,7 +47,6 @@ const char * wgtTypeStr[] = {
 };
 #define EDGE_WEIGHT_TYPES_COUNT 12
 
-
 int LOG (enum logLevel lvl, char * line, ...)
 {
     // check log level
@@ -342,4 +341,48 @@ void readFile (Instance *d)
     // print the coordinates data with enough log level
     for (size_t i = 0; i < d->nodesCount; i++)
         LOG(LOG_LVL_DEBUG, "Node %3lu: [%.2lf, %.2lf]", i+1, d->X[i], d->Y[i]);
+}
+
+void saveSolution(Instance *d)
+{  
+    // create file for the solution
+    char fileName[50] = "run/demo.opt.tour";
+    FILE *solutionFile = fopen(fileName, "w");
+
+    // inserting headers of the file
+    fprintf(solutionFile, "NAME : %s\n", fileName);
+    fprintf(solutionFile, "TYPE : TOUR\n");
+    fprintf(solutionFile, "DIMENSION : %ld\n", d->nodesCount);
+    fprintf(solutionFile, "TOUR_SECTION\n");
+
+    // populating the file with the solution
+    for (int i = 0; i < d->nodesCount; i++)
+    {
+        fprintf(solutionFile, "%d\n", d->solution.bestSolution[i] + 1);
+    }
+    fprintf(solutionFile, "-1\n");
+
+    // closing the tour file
+    fclose(solutionFile);
+     
+}
+
+void plotSolution(Instance *d)
+{
+    // creating the pipeline for gnuplot
+    FILE *gnuplotPipe = popen("gnuplot -persistent", "w");
+    char fileName[50] = "DEMO PLOT";            // DA INSERIRE IL VERO NOME DEL FILE
+    fprintf(gnuplotPipe, "set title \"%s\"\n", fileName);
+
+    // populating the plot
+    fprintf(gnuplotPipe, "plot '-' \n");
+    int i = 0;
+    do
+    {
+      fprintf(gnuplotPipe, "%lf %lf\n", d->X[i], d->Y[i]);
+      printf("%lf %lf\n", d->X[i], d->Y[i]);
+      i = d->solution.bestSolution[i];
+    } while (i != 0);
+    fprintf(gnuplotPipe, "e\n");
+    fflush(gnuplotPipe);
 }

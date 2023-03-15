@@ -1,0 +1,1 @@
+aggiungere tempo di esecuzione per thread

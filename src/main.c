@@ -8,5 +8,17 @@ int main (int argc, char *argv[])
 
     LOG (LOG_LVL_LOG, "file %s has been loaded succesfully", d.params.inputFile);
 
+    //###########################################
+    // CREATE A FAKE SOLUTION USING THE POINTS IN THEIR DEFAULT ORDER
+    int fakeSolution[48];
+    for (size_t i = 0; i < 48; i++)
+    {
+        fakeSolution[i] = i;
+    }
+    d.solution.bestSolution = fakeSolution;
+    saveSolution(&d);
+    plotSolution(&d);    
+    //###########################################
+
     return EXIT_SUCCESS;
 }
