@@ -14,19 +14,21 @@ const char * logLevelString [] = {
 
 // keywords that we need to find inside .tsp file
 const char * keywords[] = {
+    "NAME",
     "TYPE",
     "DIMENSION",
     "EDGE_WEIGHT_TYPE",
     "NODE_COORD_SECTION"
 };
-#define KEYWORDS_COUNT 4
+#define KEYWORDS_COUNT 5
 
 #define NO_KEYWORD_FOUND_ID -1
 enum keywordID {
-    TYPE_KEYWORD_ID, // 0
-    DIMENSION_KEYWORD_ID, //1 
-    EDGE_WEIGHT_TYPE_KEYWORD_ID, // 2
-    NODE_COORD_SECTION_KEYWORD_ID // 3
+    NAME_KEYWORD_ID,
+    TYPE_KEYWORD_ID,
+    DIMENSION_KEYWORD_ID,
+    EDGE_WEIGHT_TYPE_KEYWORD_ID,
+    NODE_COORD_SECTION_KEYWORD_ID
 };
 
 // 
@@ -47,20 +49,17 @@ const char * wgtTypeStr[] = {
 };
 #define EDGE_WEIGHT_TYPES_COUNT 12
 
+// file parsing functions
+void getNameFromFile(char * line, int lineSize, char out[]);
+void checkFileType(char * line, int lineSize);
+size_t getDimensionFromLine(char * line, int lineSize);
+size_t getEdgeWeightTypeFromLine(char * line, int lineSize);
+
+
 int LOG (enum logLevel lvl, char * line, ...)
 {
     // check log level
     if (lvl > globLVL) return 0;
-
-    // get time
-    /*time_t t;
-    char dateStr[51];
-    t = time(NULL);
-    tzset();
-    strftime(dateStr, sizeof(dateStr) - 1, "%a %b %d %T %Z %Y", localtime(&t));
-
-    // print time
-    printf("%s ", dateStr);*/
 
     // print log level
     printf("[%s] ", logLevelString[lvl]);
@@ -93,13 +92,12 @@ void parseArgs (Instance *d, int argc, char *argv[])
             {"t", required_argument, 0, 't'},
             {"out", required_argument, 0, 'o'},
             {"o", required_argument, 0, 'o'},
-            {"avx", no_argument, 0, 'a'},
             {0, 0, 0, 0}
         };
     int option_index = 0;
     int opt;
 
-    while ((opt = getopt_long(argc, argv, "s:f:t:o:a", options, &option_index)) != -1)
+    while ((opt = getopt_long(argc, argv, "s:f:t:o:", options, &option_index)) != -1)
     {
         switch (opt)
         {
@@ -116,10 +114,6 @@ void parseArgs (Instance *d, int argc, char *argv[])
         
         case 't':
             d->params.threadsCount = strtoul(optarg, NULL, 10);
-            break;
-
-        case 'a':
-            d->params.useAVX = 1;
             break;
         
         default:
@@ -151,7 +145,7 @@ void readFile (Instance *d)
     while ((keywordFinished == 0) && ((lineSize = getline(&line, &lineMemSize, f)) != EOF))
     {
         keywordsLinesCount++;
-        LOG(LOG_LVL_DEBUG, line);
+        LOG(LOG_LVL_EVERYTHING, line);
 
         // check in the first part of each line if we find a useful keyword
         int keywordID = NO_KEYWORD_FOUND_ID;
@@ -168,82 +162,30 @@ void readFile (Instance *d)
         }
 
         if (keywordsFound[keywordID] == 1)
-            LOG(LOG_LVL_ERROR, "Keyword \"%S\" is present more than one time. Check the .tsp file", keywords[keywordID]);
+            LOG(LOG_LVL_ERROR, "Keyword \"%s\" is present more than one time. Check the .tsp file", keywords[keywordID]);
 
         switch (keywordID)
         {
+        case NAME_KEYWORD_ID:
+            getNameFromFile(line, lineSize, d->params.name);
+            // set flag
+            keywordsFound[NAME_KEYWORD_ID] = 1;
+            break;
+
         case TYPE_KEYWORD_ID:
-            // here check if last 3 charaters(excludiing the '\n') are "TSP"
-            char substr[3] = {0}; memcpy(substr, &line[lineSize - 4], 3);   // generate substring of 3 chars for logging/debugging purposes
-            LOG(LOG_LVL_EVERYTHING, "Checking file TYPE keyword: comparing \"TSP\" with what is found at the of the line which is:%s", substr);
-            if (strncmp(&line[lineSize - 4], "TSP", 3) != 0)
-                LOG(LOG_LVL_ERROR, "The file is either not of type TSP, or there are some characters (even blank spaces) after \"TSP\" and before the next line. \n\
-                                     Check that the file used in input is of the correct type and correctly formatted. Only \"TSP\" files are currently supported");
+            checkFileType(line, lineSize);
             // if this point is reached the has a correct type -> set the flag
             keywordsFound[TYPE_KEYWORD_ID] = 1;
             break;
         
         case DIMENSION_KEYWORD_ID:
-            // first find the pointer to the first number part of line and then convert it to integer checking for all errors
-            char * numberFirstChar = strchr(line, ':');
-
-            if (*(numberFirstChar + 1) == ' ')
-                numberFirstChar += 2;
-            else
-                numberFirstChar++;
-            // now numberFirstChar should be pointing to the first character that makes the decimal number in line
-            LOG(LOG_LVL_EVERYTHING, "Getting the number of nodes from file: the first character of the number is:%c", *numberFirstChar);
-
-            char * endPtr = NULL;
-            d->nodesCount = strtoul(numberFirstChar, &endPtr, 10);
-
-            // check for errors on conversion
-            if (endPtr == numberFirstChar)
-                LOG(LOG_LVL_ERROR, "Converting dimension number from file: first character that was supposed to be a number is not a number. \n\
-                                        Dimension line in file is supposed to look like \"DIMENSION : <NUMBER>\" with just one separator \':\' and at most a \' \' after it before the numeric value");
-            if (endPtr != &line[lineSize-1])
-                LOG(LOG_LVL_ERROR, "Converting dimension number from file: there are unrecognized character before end of line with keyword DIMENSION");
-
-            // check for error on converted number
-            if (d->nodesCount == 0)
-                LOG(LOG_LVL_ERROR, "Could not properly convert dimension number in tsp file");
-            if (d->nodesCount == ULONG_MAX)
-                LOG(LOG_LVL_ERROR, "Dimension value in file is too great. Either too much data(unlikely) or the dimension value is wrong");
-
-            // if this point is reached the file has a correct type -> set the flag
+            d->nodesCount = getDimensionFromLine(line, lineSize);
+            // set the flag
             keywordsFound[DIMENSION_KEYWORD_ID] = 1;
             break;
 
         case EDGE_WEIGHT_TYPE_KEYWORD_ID:
-            // first find the pointer to the weight type descriptor
-            char * firstWgtTypePtr = strchr(line, ':');
-
-            if (*(firstWgtTypePtr + 1) == ' ')
-                firstWgtTypePtr += 2;
-            else
-                firstWgtTypePtr++;
-
-            // now firstEdgeTypePtr should be pointing to the first character that describes the weight type
-            LOG(LOG_LVL_EVERYTHING, "Getting the edge weight type from file: the first character of the weight type is:%c", *firstWgtTypePtr);
-
-            int foundEdgeWeightTypeID = -1;
-            for (size_t i = 0; i < EDGE_WEIGHT_TYPES_COUNT; i++)
-            {
-                size_t wgtTypeStrLen = strlen(wgtTypeStr[i]);
-
-                if (strncmp(firstWgtTypePtr, wgtTypeStr[i], wgtTypeStrLen) == 0)
-                {
-                    foundEdgeWeightTypeID = i;
-                    break;
-                }
-            }
-
-            // check if no match has been found
-            if (foundEdgeWeightTypeID == -1)
-                LOG(LOG_LVL_ERROR, "Getting the edge weight type from file: Could not identify the \"EDGE_WEIGTH_TYPE property\"");
-            
-            d->params.edgeWeightType = foundEdgeWeightTypeID;
-
+            d->params.edgeWeightType = getEdgeWeightTypeFromLine(line, lineSize);
             // if this point is reached a correct number for dimension has been taken from the file -> set the flag
             keywordsFound[EDGE_WEIGHT_TYPE_KEYWORD_ID] = 1;
             break;
@@ -253,12 +195,12 @@ void readFile (Instance *d)
             keywordFinished = 1;
             keywordsFound[NODE_COORD_SECTION_KEYWORD_ID] = 1;
             break;
-        
+
         case NO_KEYWORD_FOUND_ID:
             break;
 
         default:
-            LOG(LOG_LVL_ERROR, "Wierd error upon reading keywords from file");
+            LOG(LOG_LVL_ERROR, "Wierd error upon reading keywords from file. Check the code");
             break;
         }
     }
@@ -269,9 +211,9 @@ void readFile (Instance *d)
             LOG(LOG_LVL_ERROR, "Important keyword \"%s\" has not been found/detected in the tsp file. Check the .tsp file", keywords[i]);
 
     // allocate memory
-    size_t memAllcSizeForAvx = (d->nodesCount + (4 - d->nodesCount % 4)) * sizeof(double);    // 4 is the number of elements contained in the 256bits vector of AVX2. Using double 64 bits it's possible to fit 4 numbers
-    d->X = aligned_alloc(32, memAllcSizeForAvx);
-    d->Y = aligned_alloc(32, memAllcSizeForAvx);
+    size_t memElemsToAlloc = d->nodesCount + AVX_VEC_SIZE - d->nodesCount % AVX_VEC_SIZE;
+    d->X = aligned_alloc(32, memElemsToAlloc * sizeof(double));
+    d->Y = aligned_alloc(32, memElemsToAlloc * sizeof(double));
 
     // fill the memory with data
     size_t i = 0;
