@@ -51,13 +51,13 @@ const char * wgtTypeStr[] = {
 
 // file parsing functions
 // gets the string specified in the "NAME" keyword in the file
-void getNameFromFile(char * line, int lineSize, char out[]);
+void getNameFromFile(char * line, int lineSize, char out[], Instance *d);
 // checks that the file type is "TSP"
-void checkFileType(char * line, int lineSize);
+void checkFileType(char * line, int lineSize, Instance *d);
 // get the value related with the keyword "DIMENSION" and returns it as a size_t
-size_t getDimensionFromLine(char * line, int lineSize);
+size_t getDimensionFromLine(char * line, int lineSize, Instance *d);
 // check that the string associated with "EDGE_WEIGHT_TYPE" is correct and return it as a number
-size_t getEdgeWeightTypeFromLine(char * line, int lineSize);
+size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *d);
 
 
 void initInstance(Instance *d)
@@ -110,10 +110,23 @@ int LOG (enum logLevel lvl, char * line, ...)
     if (line[strlen(line)-1] != '\n')
         printf("\n");
 
-    if (lvl == LOG_LVL_ERROR)
-        exit(EXIT_FAILURE);
-
     return 0;
+}
+
+void throwError (Instance *d, char * line, ...)
+{
+    printf("[%s] ", logLevelString[0]);
+
+    va_list params;
+    va_start(params, line);
+    vprintf(line, params);
+    va_end(params);
+
+    printf("\n");
+
+    freeInstance(d);
+
+    exit(EXIT_FAILURE);
 }
 
 void parseArgs (Instance *d, int argc, char *argv[])
@@ -144,7 +157,7 @@ void parseArgs (Instance *d, int argc, char *argv[])
 
         case 'f':
             if (access(optarg, R_OK) != 0)
-                LOG(LOG_LVL_ERROR, "ERROR: File \"%s\" not found\n", optarg);
+                throwError(d, "ERROR: File \"%s\" not found\n", optarg);
 
             strncpy(d->params.inputFile, optarg, strlen(optarg)+1);
             break;
@@ -163,7 +176,7 @@ void parseArgs (Instance *d, int argc, char *argv[])
     
     // check necessary arguments were passed
     if (d->params.inputFile[0] == 0)
-        LOG(LOG_LVL_ERROR, "A file path must be specified with \"-f\" or \"--file\" options");
+        throwError(d, "A file path must be specified with \"-f\" or \"--file\" options");
 
     LOG(LOG_LVL_NOTICE, "Received arguments:");
     LOG(LOG_LVL_NOTICE,"    Random Seed  = %d", d->params.randomSeed);
@@ -206,30 +219,30 @@ void readFile (Instance *d)
         }
 
         if (keywordsFound[keywordID] == 1)
-            LOG(LOG_LVL_ERROR, "Keyword \"%s\" is present more than one time. Check the .tsp file", keywords[keywordID]);
+            throwError(d, "Keyword \"%s\" is present more than one time. Check the .tsp file", keywords[keywordID]);
 
         switch (keywordID)
         {
         case NAME_KEYWORD_ID:
-            getNameFromFile(line, lineSize, d->params.name);
+            getNameFromFile(line, lineSize, d->params.name, d);
             // set flag
             keywordsFound[NAME_KEYWORD_ID] = 1;
             break;
 
         case TYPE_KEYWORD_ID:
-            checkFileType(line, lineSize);
+            checkFileType(line, lineSize, d);
             // if this point is reached the has a correct type -> set the flag
             keywordsFound[TYPE_KEYWORD_ID] = 1;
             break;
         
         case DIMENSION_KEYWORD_ID:
-            d->nodesCount = getDimensionFromLine(line, lineSize);
+            d->nodesCount = getDimensionFromLine(line, lineSize, d);
             // set the flag
             keywordsFound[DIMENSION_KEYWORD_ID] = 1;
             break;
 
         case EDGE_WEIGHT_TYPE_KEYWORD_ID:
-            d->params.edgeWeightType = getEdgeWeightTypeFromLine(line, lineSize);
+            d->params.edgeWeightType = getEdgeWeightTypeFromLine(line, lineSize, d);
             // if this point is reached a correct number for dimension has been taken from the file -> set the flag
             keywordsFound[EDGE_WEIGHT_TYPE_KEYWORD_ID] = 1;
             break;
@@ -244,7 +257,7 @@ void readFile (Instance *d)
             break;
 
         default:
-            LOG(LOG_LVL_ERROR, "Wierd error upon reading keywords from file. Check the code");
+            throwError(d, "Wierd error upon reading keywords from file. Check the code");
             break;
         }
     }
@@ -252,7 +265,7 @@ void readFile (Instance *d)
     // check all important keywords have been found
     for (size_t i = 0; i < KEYWORDS_COUNT; i++)
         if (keywordsFound[i] != 1)  // keyword has not been found in the loop above
-            LOG(LOG_LVL_ERROR, "Important keyword \"%s\" has not been found/detected in the tsp file. Check the .tsp file", keywords[i]);
+            throwError(d, "Important keyword \"%s\" has not been found/detected in the tsp file. Check the .tsp file", keywords[i]);
 
     // allocate memory
     size_t memElemsToAlloc = d->nodesCount + AVX_VEC_SIZE; // allocate more than needed to avoid errors when reading with avx
@@ -274,45 +287,45 @@ void readFile (Instance *d)
         char * endPtr = NULL;
         size_t lineNumber = strtoul(line, &endPtr, 10);
         if (lineNumber == 0)
-            LOG(LOG_LVL_ERROR, "Conversion at line %lu of the line number has gone wrong(must not be 0)", keywordsLinesCount + i + 1);
+            throwError(d, "Conversion at line %lu of the line number has gone wrong(must not be 0)", keywordsLinesCount + i + 1);
         
         char * separatorPtr = strchr(line, ' ');
         if (!separatorPtr)
-            LOG(LOG_LVL_ERROR, "Space separator at line %lu of file has not been found");
+            throwError(d, "Space separator at line %lu of file has not been found");
         if (endPtr != separatorPtr)
-            LOG(LOG_LVL_ERROR, "Conversion at line %lu of the line number has gone wrong(must be an integer separated from other value by a space at the end)", keywordsLinesCount + i + 1);
+            throwError(d, "Conversion at line %lu of the line number has gone wrong(must be an integer separated from other value by a space at the end)", keywordsLinesCount + i + 1);
         
         if (lineNumber != i+1)
-            LOG(LOG_LVL_ERROR, "Line number at line %lu of the file is not what is supposed to be (%lu instead of %lu)", keywordsLinesCount + i + 1, lineNumber, i+1);
+            throwError(d, "Line number at line %lu of the file is not what is supposed to be (%lu instead of %lu)", keywordsLinesCount + i + 1, lineNumber, i+1);
 
         // now we can convert the actual coordinates
         char * xCoordStrPtr = separatorPtr + 1;
         separatorPtr = strchr(xCoordStrPtr, ' ');
         if (!separatorPtr)
-            LOG(LOG_LVL_ERROR, "Space separator at line %lu of file has not been found");
+            throwError(d, "Space separator at line %lu of file has not been found");
 
         d->X[i] = strtof(xCoordStrPtr, &endPtr);
 
         if (xCoordStrPtr == endPtr)
-            LOG(LOG_LVL_ERROR, "Conversion of X coordinate at line %lu has gone wrong. Check the .tsp file", keywordsLinesCount + i + 1);
+            throwError(d, "Conversion of X coordinate at line %lu has gone wrong. Check the .tsp file", keywordsLinesCount + i + 1);
         if (endPtr != separatorPtr)
-            LOG(LOG_LVL_ERROR, "Conversion of X coordinate at line %lu has gone wrong. There are unwanted characters at the end ", keywordsLinesCount + i + 1);
+            throwError(d, "Conversion of X coordinate at line %lu has gone wrong. There are unwanted characters at the end ", keywordsLinesCount + i + 1);
         if (fabsf(d->X[i]) == HUGE_VALF)
-            LOG(LOG_LVL_ERROR, "Coordinate X at line %lu has caused overflow", keywordsLinesCount + i + 1);
+            throwError(d, "Coordinate X at line %lu has caused overflow", keywordsLinesCount + i + 1);
 
         char * yCoordStrPtr = separatorPtr + 1;
         separatorPtr = strchr(yCoordStrPtr, '\n');
         if (!separatorPtr)
-            LOG(LOG_LVL_ERROR, "'\n' at line %lu of file has not been found");
+            throwError(d, "'\n' at line %lu of file has not been found");
         
         d->Y[i] = strtof(yCoordStrPtr, &endPtr);
 
         if (yCoordStrPtr == endPtr)
-            LOG(LOG_LVL_ERROR, "Conversion of Y coordinate at line %lu has gone wrong. Check the .tsp file", keywordsLinesCount + i + 1);
+            throwError(d, "Conversion of Y coordinate at line %lu has gone wrong. Check the .tsp file", keywordsLinesCount + i + 1);
         if (endPtr != separatorPtr)
-            LOG(LOG_LVL_ERROR, "Conversion of Y coordinate at line %lu has gone wrong. There are unwanted characters at the end ", keywordsLinesCount + i + 1);
+            throwError(d, "Conversion of Y coordinate at line %lu has gone wrong. There are unwanted characters at the end ", keywordsLinesCount + i + 1);
         if (fabsf(d->Y[i]) == HUGE_VAL)
-            LOG(LOG_LVL_ERROR, "Coordinate Y at line %lu has caused overflow", keywordsLinesCount + i + 1);
+            throwError(d, "Coordinate Y at line %lu has caused overflow", keywordsLinesCount + i + 1);
 
         i++;
     }
@@ -326,7 +339,7 @@ void readFile (Instance *d)
 }
 
 
-void getNameFromFile(char * line, int lineSize, char out[])
+void getNameFromFile(char * line, int lineSize, char out[], Instance *d)
 {
     memset(out, 0, 200); // set name array to 0
 
@@ -336,22 +349,22 @@ void getNameFromFile(char * line, int lineSize, char out[])
 
     int nameLen = lineSize + line - nameBegin - 1;
     if (nameLen > 200)
-        LOG(LOG_LVL_ERROR, "Name lenght exceeds 200 characters");
+        throwError(d, "Name lenght exceeds 200 characters");
     memcpy(out, nameBegin, nameLen);
 }
 
-void checkFileType(char * line, int lineSize)
+void checkFileType(char * line, int lineSize, Instance *d)
 {
     // here check if last 3 charaters(excludiing the '\n') are "TSP"
     char substr[3] = {0};
     memcpy(substr, &line[lineSize - 4], 3); // generate substring of 3 chars for logging/debugging purposes
     LOG(LOG_LVL_EVERYTHING, "Checking file TYPE keyword: comparing \"TSP\" with what is found at the of the line which is:%s", substr);
     if (strncmp(&line[lineSize - 4], "TSP", 3) != 0)
-        LOG(LOG_LVL_ERROR, "The file is either not of type TSP, or there are some characters (even blank spaces) after \"TSP\" and before the next line. \n\
+        throwError(d, "The file is either not of type TSP, or there are some characters (even blank spaces) after \"TSP\" and before the next line. \n\
                                      Check that the file used in input is of the correct type and correctly formatted. Only \"TSP\" files are currently supported");
 }
 
-size_t getDimensionFromLine(char * line, int lineSize)
+size_t getDimensionFromLine(char * line, int lineSize, Instance *d)
 {
     // first find the pointer to the first number part of line and then convert it to integer checking for all errors
     char *numberFirstChar = strchr(line, ':');
@@ -368,21 +381,21 @@ size_t getDimensionFromLine(char * line, int lineSize)
 
     // check for errors on conversion
     if (endPtr == numberFirstChar)
-        LOG(LOG_LVL_ERROR, "Converting dimension number from file: first character that was supposed to be a number is not a number. \n\
+        throwError(d, "Converting dimension number from file: first character that was supposed to be a number is not a number. \n\
                                         Dimension line in file is supposed to look like \"DIMENSION : <NUMBER>\" with just one separator \':\' and at most a \' \' after it before the numeric value");
     if (endPtr != &line[lineSize - 1])
-        LOG(LOG_LVL_ERROR, "Converting dimension number from file: there are unrecognized character before end of line with keyword DIMENSION");
+        throwError(d, "Converting dimension number from file: there are unrecognized character before end of line with keyword DIMENSION");
 
     // check for error on converted number
     if (dimension == 0)
-        LOG(LOG_LVL_ERROR, "Could not properly convert dimension number in tsp file");
+        throwError(d, "Could not properly convert dimension number in tsp file");
     if (dimension == ULONG_MAX)
-        LOG(LOG_LVL_ERROR, "Dimension value in file is too great. Either too much data(unlikely) or the dimension value is wrong");
+        throwError(d, "Dimension value in file is too great. Either too much data(unlikely) or the dimension value is wrong");
 
     return dimension;
 }
 
-size_t getEdgeWeightTypeFromLine(char * line, int lineSize)
+size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *d)
 {
     // first find the pointer to the weight type descriptor
     char *firstWgtTypePtr = strchr(line, ':');
@@ -409,7 +422,7 @@ size_t getEdgeWeightTypeFromLine(char * line, int lineSize)
 
     // check if no match has been found
     if (foundEdgeWeightTypeID == -1)
-        LOG(LOG_LVL_ERROR, "Getting the edge weight type from file: Could not identify the \"EDGE_WEIGTH_TYPE property\"");
+        throwError(d, "Getting the edge weight type from file: Could not identify the \"EDGE_WEIGTH_TYPE property\"");
 
     return foundEdgeWeightTypeID;
 }

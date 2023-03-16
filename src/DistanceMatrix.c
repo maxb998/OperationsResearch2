@@ -104,7 +104,7 @@ int computeSquaredDistanceMatrix(Instance *d)
 {
     // first check that distance type is supported
     if (d->params.edgeWeightType > ATT)
-        LOG (LOG_LVL_ERROR, "Distance Matrix Computation: Edge weight type unsupported");
+        throwError(d, "Distance Matrix Computation: Edge weight type unsupported");
 
     // allocate memory
     size_t n = d->nodesCount;

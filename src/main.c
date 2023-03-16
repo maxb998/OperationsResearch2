@@ -23,8 +23,8 @@ int main (int argc, char *argv[])
     }
     fakeSolution[47] = 0;
     d.solution.bestSolution = fakeSolution;
-    saveSolution(&d);
-    plotSolution(&d);    
+    //saveSolution(&d);
+    //plotSolution(&d);    
     //###########################################
 
     freeInstance(&d);

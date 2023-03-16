@@ -108,6 +108,9 @@ void freeInstance(Instance *d);
 
 int LOG (enum logLevel lvl, char * line, ...);
 
+// launch fatal error, free memory and exit with code 1
+void throwError (Instance *d, char * line, ...);
+
 void parseArgs (Instance *d, int argc, char *argv[]);
 
 void readFile (Instance *d);
