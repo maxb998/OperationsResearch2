@@ -398,7 +398,9 @@ size_t getEdgeWeightTypeFromLine(char * line, int lineSize)
 void saveSolution(Instance *d)
 {  
     // create file for the solution
-    char fileName[50] = "run/demo.opt.tour";
+    char fileName[50] = "run/";
+    strcat(fileName, d->params.name);
+    strcat(fileName, ".opt.tour");
     FILE *solutionFile = fopen(fileName, "w");
 
     // inserting headers of the file
@@ -423,11 +425,11 @@ void plotSolution(Instance *d)
 {
     // creating the pipeline for gnuplot
     FILE *gnuplotPipe = popen("gnuplot -persistent", "w");
-    char fileName[50] = "DEMO PLOT";            // DA INSERIRE IL VERO NOME DEL FILE
-    fprintf(gnuplotPipe, "set title \"%s\"\n", fileName);
+    fprintf(gnuplotPipe, "set title \"%s\"\n", d->params.name);
 
     // populating the plot
-    fprintf(gnuplotPipe, "plot '-' \n");
+
+    fprintf(gnuplotPipe, "plot '-' with linespoint\n");
     int i = 0;
     do
     {
@@ -435,6 +437,7 @@ void plotSolution(Instance *d)
       printf("%lf %lf\n", d->X[i], d->Y[i]);
       i = d->solution.bestSolution[i];
     } while (i != 0);
+    fprintf(gnuplotPipe, "%lf %lf\n", d->X[0], d->Y[0]);
     fprintf(gnuplotPipe, "e\n");
     fflush(gnuplotPipe);
 }

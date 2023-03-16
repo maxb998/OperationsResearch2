@@ -16,14 +16,15 @@ int main (int argc, char *argv[])
 
     //###########################################
     // CREATE A FAKE SOLUTION USING THE POINTS IN THEIR DEFAULT ORDER
-    int fakeSolution[48];
-    for (size_t i = 0; i < 48; i++)
+    int *fakeSolution = malloc(48 * sizeof(int));
+    for (int i = 0; i < 48; i++)
     {
-        fakeSolution[i] = i;
+        fakeSolution[i] = i+1;
     }
+    fakeSolution[47] = 0;
     d.solution.bestSolution = fakeSolution;
-    //saveSolution(&d);
-    //plotSolution(&d);    
+    saveSolution(&d);
+    plotSolution(&d);    
     //###########################################
 
     freeInstance(&d);

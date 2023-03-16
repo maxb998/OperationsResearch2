@@ -1,8 +1,7 @@
-NAME : run/demo.opt.tour
+NAME : run/att48.opt.tour
 TYPE : TOUR
 DIMENSION : 48
 TOUR_SECTION
-1
 2
 3
 4
@@ -50,4 +49,5 @@ TOUR_SECTION
 46
 47
 48
+1
 -1
