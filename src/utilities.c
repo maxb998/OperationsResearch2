@@ -33,19 +33,19 @@ enum keywordID {
 
 // 
 const char * wgtTypeStr[] = {
-	"EUC_2D", // 0, euclidean distance 2d
-	"MAN_2D", // 1, manhattan distance 2d
-	"MAX_2D", // 2, maximum distance 2d
-	"CEIL_2D", // 3, euclidean 2d rounded up
-    "GEO", // 4,
-	"ATT", // 5, special distance for problems att48 and att532
-	"XRAY1", // 6, special distance for crystallography problems v1
-	"XRAY2", // 7, special distance for crystallography problems v2
-	"EUC_3D", // 8, euclidean distance 3d
-	"MAN_3D", // 9, manhattan distance 3d
-	"MAX_3D", // 10, maximum distance 3d
-	"EXPLICIT", // 11, weights are specified in the file
-	"SPECIAL" // 12, special type of distance documented elsewhere
+	"EUC_2D", // euclidean distance 2d
+	"MAN_2D", // manhattan distance 2d
+	"MAX_2D", // maximum distance 2d
+	"CEIL_2D", // euclidean 2d rounded up
+	"ATT", // special distance for problems att48 and att532
+	"EUC_3D", // euclidean distance 3d
+	"MAN_3D", // manhattan distance 3d
+	"MAX_3D", // maximum distance 3d
+    "GEO", // geographical distance
+	"XRAY1", // special distance for crystallography problems v1
+	"XRAY2", // special distance for crystallography problems v2
+	"EXPLICIT", // weights are specified in the file
+	"SPECIAL" // special type of distance documented elsewhere
 };
 #define EDGE_WEIGHT_TYPES_COUNT 12
 
@@ -62,8 +62,20 @@ size_t getEdgeWeightTypeFromLine(char * line, int lineSize);
 
 void initInstance(Instance *d)
 {
+    // set pointers to NULL
     d->X = d->Y = d->edgeCost.mat = NULL;
     d->edgeCost.roundedMat = d->solution.bestSolution = NULL;
+
+    // initialize variables to standard value
+    d->params.edgeWeightType = -1; // so that it gives error
+    d->params.roundWeights = 0;
+    d->params.threadsCount = 1;
+    d->nodesCount = 0;
+    d->solution.bestCost = INFINITY;
+    
+    // make strings empty to check for errors (should only need to change first char to 0 but it's nicer this way)
+    memset(d->params.inputFile, 0, 1000);
+    memset(d->params.name, 0, 200);
 }
 
 void freeInstance(Instance *d)
@@ -116,12 +128,13 @@ void parseArgs (Instance *d, int argc, char *argv[])
             {"t", required_argument, 0, 't'},
             {"out", required_argument, 0, 'o'},
             {"o", required_argument, 0, 'o'},
+            {"roundWeigths", no_argument, 0, 'r'},
             {0, 0, 0, 0}
         };
     int option_index = 0;
     int opt;
 
-    while ((opt = getopt_long(argc, argv, "s:f:t:o:", options, &option_index)) != -1)
+    while ((opt = getopt_long(argc, argv, "s:f:t:o:r", options, &option_index)) != -1)
     {
         switch (opt)
         {
@@ -140,11 +153,18 @@ void parseArgs (Instance *d, int argc, char *argv[])
             d->params.threadsCount = strtoul(optarg, NULL, 10);
             break;
         
+        case 'r':
+            d->params.roundWeights = 1;
+        
         default:
             abort();
         }
     }
     
+    // check necessary arguments were passed
+    if (d->params.inputFile[0] == 0)
+        LOG(LOG_LVL_ERROR, "A file path must be specified with \"-f\" or \"--file\" options");
+
     LOG(LOG_LVL_NOTICE, "Received arguments:");
     LOG(LOG_LVL_NOTICE,"    Random Seed  = %d", d->params.randomSeed);
     LOG(LOG_LVL_NOTICE,"    Filename     = %s", d->params.inputFile);
@@ -302,7 +322,7 @@ void readFile (Instance *d)
 
     // print the coordinates data with enough log level
     for (size_t i = 0; i < d->nodesCount; i++)
-        LOG(LOG_LVL_DEBUG, "Node %3lu: [%.2lf, %.2lf]", i+1, d->X[i], d->Y[i]);
+        LOG(LOG_LVL_EVERYTHING, "Node %4lu: [%.2e, %.2e]", i+1, d->X[i], d->Y[i]);
 }
 
 

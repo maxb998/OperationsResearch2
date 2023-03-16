@@ -24,17 +24,54 @@ static void * computeSqDistMatThread(void * d);
 // #############################################################################################################
 // DISTANCE FUNCTIONS
 
-#define euclideanDist2D(x1,y1,xDiff,yDiff,dist,i) xDiff = _mm256_sub_ps(x1, _mm256_load_ps(&th->d->X[i]));\
-            yDiff = _mm256_sub_ps(y1, _mm256_load_ps(&th->d->Y[i]));\
+#define euclideanCostSquared2D(x1,y1,dist,i,X,Y) \
+            static __m256 xDiff, yDiff;\
+            xDiff = _mm256_sub_ps(x1, _mm256_load_ps(&X[i]));\
+            yDiff = _mm256_sub_ps(y1, _mm256_load_ps(&Y[i]));\
             dist = _mm256_add_ps(_mm256_mul_ps(xDiff, xDiff), _mm256_mul_ps(yDiff, yDiff));
 
-#define euclideanDist3D(x1,y1,z1,xDiff,yDiff,zDiff,dist,i) xDiff = _mm256_sub_ps(x1, _mm256_load_ps(&th->d->X[i]));\
-            yDiff = _mm256_sub_ps(y1, _mm256_load_ps(&th->d->Y[i]));\
-            zDiff = _mm256_sub_ps(z1, _mm256_load_ps(&th->d->Z[i]));\
+// https://stackoverflow.com/questions/63599391/find-absolute-in-avx
+#define manhattanCost2D(x1,y1,dist,i,X,Y) \
+            register __m256 xDiff, yDiff, absMask = _mm256_set1_ps(-0.0F);\
+            xDiff = _mm256_sub_ps(x1, _mm256_load_ps(&X[i]));\
+            yDiff = _mm256_sub_ps(y1, _mm256_load_ps(&Y[i]));\
+            xDiff = _mm256_andnot_ps(xDiff, absMask);\
+            yDiff = _mm256_andnot_ps(yDiff, absMask);\
+            dist = _mm256_add_ps(xDiff, yDiff);
+
+#define maximumCost2D(x1,y1,dist,i,X,Y) \
+            static __m256 xDiff, yDiff; \
+            xDiff = _mm256_sub_ps(x1, _mm256_load_ps(&X[i]));\
+            yDiff = _mm256_sub_ps(y1, _mm256_load_ps(&Y[i]));\
+            dist = _mm256_max_ps(xDiff, yDiff);
+
+#define attCostSquared2D(x1,y1,dist,i,X,Y) \
+            register __m256 xDiff, yDiff, roundedDiff, vec10 = _mm256_set1_ps(10.F); \
+            xDiff = _mm256_sub_ps(x1, _mm256_load_ps(&X[i]));\
+            yDiff = _mm256_sub_ps(y1, _mm256_load_ps(&Y[i]));\
             dist = _mm256_add_ps(_mm256_mul_ps(xDiff, xDiff), _mm256_mul_ps(yDiff, yDiff));\
-            dist = _mm256_add_ps(dist, _mm256_mul_ps(zDiff, zDiff));
+            dist = _mm256_div_ps(dist, vec10);
 
+// ROUNDED DISTANCES
 
+#define euclideanCostSquared2DRounded(x1,y1,dist,roundedDist,i,X,Y) \
+            euclideanCostSquared2D(x1,y1,dist,i,X,Y)\
+            roundedDist = _mm256_cvttps_epi32(dist);
+
+#define manhattanCost2DRounded(x1,y1,dist,roundedDist,i,X,Y) \
+            manhattanCost2D(x1,y1,dist,i,X,Y)\
+            roundedDist = _mm256_cvttps_epi32(dist);
+
+#define maximumCost2DRounded(x1,y1,dist,roundedDist,i,X,Y) \
+            maximumCost2D(x1,y1,dist,i,X,Y)\
+            roundedDist = _mm256_cvttps_epi32(dist);
+
+#define attCostSquared2DRounded(x1,y1,dist,roundedDist,i,X,Y) \
+            attCostSquared2D(x1,y1,dist,i,X,Y)\
+            dist = _mm256_sqrt(dist);\
+            dist = _mm256_ceil_ps(dist);\
+            roundedDist = _mm256_cvtps_epi32(dist);
+            
 // #############################################################################################################
 
 
@@ -59,9 +96,6 @@ void printDistanceMatrix(Instance *d, int showEndRowPlaceholder)
             printf("%.2e ", d->edgeCost.mat[row * d->edgeCost.rowSizeMem + col]);
         printf("\n");
     }
-
-    
-    
 }
 
 
@@ -69,13 +103,8 @@ void printDistanceMatrix(Instance *d, int showEndRowPlaceholder)
 int computeSquaredDistanceMatrix(Instance *d)
 {
     // first check that distance type is supported
-    //if (d->params.edgeWeightType > 1)
-    //    LOG (LOG_LVL_ERROR, "Distance Matrix Computation: Edge weight type unsupported");
-
-    /*  uncomment method on top also 
-    if (Type requires so)
-       return distMatIntegerW;
-    */
+    if (d->params.edgeWeightType > ATT)
+        LOG (LOG_LVL_ERROR, "Distance Matrix Computation: Edge weight type unsupported");
 
     // allocate memory
     size_t n = d->nodesCount;
@@ -85,8 +114,11 @@ int computeSquaredDistanceMatrix(Instance *d)
     else
         d->edgeCost.rowSizeMem = n;
 
-    d->edgeCost.mat = aligned_alloc(32, d->edgeCost.rowSizeMem * n * sizeof(float));
-
+    if (d->params.roundWeights == 0)
+        d->edgeCost.mat = aligned_alloc(32, d->edgeCost.rowSizeMem * n * sizeof(float));
+    else
+        d->edgeCost.roundedMat = aligned_alloc(32, d->edgeCost.rowSizeMem * n * sizeof(int));
+        
     // init data structure to pass to threads
     ThreadedInstance thInst = { .d = d, .nextRow = 0 };
     pthread_mutex_init (&thInst.mutex, NULL);
@@ -112,10 +144,10 @@ int computeSquaredDistanceMatrix(Instance *d)
 }
 
 // EUCLIDEAN DISTANCE
-static void * computeSqDistMatThread(void* arg)
+static void * computeSqDistMatThread(void* d)
 {
     // correctly identify data
-    ThreadedInstance *th = (ThreadedInstance*)arg;
+    ThreadedInstance *th = (ThreadedInstance*)d;
 
     size_t n = th->d->nodesCount;
 
@@ -135,22 +167,22 @@ static void * computeSqDistMatThread(void* arg)
         if (pthreadMutexErrorID != 0) break;
 
         // now the thread can compute the distance matrix inside it's workspace (row)
-        register __m256 x1, y1, xDiff, yDiff, dist;
+        register __m256 x1, y1, dist;
 
         x1 = _mm256_set1_ps(th->d->X[row]);
         y1 = _mm256_set1_ps(th->d->Y[row]);
 
         for (size_t i = 0; i < n; i += AVX_VEC_SIZE)
         {
-            euclideanDist2D(x1,y1,xDiff,yDiff,dist,i)
+            euclideanCostSquared2D(x1,y1,dist,i,th->d->X,th->d->Y)
 
             // store result in memory
             _mm256_store_ps(&th->d->edgeCost.mat[row * th->d->edgeCost.rowSizeMem + i], dist);
         }
         
-        // set last elements of the row (the ones that prevents a lot of headackes with avx) to max value of double(so it never gets picked in greedy algorithms)
+        // set last elements of the row (the ones that prevents a lot of headackes with avx) to infinity(so it never gets picked in greedy algorithms)
         for (size_t i = n; i < th->d->edgeCost.rowSizeMem; i++)
-            th->d->edgeCost.mat[row * th->d->edgeCost.rowSizeMem + i] = DOUBLE_MAX;
+            th->d->edgeCost.mat[row * th->d->edgeCost.rowSizeMem + i] = INFINITY;
         
     }
 

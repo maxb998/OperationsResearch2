@@ -31,19 +31,19 @@
 #define EPSILON 1e-9
 
 enum edgeWeightType{
-	EUC_2D, // 0, euclidean distance 2d
-	MAN_2D, // 1, manhattan distance 2d
-	MAX_2D, // 2, maximum distance 2d
-	CEIL_2D, // 3, euclidean 2d rounded up
-    GEO, // 4,
-	ATT, // 5, special distance for problems att48 and att532
-	XRAY1, // 6, special distance for crystallography problems v1
-	XRAY2, // 7, special distance for crystallography problems v2
-	EUC_3D, // 8, euclidean distance 3d
-	MAN_3D, // 9, manhattan distance 3d
-	MAX_3D, // 10, maximum distance 3d
-	EXPLICIT, // 11, weights are specified in the file
-	SPECIAL // 12, special type of distance documented elsewhere
+	EUC_2D, // euclidean distance 2d
+	MAN_2D, // manhattan distance 2d
+	MAX_2D, // maximum distance 2d
+	CEIL_2D, // euclidean 2d rounded up
+	ATT, // special distance for problems att48 and att532
+	EUC_3D, // euclidean distance 3d
+	MAN_3D, // manhattan distance 3d
+	MAX_3D, // maximum distance 3d
+    GEO, // geographical distance
+	XRAY1, // special distance for crystallography problems v1
+	XRAY2, // special distance for crystallography problems v2
+	EXPLICIT, // weights are specified in the file
+	SPECIAL // special type of distance documented elsewhere
 };
 
 // data structures
@@ -51,6 +51,7 @@ typedef struct
 {
     int edgeWeightType;
     int randomSeed;
+	int roundWeights;
     char inputFile[1000];
 	char name[200];
     size_t threadsCount;
