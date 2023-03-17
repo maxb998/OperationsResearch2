@@ -51,13 +51,13 @@ const char * wgtTypeStr[] = {
 
 // file parsing functions
 // gets the string specified in the "NAME" keyword in the file
-void getNameFromFile(char * line, int lineSize, char out[], Instance *d);
+static void getNameFromFile(char * line, int lineSize, char out[], Instance *d);
 // checks that the file type is "TSP"
-void checkFileType(char * line, int lineSize, Instance *d);
+static void checkFileType(char * line, int lineSize, Instance *d);
 // get the value related with the keyword "DIMENSION" and returns it as a size_t
-size_t getDimensionFromLine(char * line, int lineSize, Instance *d);
+static size_t getDimensionFromLine(char * line, int lineSize, Instance *d);
 // check that the string associated with "EDGE_WEIGHT_TYPE" is correct and return it as a number
-size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *d);
+static size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *d);
 
 
 void initInstance(Instance *d)
@@ -131,6 +131,7 @@ void throwError (Instance *d, char * line, ...)
 
 void parseArgs (Instance *d, int argc, char *argv[])
 {
+    static int roundWeightsFlag = 0;
     static struct option options[] = 
         {
             {"seed", required_argument, 0, 's'},
@@ -139,15 +140,17 @@ void parseArgs (Instance *d, int argc, char *argv[])
             {"f", required_argument, 0, 'f'},
             {"threads", required_argument, 0, 't'},
             {"t", required_argument, 0, 't'},
-            {"out", required_argument, 0, 'o'},
-            {"o", required_argument, 0, 'o'},
-            {"roundWeigths", no_argument, 0, 'r'},
+            {"roundWeigths", no_argument, &roundWeightsFlag, 1},
             {0, 0, 0, 0}
         };
+    // set flags in d
+    d->params.roundWeights = roundWeightsFlag;
+
+
     int option_index = 0;
     int opt;
 
-    while ((opt = getopt_long(argc, argv, "s:f:t:o:r", options, &option_index)) != -1)
+    while ((opt = getopt_long(argc, argv, "s:f:t:", options, &option_index)) != -1)
     {
         switch (opt)
         {
@@ -166,14 +169,11 @@ void parseArgs (Instance *d, int argc, char *argv[])
             d->params.threadsCount = strtoul(optarg, NULL, 10);
             break;
         
-        case 'r':
-            d->params.roundWeights = 1;
-        
         default:
             abort();
         }
     }
-    
+
     // check necessary arguments were passed
     if (d->params.inputFile[0] == 0)
         throwError(d, "A file path must be specified with \"-f\" or \"--file\" options");
@@ -339,7 +339,7 @@ void readFile (Instance *d)
 }
 
 
-void getNameFromFile(char * line, int lineSize, char out[], Instance *d)
+static void getNameFromFile(char * line, int lineSize, char out[], Instance *d)
 {
     memset(out, 0, 200); // set name array to 0
 
@@ -353,7 +353,7 @@ void getNameFromFile(char * line, int lineSize, char out[], Instance *d)
     memcpy(out, nameBegin, nameLen);
 }
 
-void checkFileType(char * line, int lineSize, Instance *d)
+static void checkFileType(char * line, int lineSize, Instance *d)
 {
     // here check if last 3 charaters(excludiing the '\n') are "TSP"
     char substr[3] = {0};
@@ -364,7 +364,7 @@ void checkFileType(char * line, int lineSize, Instance *d)
                                      Check that the file used in input is of the correct type and correctly formatted. Only \"TSP\" files are currently supported");
 }
 
-size_t getDimensionFromLine(char * line, int lineSize, Instance *d)
+static size_t getDimensionFromLine(char * line, int lineSize, Instance *d)
 {
     // first find the pointer to the first number part of line and then convert it to integer checking for all errors
     char *numberFirstChar = strchr(line, ':');
@@ -395,7 +395,7 @@ size_t getDimensionFromLine(char * line, int lineSize, Instance *d)
     return dimension;
 }
 
-size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *d)
+static size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *d)
 {
     // first find the pointer to the weight type descriptor
     char *firstWgtTypePtr = strchr(line, ':');

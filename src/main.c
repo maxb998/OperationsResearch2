@@ -8,11 +8,11 @@ int main (int argc, char *argv[])
 
     LOG (LOG_LVL_LOG, "file %s has been loaded succesfully", d.params.inputFile);
 
-    computeSquaredDistanceMatrix(&d);
+    double computeMatrixTime = computeDistanceMatrix(&d);
     
-    LOG(LOG_LVL_LOG, "Distance Matrix Done");
+    LOG(LOG_LVL_LOG, "Distance Matrix Done in %.3e seconds", computeMatrixTime);
 
-    //printDistanceMatrix(&d, 1);
+    printDistanceMatrix(&d, 1);
 
     //###########################################
     // CREATE A FAKE SOLUTION USING THE POINTS IN THEIR DEFAULT ORDER

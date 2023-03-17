@@ -126,6 +126,6 @@ void plotSolution(Instance *d);
 
 void printDistanceMatrix(Instance *d, int showEndRowPlaceholder);
 
-int computeSquaredDistanceMatrix(Instance *d);
+double computeDistanceMatrix(Instance *d);
 
 #endif //DISTANCE_MATRIX
