@@ -5,7 +5,6 @@ typedef struct
     Instance *d;
     pthread_mutex_t mutex;
     size_t nextRow; // only value that needs critical region, used to select the row on which the thread will work on
-    char fatal;
 } ThreadedInstance;
 
 // method to compute edges weights with multiple threads using AVX2 instructions
@@ -15,6 +14,7 @@ static void * computeDistMatThread(void * d);
 // #############################################################################################################
 // EXACT DISTANCE FUNCTIONS DEFINITIONS
 
+// Return vector containing the euclidean distance squared. Fastest
 static inline __m256 euclideanCostSquared2D(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
 {
     register __m256 xDiff, yDiff, dist;
@@ -24,6 +24,16 @@ static inline __m256 euclideanCostSquared2D(__m256 x1, __m256 y1, __m256 x2, __m
     dist = _mm256_add_ps(_mm256_mul_ps(xDiff, xDiff), _mm256_mul_ps(yDiff, yDiff));
 
     return dist;
+}
+// Return vector containing the most accurate euclidean distance. Slow
+static inline __m256 euclideanCost2D(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
+{
+    return _mm256_sqrt_ps(euclideanCostSquared2D(x1,y1,x2,y2));
+}
+// Return vector containig the approximations of euclidean distances. Maximum relative error is 3*2^-12. Fast euclidean distance
+static inline __m256 euclideanCost2DFastApprox(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
+{
+    return _mm256_rcp_ps(_mm256_rsqrt_ps(euclideanCostSquared2D(x1,y1,x2,y2)));
 }
 
 // https://stackoverflow.com/questions/63599391/find-absolute-in-avx
@@ -63,12 +73,27 @@ static inline __m256 attCostSquared2D(__m256 x1, __m256 y1, __m256 x2, __m256 y2
     return dist;
 }
 
+static inline __m256 attCost2D(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
+{
+    return _mm256_sqrt_ps(attCostSquared2D(x1,y1,x2,y2));
+}
+
+static inline __m256 attCost2DFastApprox(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
+{
+    return _mm256_rcp_ps(_mm256_rsqrt_ps(attCostSquared2D(x1,y1,x2,y2)));
+}
+
 // ###########################################################################################################
 // ROUNDED DISTANCE FUNCTIONS DEFINITIONS
 
-static inline __m256i euclideanCostSquared2DRounded(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
+static inline __m256i euclideanCost2DRounded(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
 {
-    return _mm256_cvttps_epi32(_mm256_sqrt_ps(euclideanCostSquared2D(x1,y1,x2,y2)));
+    return _mm256_cvttps_epi32(euclideanCost2D(x1,y1,x2,y2));
+}
+
+static inline __m256i euclideanCost2DFastApproxRounded(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
+{
+    return _mm256_cvttps_epi32(euclideanCost2DFastApprox(x1,y1,x2,y2));
 }
 
 static inline __m256i manhattanCost2DRounded(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
@@ -81,11 +106,14 @@ static inline __m256i maximumCost2DRounded(__m256 x1, __m256 y1, __m256 x2, __m2
     return _mm256_cvttps_epi32(maximumCost2D(x1,y1,x2,y2));
 }
 
-static inline __m256i attCostSquared2DRounded(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
+static inline __m256i attCost2DRounded(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
 {
-    register __m256 roundedDist = attCostSquared2D(x1,y1,x2,y2);
-    roundedDist = _mm256_ceil_ps(_mm256_sqrt_ps(roundedDist));
-    return _mm256_cvttps_epi32(roundedDist);
+    return _mm256_cvttps_epi32(_mm256_ceil_ps(attCost2D(x1,y1,x2,y2)));
+}
+
+static inline __m256i attCost2DFastApproxRounded(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
+{
+    return _mm256_cvttps_epi32(_mm256_ceil_ps(attCost2DFastApprox(x1,y1,x2,y2)));
 }
             
 // #############################################################################################################
@@ -111,7 +139,7 @@ void printDistanceMatrix(Instance *d, int showEndRowPlaceholder)
         {
             printf(" ");
             for (size_t col = 0; col < rowSizeToPrint; col++)
-                printf("%.2e ", d->edgeCost.mat[row * d->edgeCost.rowSizeMem + col]);
+                printf("%.6e ", d->edgeCost.mat[row * d->edgeCost.rowSizeMem + col]);
             printf("\n");
         }
     }
@@ -154,7 +182,7 @@ double computeDistanceMatrix(Instance *d)
         d->edgeCost.roundedMat = aligned_alloc(32, d->edgeCost.rowSizeMem * n * sizeof(int));
         
     // init data structure to pass to threads
-    ThreadedInstance thInst = { .d = d, .nextRow = 0, .fatal = 0};
+    ThreadedInstance thInst = { .d = d, .nextRow = 0 };
     pthread_mutex_init (&thInst.mutex, NULL);
 
     // each thread compute one row of the distance matrix before calling mutex to get a new workspace
@@ -186,9 +214,6 @@ double computeDistanceMatrix(Instance *d)
         if (threadMax < threadsTime[i])
             threadMax = threadsTime[i];
 
-    if (thInst.fatal == 1)
-        throwError(d, "Distance Matrix Computation: An error has occured while the threads were working. Check the code");
-
     return totCpuTime + threadMax;
 }
 
@@ -204,8 +229,7 @@ static void * computeDistMatThread(void* d)
 
     size_t n = th->d->nodesCount;
 
-    int pthreadMutexErrorID = 0;  // check for mutex errors
-    while ( (pthreadMutexErrorID = pthread_mutex_lock(&th->mutex) == 0) && (th->nextRow < th->d->nodesCount) )    // lock mutex before checking nextRow
+    while ( (pthread_mutex_lock(&th->mutex) == 0) && (th->nextRow < th->d->nodesCount) )    // lock mutex before checking nextRow
     {
         // CRITICAL REGION STARTED(INCLUDING WHILE CONDITION) ######################
         // here thread gets it's workspace
@@ -213,11 +237,8 @@ static void * computeDistMatThread(void* d)
         size_t row = th->nextRow;
         th->nextRow++; // prevent other threads threads to access this thread working row
 
-        pthreadMutexErrorID = pthread_mutex_unlock (&th->mutex);
+        pthread_mutex_unlock (&th->mutex);
         // CRITICAL REGION END #####################################################
-
-        // check errors with mutex
-        if (pthreadMutexErrorID != 0) break;
 
         // now the thread can compute the distance matrix inside it's workspace (row)
         register __m256 x1, y1, x2, y2, dist;
@@ -235,7 +256,11 @@ static void * computeDistMatThread(void* d)
                 switch (th->d->params.edgeWeightType)
                 {
                 case EUC_2D:
-                    dist = euclideanCostSquared2D(x1, y1, x2, y2); break;
+                    if (USE_APPROXIMATED_DISTANCES == 1)
+                        dist = euclideanCost2DFastApprox(x1, y1, x2, y2);
+                    else
+                        dist = euclideanCost2D(x1, y1, x2, y2); 
+                    break;
 
                 case MAN_2D:
                     dist = manhattanCost2D(x1, y1, x2, y2); break;
@@ -244,11 +269,14 @@ static void * computeDistMatThread(void* d)
                     dist = maximumCost2D(x1, y1, x2, y2); break;
 
                 case ATT:
-                    dist = attCostSquared2D(x1, y1, x2, y2); break;
+                    if (USE_APPROXIMATED_DISTANCES == 1)
+                        dist = attCost2DFastApprox(x1, y1, x2, y2);
+                    else
+                        dist = attCost2D(x1, y1, x2, y2);
+                    break;
 
                 default:
                     LOG(LOG_LVL_CRITICAL, "Thread is trying to compute distance with unsupported edge weight type. Check the code");
-                    th->fatal = 1;
                     return NULL;
                 }
 
@@ -268,7 +296,11 @@ static void * computeDistMatThread(void* d)
                 switch (th->d->params.edgeWeightType)
                 {
                 case EUC_2D:
-                    roundedDist = euclideanCostSquared2DRounded(x1, y1, x2, y2); break;
+                    if (USE_APPROXIMATED_DISTANCES == 1)
+                        roundedDist = euclideanCost2DFastApproxRounded(x1, x2, y1, y2);
+                    else
+                        roundedDist = euclideanCost2DRounded(x1, y1, x2, y2);
+                    break;
 
                 case MAN_2D:
                     roundedDist = manhattanCost2DRounded(x1, y1, x2, y2); break;
@@ -277,11 +309,14 @@ static void * computeDistMatThread(void* d)
                     roundedDist = maximumCost2DRounded(x1, y1, x2, y2); break;
 
                 case ATT:
-                    roundedDist = attCostSquared2DRounded(x1, y1, x2, y2); break;
+                    if (USE_APPROXIMATED_DISTANCES == 1)
+                        roundedDist = attCost2DFastApproxRounded(x1, y1, x2, y2);
+                    else
+                        roundedDist = attCost2DRounded(x1, y1, x2, y2);
+                    break;
 
                 default:
                     LOG(LOG_LVL_CRITICAL, "Thread is trying to compute distance with unsupported edge weight type. Check the code");
-                    th->fatal = 1;
                     return NULL;
                 }
 
@@ -295,16 +330,7 @@ static void * computeDistMatThread(void* d)
     }
 
     // unlock mutex that was locked in the while condition
-    pthreadMutexErrorID = pthread_mutex_unlock(&th->mutex);
-    
-    // Log mutex errors
-    if (pthreadMutexErrorID != 0)
-    {
-        LOG(LOG_LVL_ERROR, "computeSqDistMatThread(): Error on mutex lock/unlock with code %d. Do not trust results", pthreadMutexErrorID);
-        th->fatal = 1;
-        return NULL;
-    }
-
+    pthread_mutex_unlock(&th->mutex);
 
     end =  clock();
 

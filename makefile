@@ -14,8 +14,8 @@ BIN_DEBUG_DIR = bin/debug
 BIN_EXEC_DIR = bin/x64
 
 # files list
-OBJ_DEBUG_FILES = $(OBJ_DEBUG_DIR)/main.o $(OBJ_DEBUG_DIR)/utilities.o $(OBJ_DEBUG_DIR)/DistanceMatrix.o $(OBJ_DEBUG_DIR)/NearestNeighbour.o $(OBJ_DEBUG_DIR)/ExtraMileage.o
-OBJ_EXEC_FILES = $(OBJ_EXEC_DIR)/main.o $(OBJ_EXEC_DIR)/utilities.o $(OBJ_EXEC_DIR)/DistanceMatrix.o $(OBJ_EXEC_DIR)/NearestNeighbour.o $(OBJ_EXEC_DIR)/ExtraMileage.o
+OBJ_DEBUG_FILES = $(OBJ_DEBUG_DIR)/main.o $(OBJ_DEBUG_DIR)/utilities.o $(OBJ_DEBUG_DIR)/DistanceMatrix.o $(OBJ_DEBUG_DIR)/NearestNeighbour.o $(OBJ_DEBUG_DIR)/ExtraMileage.o $(OBJ_DEBUG_DIR)/2opt.o
+OBJ_EXEC_FILES = $(OBJ_EXEC_DIR)/main.o $(OBJ_EXEC_DIR)/utilities.o $(OBJ_EXEC_DIR)/DistanceMatrix.o $(OBJ_EXEC_DIR)/NearestNeighbour.o $(OBJ_EXEC_DIR)/ExtraMileage.o $(OBJ_EXEC_DIR)/2opt.o
 
 # list of header files
 HEADERS = src/tsp.h
@@ -40,6 +40,8 @@ $(OBJ_DEBUG_DIR)/NearestNeighbour.o: src/NearestNeighbour.c $(HEADERS)
 $(OBJ_DEBUG_DIR)/ExtraMileage.o: src/ExtraMileage.c $(HEADERS)
 	$(CC) $(CFLAGS_DEBUG) src/ExtraMileage.c -o $(OBJ_DEBUG_DIR)/ExtraMileage.o
 
+$(OBJ_DEBUG_DIR)/2opt.o: src/2opt.c $(HEADERS)
+	$(CC) $(CFLAGS_DEBUG) src/2opt.c -o $(OBJ_DEBUG_DIR)/2opt.o
 
 
 # build options when testing performance
@@ -60,6 +62,9 @@ $(OBJ_EXEC_DIR)/NearestNeighbour.o: src/NearestNeighbour.c $(HEADERS)
 
 $(OBJ_EXEC_DIR)/ExtraMileage.o: src/ExtraMileage.c $(HEADERS)
 	$(CC) $(CFLAGS_EXEC) src/ExtraMileage.c -o $(OBJ_EXEC_DIR)/ExtraMileage.o
+
+$(OBJ_EXEC_DIR)/2opt.o: src/2opt.c $(HEADERS)
+	$(CC) $(CFLAGS_EXEC) src/2opt.c -o $(OBJ_EXEC_DIR)/2opt.o
 
 
 build: buildDebug buildExec
