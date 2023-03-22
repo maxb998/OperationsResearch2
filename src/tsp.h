@@ -27,7 +27,6 @@
 // size of avx vector. 4 is vector of doubles 64bits, 8 is vector of floats 32bits
 #define AVX_VEC_SIZE 8
 
-#define DOUBLE_MAX 1.79769313486231570e+308
 #define SMALLX 1e-6
 #define EPSILON 1e-9
 
@@ -104,21 +103,39 @@ enum logLevel{
 	LOG_LVL_EVERYTHING // 6
 };
 
+// Initialize empty instance
 void initInstance(Instance *d);
+
+/*Free whatever dynamic memory might be allocated in the Instance pointed by d.
+* d must be initialized with initInstance(d);
+*/
 void freeInstance(Instance *d);
 
+/*Function used to log informations with level.
+* lvl -> logLevel: Desired level of logging priority. If this value is greater than global value than LOG does not print anything
+* line, ... -> string, args: Arguments that are directly fed to printf
+*/
 int LOG (enum logLevel lvl, char * line, ...);
 
-// launch fatal error, free memory and exit with code 1
+// Launch fatal error, free memory and exit with code 1
 void throwError (Instance *d, char * line, ...);
 
+// Parse commandline arguments stored in argv and save relevant information to d->params
 void parseArgs (Instance *d, int argc, char *argv[]);
 
+// Read file with .tsp extension according to tsplib specifications, complete with file sintax error checking
 void readFile (Instance *d);
 
 void saveSolution(Instance *d);
 
-void plotSolution(Instance *d);
+/*Plot solution using gnuplot. Does NOT check for errors on input
+* d	-> Instance to plot
+* plotPixelSize	-> string: Plot window size in pixel specified with format: "<WIDTH>,<HEIGHT>"
+* pointColor -> string: Color of the circle representing the point, eg "black" or "red"
+* tourPointColor -> string: Color of the 'X' on top of the point circle of color pointColor. Format and types is the same as for pointColor
+* pointSize -> int: Size of the points
+*/
+void plotSolution(Instance *d, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize);
 
 #endif //TSP_UTILITIES
 
@@ -130,3 +147,11 @@ void printDistanceMatrix(Instance *d, int showEndRowPlaceholder);
 double computeDistanceMatrix(Instance *d);
 
 #endif //DISTANCE_MATRIX
+
+
+#ifndef EXTRA_MILEAGE
+#define EXTRA_MILEAGE
+
+double solveExtraMileage(Instance *d);
+
+#endif //EXTRA_MILEAGE

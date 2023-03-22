@@ -50,6 +50,7 @@ const char * wgtTypeStr[] = {
 #define EDGE_WEIGHT_TYPES_COUNT 12
 
 // file parsing functions
+
 // gets the string specified in the "NAME" keyword in the file
 static void getNameFromFile(char * line, int lineSize, char out[], Instance *d);
 // checks that the file type is "TSP"
@@ -81,15 +82,15 @@ void initInstance(Instance *d)
 void freeInstance(Instance *d)
 {
     // points
-    if (d->X) free(d->X);
-    if (d->Y) free(d->Y);
+    free(d->X);
+    free(d->Y);
 
     // cost matrix
-    if (d->edgeCost.mat) free(d->edgeCost.mat);
-    if (d->edgeCost.roundedMat) free(d->edgeCost.roundedMat);
+    free(d->edgeCost.mat);
+    free(d->edgeCost.roundedMat);
 
     // solution
-    if (d->solution.bestSolution) free(d->solution.bestSolution);
+    free(d->solution.bestSolution);
 }
 
 int LOG (enum logLevel lvl, char * line, ...)
@@ -454,23 +455,41 @@ void saveSolution(Instance *d)
      
 }
 
-void plotSolution(Instance *d)
+void plotSolution(Instance *d, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize)
 {
     // creating the pipeline for gnuplot
     FILE *gnuplotPipe = popen("gnuplot -persistent", "w");
+
+    // gnuplot settings
     fprintf(gnuplotPipe, "set title \"%s\"\n", d->params.name);
+    fprintf(gnuplotPipe, "set terminal qt size %s\n", plotPixelSize);
+
+
+    // set plot linestyles
+    fprintf(gnuplotPipe, "set style line 1 linecolor rgb '%s' pt 7 pointsize %d\n", pointColor, pointSize);
+    fprintf(gnuplotPipe, "set style line 2 linecolor rgb '%s' pointsize %d\n", tourPointColor, pointSize);
 
     // populating the plot
+    
+    fprintf(gnuplotPipe, "plot '-' with point linestyle 1, '-' with linespoint linestyle 2\n");
 
-    fprintf(gnuplotPipe, "plot '-' with linespoint\n");
-    int i = 0;
-    do
-    {
-      fprintf(gnuplotPipe, "%lf %lf\n", d->X[i], d->Y[i]);
-      printf("%lf %lf\n", d->X[i], d->Y[i]);
-      i = d->solution.bestSolution[i];
-    } while (i != 0);
-    fprintf(gnuplotPipe, "%lf %lf\n", d->X[0], d->Y[0]);
+    // first plot only the points
+    for (size_t i = 0; i < d->nodesCount; i++)
+        fprintf(gnuplotPipe, "%f %f\n", d->X[i], d->Y[i]);
     fprintf(gnuplotPipe, "e\n");
+    
+    // second print the tour
+    for (size_t i = 0; i < d->nodesCount; i++)
+    {
+        size_t successorID = d->solution.bestSolution[i];
+        fprintf(gnuplotPipe, "%f %f\n", d->X[successorID], d->Y[successorID]);
+    }
+    fprintf(gnuplotPipe, "%lf %lf\n", d->X[d->solution.bestSolution[0]], d->Y[d->solution.bestSolution[0]]);
+    fprintf(gnuplotPipe, "e\n");
+
+    // force write on stream
     fflush(gnuplotPipe);
+
+    // close stream
+    pclose(gnuplotPipe);
 }
