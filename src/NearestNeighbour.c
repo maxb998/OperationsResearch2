@@ -10,7 +10,7 @@ typedef struct
 
 double NearestNeighbour(Instance *d, int configuration);
 
-static void * computeSingleNN(void *thInst);
+static void * threadNN(void *thInst);
 
 int findSuccessor(Instance *d, int *uncoveredNodes, int node, float *pathCost);
 
@@ -32,7 +32,7 @@ double NearestNeighbour(Instance *d, int configuration)
     pthread_t threads[numProcessors];
     for(int i = 0; i < numProcessors; i++)
     {
-        pthread_create(&threads[i], NULL, computeSingleNN, &thInst);
+        pthread_create(&threads[i], NULL, threadNN, &thInst);
         LOG(LOG_LVL_LOG, "Nearest Neighbour : Thread %d CREATED", i);
     }
 
@@ -55,7 +55,7 @@ double NearestNeighbour(Instance *d, int configuration)
     return -1;
 }
 
-static void * computeSingleNN(void *thInst)
+static void * threadNN(void *thInst)
 {
     ThreadedInstance *th = (ThreadedInstance *)thInst;
 
@@ -88,6 +88,12 @@ static void * computeSingleNN(void *thInst)
             // find the successor node
             // pathCost is also updated in this method
             successor = findSuccessor(th->d, uncoveredNodes, currentNode, &pathCost);
+            // Control on validity of successor: must be in [0,nodesCount)
+            if(successor < 0 || successor >= th->d->nodesCount)
+            {
+                LOG(LOG_LVL_ERROR, "threadNN: error computing successor %d, value: %d", i, successor);
+                exit(EXIT_FAILURE);
+            }
             // set the successor in the path
             iterationPath[currentNode] = successor;
             // update current node
@@ -125,7 +131,6 @@ int findSuccessor(Instance *d, int *uncoveredNodes, int node, float *pathCost)
             {
                 currentBestNode = i;
                 bestDistance = d->edgeCost.mat[(d->edgeCost.rowSizeMem)*node + i];
-                uncoveredNodes[i] = 1;
             }
         }
     }else
@@ -137,10 +142,10 @@ int findSuccessor(Instance *d, int *uncoveredNodes, int node, float *pathCost)
             {
                 currentBestNode = i;
                 bestDistance = d->edgeCost.mat[(d->edgeCost.rowSizeMem)*node + i];
-                uncoveredNodes[i] = 1;
             }
         }
     }
+    uncoveredNodes[currentBestNode] = 1;
     *pathCost += bestDistance;
     return currentBestNode;
 }
