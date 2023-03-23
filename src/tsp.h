@@ -153,8 +153,6 @@ double computeDistanceMatrix(Instance *d);
 
 double NearestNeighbour(Instance *d, int configuration);
 
-static void * computeSingleNN(void *thInst);
-
 int findSuccessor(Instance *d, int *uncoveredNodes, int node, float *pathCost);
 
 #endif //NEAREST_NEIGHBOUR
