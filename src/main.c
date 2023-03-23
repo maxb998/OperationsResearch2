@@ -24,7 +24,7 @@ int main (int argc, char *argv[])
     memcpy(d.solution.bestSolution, optSolution, d.nodesCount * sizeof(int));
 
     //saveSolution(&d);
-    plotSolution(&d, "1920,1080", "green", "black", 2);    
+    plotSolution(&d, "640,480", "green", "black", 1);    
     //###########################################
 
     freeInstance(&d);

@@ -148,6 +148,17 @@ double computeDistanceMatrix(Instance *d);
 
 #endif //DISTANCE_MATRIX
 
+#ifndef NEAREST_NEIGHBOUR
+#define NEAREST_NEIGHBOUR
+
+double NearestNeighbour(Instance *d, int configuration);
+
+static void * computeSingleNN(void *thInst);
+
+int findSuccessor(Instance *d, int *uncoveredNodes, int node, float *pathCost);
+
+#endif //NEAREST_NEIGHBOUR
+
 
 #ifndef EXTRA_MILEAGE
 #define EXTRA_MILEAGE
