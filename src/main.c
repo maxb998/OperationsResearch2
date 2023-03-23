@@ -23,8 +23,11 @@ int main (int argc, char *argv[])
 
     //memcpy(d.solution.bestSolution, optSolution, d.nodesCount * sizeof(int));
 
-    d.solution.bestSolution =  malloc(d.nodesCount * sizeof(int));
+    // WORKS WITH THIS COMMENTED
+    //d.solution.bestSolution =  malloc(d.nodesCount * sizeof(int));
     NearestNeighbour(&d, 1);
+    
+    for(int i = 0; i < d.nodesCount; i++) LOG(LOG_LVL_LOG, "Node %d in solution: %d", i, d.solution.bestSolution[i]);
 
     //saveSolution(&d);
     plotSolution(&d, "640,480", "green", "black", 1);    

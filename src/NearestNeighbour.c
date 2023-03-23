@@ -75,6 +75,8 @@ static void * threadNN(void *thInst)
 
         // set all elements of uncoveredNodes to zero
         memset(uncoveredNodes, 0, th->d->nodesCount * sizeof(int));
+        // DEBUG: reset iterationPath to all zeros
+        memset(iterationPath, 0, th->d->nodesCount * sizeof(int));
 
         // initialize the cost of the path to zero
         float pathCost = 0;
@@ -85,8 +87,6 @@ static void * threadNN(void *thInst)
         int successor;
         for(int i = 0; i < th->d->nodesCount-1; i++)    // for n nodes we want to run this loop n-1 times, at the end we set as successor of the last node the starting node
         {
-            // find the successor node
-            // pathCost is also updated in this method
             successor = findSuccessor(th->d, uncoveredNodes, currentNode, &pathCost);
             // Control on validity of successor: must be in [0,nodesCount)
             if(successor < 0 || successor >= th->d->nodesCount)
@@ -98,6 +98,9 @@ static void * threadNN(void *thInst)
             iterationPath[currentNode] = successor;
             // update current node
             currentNode = successor;
+
+            //iterationPath[currentNode] = findSuccessor(th->d, uncoveredNodes, currentNode, &pathCost);
+            //currentNode = iterationPath[currentNode];
         }
         // at the end we set the starting node as successor of the last one to close the circuit
         iterationPath[currentNode] = node;

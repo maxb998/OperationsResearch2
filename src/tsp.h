@@ -151,8 +151,11 @@ double computeDistanceMatrix(Instance *d);
 #ifndef NEAREST_NEIGHBOUR
 #define NEAREST_NEIGHBOUR
 
+// Computes the Nearest Neighbour heuristic starting from every node, and saving the path with minimum cost into the Instance
+// Creates a thread for every logic processor in the machine
 double NearestNeighbour(Instance *d, int configuration);
 
+// finds the closest unvisited node (pathCost is also updated in this method)
 int findSuccessor(Instance *d, int *uncoveredNodes, int node, float *pathCost);
 
 #endif //NEAREST_NEIGHBOUR
