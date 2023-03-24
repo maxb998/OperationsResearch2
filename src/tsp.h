@@ -172,6 +172,6 @@ double solveExtraMileage(Instance *d);
 #ifndef _2OPT
 #define _2OPT
 
-_2optBestFix(Instance *d);
+double _2optBestFix(Instance *d);
 
 #endif //_2OPT

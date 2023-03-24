@@ -35,13 +35,10 @@ typedef struct
 
 } ThreadedInstance;
 
-
-static double _2optBestFix(Instance *d);
-
 static void * _2optBestFixThread(void * arg);
 
 
-static double _2optBestFix(Instance *d)
+double _2optBestFix(Instance *d)
 {
     ThreadedInstance th = { .d = d, .nextEdge = 0, .finishedFlag = 0, .threadFinish = 0 };
 
@@ -62,15 +59,16 @@ static double _2optBestFix(Instance *d)
         pthread_create(&threads[i], NULL, _2optBestFixThread, &th);
 
     // wait for threads and get execution time
-    double threadsTime[MAX_THREADS];
+    double maxThreadsTime = 0.0;
     for (size_t i = 0; i < d->params.threadsCount; i++)
     {
         double * returnedTime;
-        pthread_join(threads[i], &returnedTime);
+        pthread_join(threads[i], (void**)&returnedTime);
 
         if (!returnedTime) throwError(d, "Return value of thread %ld int 2optBestFix does not exist", i);
 
-        threadsTime[i] = *returnedTime;
+        if (maxThreadsTime < *returnedTime)
+            maxThreadsTime = *returnedTime;
         free(returnedTime);
     }
 
@@ -79,11 +77,16 @@ static double _2optBestFix(Instance *d)
     pthread_mutex_destroy(&th.mutexBestConfigUpdate);
     pthread_mutex_destroy(&th.mutexNextEdgeMutex);
     pthread_cond_destroy(&th.conditionBestSolUpdate);
+
+    return 0.0;
 }
 
 
 static void * _2optBestFixThread(void * arg)
 {
+    clock_t start, end;
+    start = clock();
+
     // CRITICAL SECTION #1 -> finishFlag read
     // CRITICAL SECTION #2 -> 
     // CRITICAL SECTION #3 -> 
@@ -169,7 +172,7 @@ static void * _2optBestFixThread(void * arg)
                 {
                     int temp = th->d->solution.bestSolution[smallID];
                     th->d->solution.bestSolution[smallID] = th->d->solution.bestSolution[bigID];
-                    th->d->solution.bestSolution[bigID] = th->d->solution.bestSolution[smallID];
+                    th->d->solution.bestSolution[bigID] = temp;
                     smallID++;
                     bigID++;
                 }
@@ -195,4 +198,11 @@ static void * _2optBestFixThread(void * arg)
 
     pthread_mutex_unlock(&th->mutexFinishFlagMutex);
     // CRITICAL SECTION #1 -> END # 1.2
+
+    end = clock();
+
+    double *cpuTimeUsed = malloc(sizeof(double));
+    *cpuTimeUsed = ((double)(end-start)) / CLOCKS_PER_SEC;
+
+    pthread_exit(cpuTimeUsed);
 }
