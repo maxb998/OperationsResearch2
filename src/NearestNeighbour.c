@@ -13,15 +13,10 @@ static void * threadNN(void *thInst);
 // finds the closest unvisited node (pathCost is also updated in this method)
 static inline int findSuccessor(Instance *d, int *uncoveredNodes, int node, double *pathCost);
 
-double NearestNeighbour(Instance *d, int configuration)
+double NearestNeighbour(Instance *d)
 {
     // first we check the number of processors to now how many threads we want to create
-    FILE *commandPipe;
-    char *command = "nproc";
-    char temp[10];
-    commandPipe = (FILE*)popen(command, "r");
-    fgets(temp, sizeof(temp), commandPipe);
-    int numProcessors = atoi(temp);
+    int numProcessors = nProcessors();
 
     // we create and initialize the threaded instance
     ThreadedInstance thInst = {.d = d, .startingNode = 0};

@@ -73,7 +73,7 @@ void initInstance(Instance *d)
     d->params.threadsCount = 1;
     d->nodesCount = 0;
     d->solution.bestCost = INFINITY;
-    
+    d->params.randomSeed = -1;
     // make strings empty to check for errors (should only need to change first char to 0 but it's nicer this way)
     memset(d->params.inputFile, 0, 1000);
     memset(d->params.name, 0, 200);
@@ -428,6 +428,17 @@ static size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *d)
     return foundEdgeWeightTypeID;
 }
 
+int nProcessors()
+{
+    FILE *commandPipe;
+    char *command = "nproc";
+    char temp[10];
+    commandPipe = (FILE*)popen(command, "r");
+    fgets(temp, sizeof(temp), commandPipe);
+    pclose(commandPipe);
+    int numProcessors = atoi(temp);
+    return numProcessors;
+}
 
 void saveSolution(Instance *d)
 {  

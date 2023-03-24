@@ -25,7 +25,7 @@ int main (int argc, char *argv[])
 
     // WORKS WITH THIS COMMENTED
     //d.solution.bestSolution =  malloc(d.nodesCount * sizeof(int));
-    NearestNeighbour(&d, 1);
+    NearestNeighbour(&d);
     
     for(int i = 0; i < d.nodesCount; i++) LOG(LOG_LVL_EVERYTHING, "Node %d in solution: %d", i, d.solution.bestSolution[i]);
 

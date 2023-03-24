@@ -126,6 +126,9 @@ void parseArgs (Instance *d, int argc, char *argv[]);
 // Read file with .tsp extension according to tsplib specifications, complete with file sintax error checking
 void readFile (Instance *d);
 
+// Returns the number of processors of the machine
+int nProcessors();
+
 void saveSolution(Instance *d);
 
 /*Plot solution using gnuplot. Does NOT check for errors on input
@@ -153,7 +156,7 @@ double computeDistanceMatrix(Instance *d);
 
 // Computes the Nearest Neighbour heuristic starting from every node, and saving the path with minimum cost into the Instance
 // Creates a thread for every logic processor in the machine
-double NearestNeighbour(Instance *d, int configuration);
+double NearestNeighbour(Instance *d);
 
 #endif //NEAREST_NEIGHBOUR
 
