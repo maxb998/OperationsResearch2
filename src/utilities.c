@@ -464,7 +464,6 @@ void plotSolution(Instance *d, const char * plotPixelSize, const char * pointCol
     fprintf(gnuplotPipe, "set title \"%s\"\n", d->params.name);
     fprintf(gnuplotPipe, "set terminal qt size %s\n", plotPixelSize);
 
-
     // set plot linestyles
     fprintf(gnuplotPipe, "set style line 1 linecolor rgb '%s' pt 7 pointsize %d\n", pointColor, pointSize);
     fprintf(gnuplotPipe, "set style line 2 linecolor rgb '%s' pointsize %d\n", tourPointColor, pointSize);

@@ -8,11 +8,10 @@ typedef struct
     int startingNode;
 }ThreadedInstance;
 
-double NearestNeighbour(Instance *d, int configuration);
-
 static void * threadNN(void *thInst);
 
-int findSuccessor(Instance *d, int *uncoveredNodes, int node, float *pathCost);
+// finds the closest unvisited node (pathCost is also updated in this method)
+static inline int findSuccessor(Instance *d, int *uncoveredNodes, int node, float *pathCost);
 
 double NearestNeighbour(Instance *d, int configuration)
 {
@@ -59,13 +58,14 @@ static void * threadNN(void *thInst)
 {
     ThreadedInstance *th = (ThreadedInstance *)thInst;
 
-    // we create an array that keeps track of the successors along the path
-    int * iterationPath = malloc(th->d->nodesCount * sizeof(int));
+    // We create an array that stores the nodes of the solution in order
+    // It must contain nodesCount + 1 elements, since the first and the last node are the same
+    int * iterationPath = malloc((th->d->nodesCount+1) * sizeof(int));
     // we create an array that indicates if a node has alredy been visited
     int * uncoveredNodes = malloc(th->d->nodesCount * sizeof(int));
 
-    // we want the threads to repeat the computation for every node
-    // for this we use a mutex on startingNode until it reaches nodesCount
+    // We want the threads to repeat the computation for every node
+    // For this we use a mutex on startingNode until it reaches nodesCount
     while((pthread_mutex_lock(&th->nodeLock) == 0) && (th->startingNode < th->d->nodesCount))
     {
         int node = th->startingNode;
@@ -76,16 +76,16 @@ static void * threadNN(void *thInst)
         // set all elements of uncoveredNodes to zero
         memset(uncoveredNodes, 0, th->d->nodesCount * sizeof(int));
         // DEBUG: reset iterationPath to all zeros
-        memset(iterationPath, 0, th->d->nodesCount * sizeof(int));
+        memset(iterationPath, 0, (th->d->nodesCount+1) * sizeof(int));
 
         // initialize the cost of the path to zero
         float pathCost = 0;
 
         // we set the starting node as visited
         uncoveredNodes[node] = 1;
-        int currentNode = node;
+        int currentNode = iterationPath[0] = node;
         int successor;
-        for(int i = 0; i < th->d->nodesCount-1; i++)    // for n nodes we want to run this loop n-1 times, at the end we set as successor of the last node the starting node
+        for(int i = 1; i < th->d->nodesCount; i++)    // for n nodes we want to run this loop n-1 times, at the end we set as successor of the last node the starting node
         {
             successor = findSuccessor(th->d, uncoveredNodes, currentNode, &pathCost);
             // Control on validity of successor: must be in [0,nodesCount)
@@ -95,15 +95,12 @@ static void * threadNN(void *thInst)
                 exit(EXIT_FAILURE);
             }
             // set the successor in the path
-            iterationPath[currentNode] = successor;
+            iterationPath[i] = successor;
             // update current node
             currentNode = successor;
-
-            //iterationPath[currentNode] = findSuccessor(th->d, uncoveredNodes, currentNode, &pathCost);
-            //currentNode = iterationPath[currentNode];
         }
         // at the end we set the starting node as successor of the last one to close the circuit
-        iterationPath[currentNode] = node;
+        iterationPath[th->d->nodesCount] = node;
 
         // to check if we have to update the best solution we use another mutex
         if((pthread_mutex_lock(&th->saveLock) == 0) && (th->d->solution.bestCost > pathCost))
@@ -119,7 +116,7 @@ static void * threadNN(void *thInst)
     return 0;
 }
 
-int findSuccessor(Instance *d, int *uncoveredNodes, int node, float *pathCost)
+static inline int findSuccessor(Instance *d, int *uncoveredNodes, int node, float *pathCost)
 {
     float bestDistance = INFINITY;
     int currentBestNode = -1;

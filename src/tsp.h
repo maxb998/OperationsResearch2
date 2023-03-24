@@ -155,9 +155,6 @@ double computeDistanceMatrix(Instance *d);
 // Creates a thread for every logic processor in the machine
 double NearestNeighbour(Instance *d, int configuration);
 
-// finds the closest unvisited node (pathCost is also updated in this method)
-int findSuccessor(Instance *d, int *uncoveredNodes, int node, float *pathCost);
-
 #endif //NEAREST_NEIGHBOUR
 
 
