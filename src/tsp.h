@@ -93,6 +93,8 @@ typedef struct
 #ifndef TSP_UTILITIES
 #define TSP_UTILITIES
 
+#define GRASP_COEFF (int)RAND_MAX*0.9
+
 enum logLevel{
 	LOG_LVL_ERROR, // 0
 	LOG_LVL_CRITICAL, // 1

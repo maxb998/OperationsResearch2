@@ -15,7 +15,8 @@ static inline int findSuccessor(Instance *d, int *uncoveredNodes, int node, doub
 
 double NearestNeighbour(Instance *d)
 {
-
+    // we initialize the seed if it has been passed as argument
+    if(d->params.randomSeed != -1) srand(d->params.randomSeed);
     // we create and initialize the threaded instance
     ThreadedInstance thInst = {.d = d, .startingNode = 0};
     pthread_mutex_init(&thInst.nodeLock, NULL);
@@ -111,34 +112,66 @@ static void * threadNN(void *thInst)
 
 static inline int findSuccessor(Instance *d, int *uncoveredNodes, int node, double *pathCost)
 {
+    // to keep track of the closest node
     float bestDistance = INFINITY;
     int currentBestNode = -1;
+    // to keep track of the second closest node
+    float secondBestDistance = INFINITY;
+    int secondBestNode = -1;
+
+    int currentDistance;    // stores the distance of the node that we are checking
     // check if we are working with rounded weights
     if(d->params.roundWeights == 0)
     {
         for(int i = 0; i < d->nodesCount; i++)
         {
         // check if the node has alredy been visited, if it's different from the current node
-        // and if the distance is better than the best seen
-            if(uncoveredNodes[i] == 0 && i != node && d->edgeCost.mat[(d->edgeCost.rowSizeMem)*node + i] < bestDistance)
+            if(uncoveredNodes[i] == 0 && i != node)
             {
-                currentBestNode = i;
-                bestDistance = d->edgeCost.mat[(d->edgeCost.rowSizeMem)*node + i];
+                currentDistance = d->edgeCost.mat[(d->edgeCost.rowSizeMem)*node + i];
+                // check if the distance is better than the best seen
+                if(currentDistance < bestDistance)
+                {
+                    currentBestNode = i;
+                    bestDistance = currentDistance;
+                }else if(currentDistance < secondBestDistance)
+                {
+                    secondBestNode = i;
+                    secondBestDistance = currentDistance;
+                }
             }
         }
-    }else
+    }else   // here we are working with rounded weights, which are stored in d.edgeCost.roundedMat
     {
         for(int i = 0; i < d->nodesCount; i++)
         {
-        // here we are working with rounded weights, which are stored in d.edgeCost.roundedMat
-            if(uncoveredNodes[i] == 0 && i != node && d->edgeCost.roundedMat[(d->edgeCost.rowSizeMem)*node + i] < bestDistance)
+            if(uncoveredNodes[i] == 0 && i != node)
             {
-                currentBestNode = i;
-                bestDistance = d->edgeCost.mat[(d->edgeCost.rowSizeMem)*node + i];
+                currentDistance = d->edgeCost.roundedMat[(d->edgeCost.rowSizeMem)*node + i];
+                // check if the distance is better than the best seen
+                if(currentDistance < bestDistance)
+                {
+                    secondBestNode = currentBestNode;
+                    secondBestDistance = currentDistance;
+                    currentBestNode = i;
+                    bestDistance = currentDistance;
+                }else if(currentDistance < secondBestDistance)
+                {
+                    secondBestNode = i;
+                    secondBestDistance = currentDistance;
+                }
             }
         }
     }
-    uncoveredNodes[currentBestNode] = 1;
-    *pathCost += bestDistance;
-    return currentBestNode;
+    // We choose what node of the two best we return if GRASP has been required
+    if(d->params.randomSeed != -1 && rand() > GRASP_COEFF && secondBestNode != -1)
+    {
+        uncoveredNodes[secondBestNode] = 1;
+        *pathCost += secondBestDistance;
+        return secondBestNode;
+    }else
+    {    uncoveredNodes[currentBestNode] = 1;
+        *pathCost += bestDistance;
+        return currentBestNode;
+    }
 }
