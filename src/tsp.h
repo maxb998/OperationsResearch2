@@ -167,3 +167,11 @@ int findSuccessor(Instance *d, int *uncoveredNodes, int node, float *pathCost);
 double solveExtraMileage(Instance *d);
 
 #endif //EXTRA_MILEAGE
+
+
+#ifndef _2OPT
+#define _2OPT
+
+_2optBestFix(Instance *d);
+
+#endif //_2OPT
