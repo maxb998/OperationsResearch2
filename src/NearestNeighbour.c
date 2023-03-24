@@ -15,16 +15,14 @@ static inline int findSuccessor(Instance *d, int *uncoveredNodes, int node, doub
 
 double NearestNeighbour(Instance *d)
 {
-    // first we check the number of processors to now how many threads we want to create
-    int numProcessors = nProcessors();
 
     // we create and initialize the threaded instance
     ThreadedInstance thInst = {.d = d, .startingNode = 0};
     pthread_mutex_init(&thInst.nodeLock, NULL);
     pthread_mutex_init(&thInst.saveLock, NULL);
     
-    pthread_t threads[numProcessors];
-    for(int i = 0; i < numProcessors; i++)
+    pthread_t threads[d->params.threadsCount];
+    for(int i = 0; i < d->params.threadsCount; i++)
     {
         pthread_create(&threads[i], NULL, threadNN, &thInst);
         LOG(LOG_LVL_LOG, "Nearest Neighbour : Thread %d CREATED", i);
@@ -32,7 +30,7 @@ double NearestNeighbour(Instance *d)
 
     //double threadsTime[numProcessors];    // SEGMENTATION FAULT BELOW
     double *returnPtr;
-    for(int i = 0; i < numProcessors; i++)
+    for(int i = 0; i < d->params.threadsCount; i++)
     {
         pthread_join(threads[i], (void **)&returnPtr);
         //threadsTime[i] = *returnPtr;      // THROWS SEGMENTATION FAULT

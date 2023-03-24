@@ -50,11 +50,11 @@ enum edgeWeightType{
 typedef struct
 {
     int edgeWeightType;
-    int randomSeed;
+    int randomSeed;			// if no value has been specified as argument GRASP won't be enabled
 	int roundWeights;
     char inputFile[1000];
 	char name[200];
-    size_t threadsCount;
+    int threadsCount;	// if no value has been specified as argument its default value is the number of processors in the machine
 } Parameters;
 
 typedef struct
@@ -125,9 +125,6 @@ void parseArgs (Instance *d, int argc, char *argv[]);
 
 // Read file with .tsp extension according to tsplib specifications, complete with file sintax error checking
 void readFile (Instance *d);
-
-// Returns the number of processors of the machine
-int nProcessors();
 
 void saveSolution(Instance *d);
 

@@ -59,6 +59,8 @@ static void checkFileType(char * line, int lineSize, Instance *d);
 static size_t getDimensionFromLine(char * line, int lineSize, Instance *d);
 // check that the string associated with "EDGE_WEIGHT_TYPE" is correct and return it as a number
 static size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *d);
+// Returns the number of processors of the machine
+static inline int nProcessors();
 
 
 void initInstance(Instance *d)
@@ -70,7 +72,7 @@ void initInstance(Instance *d)
     // initialize variables to standard value
     d->params.edgeWeightType = -1; // so that it gives error
     d->params.roundWeights = 0;
-    d->params.threadsCount = 1;
+    d->params.threadsCount = nProcessors();
     d->nodesCount = 0;
     d->solution.bestCost = INFINITY;
     d->params.randomSeed = -1;
@@ -428,7 +430,7 @@ static size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *d)
     return foundEdgeWeightTypeID;
 }
 
-int nProcessors()
+static inline int nProcessors()
 {
     FILE *commandPipe;
     char *command = "nproc";
