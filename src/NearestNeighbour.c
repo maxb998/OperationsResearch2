@@ -11,7 +11,7 @@ typedef struct
 static void * threadNN(void *thInst);
 
 // finds the closest unvisited node (pathCost is also updated in this method)
-static inline int findSuccessor(Instance *d, int *uncoveredNodes, int node, float *pathCost);
+static inline int findSuccessor(Instance *d, int *uncoveredNodes, int node, double *pathCost);
 
 double NearestNeighbour(Instance *d, int configuration)
 {
@@ -43,7 +43,7 @@ double NearestNeighbour(Instance *d, int configuration)
         //threadsTime[i] = *returnPtr;      // THROWS SEGMENTATION FAULT
         free(returnPtr);
 
-        LOG(LOG_LVL_LOG, "Thread %d finished in x time", i);
+        LOG(LOG_LVL_LOG, "Nearest Neighbour : Thread %d finished in x time", i);
     }
 
 
@@ -79,7 +79,7 @@ static void * threadNN(void *thInst)
         memset(iterationPath, 0, (th->d->nodesCount+1) * sizeof(int));
 
         // initialize the cost of the path to zero
-        float pathCost = 0;
+        double pathCost = 0;
 
         // we set the starting node as visited
         uncoveredNodes[node] = 1;
@@ -91,8 +91,7 @@ static void * threadNN(void *thInst)
             // Control on validity of successor: must be in [0,nodesCount)
             if(successor < 0 || successor >= th->d->nodesCount)
             {
-                LOG(LOG_LVL_ERROR, "threadNN: error computing successor %d, value: %d", i, successor);
-                exit(EXIT_FAILURE);
+                throwError(th->d, "threadNN: error computing successor %d, value returned: %d", i, successor);
             }
             // set the successor in the path
             iterationPath[i] = successor;
@@ -109,6 +108,7 @@ static void * threadNN(void *thInst)
             int * temp = th->d->solution.bestSolution;
             th->d->solution.bestSolution = iterationPath;
             iterationPath = temp;
+            LOG(LOG_LVL_LOG, "Found better solution starting from node %d, cost: %lf", node, pathCost);
         }
         pthread_mutex_unlock(&th->saveLock);
     }
@@ -116,7 +116,7 @@ static void * threadNN(void *thInst)
     return 0;
 }
 
-static inline int findSuccessor(Instance *d, int *uncoveredNodes, int node, float *pathCost)
+static inline int findSuccessor(Instance *d, int *uncoveredNodes, int node, double *pathCost)
 {
     float bestDistance = INFINITY;
     int currentBestNode = -1;
