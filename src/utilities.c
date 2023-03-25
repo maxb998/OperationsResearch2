@@ -275,6 +275,8 @@ void readFile (Instance *d)
     d->X = aligned_alloc(32, memElemsToAlloc * sizeof(float));
     d->Y = aligned_alloc(32, memElemsToAlloc * sizeof(float));
 
+    d->solution.bestSolution = aligned_alloc(32, memElemsToAlloc * sizeof(int));
+
     // fill the memory with data
     size_t i = 0;
     while (((lineSize = getline(&line, &lineMemSize, f)) != EOF) && (strncmp(line, "EOF", 3) != 0))

@@ -139,7 +139,7 @@ void printDistanceMatrix(Instance *d, int showEndRowPlaceholder)
         {
             printf(" ");
             for (size_t col = 0; col < rowSizeToPrint; col++)
-                printf("%.6e ", d->edgeCost.mat[row * d->edgeCost.rowSizeMem + col]);
+                printf("%.3e ", d->edgeCost.mat[row * d->edgeCost.rowSizeMem + col]);
             printf("\n");
         }
     }

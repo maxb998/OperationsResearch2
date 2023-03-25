@@ -21,7 +21,7 @@
 #ifndef TSP_DATA_STRUCTURES
 #define TSP_DATA_STRUCTURES
 
-#define MAX_THREADS 255
+#define MAX_THREADS 32
 #define USE_APPROXIMATED_DISTANCES 1
 
 // size of avx vector. 4 is vector of doubles 64bits, 8 is vector of floats 32bits
