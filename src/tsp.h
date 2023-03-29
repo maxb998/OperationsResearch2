@@ -18,8 +18,8 @@
 #endif //TSP_INCLUDES
 
 
-#ifndef TSP_DATA_STRUCTURES
-#define TSP_DATA_STRUCTURES
+#ifndef TSP_DATA_BASE
+#define TSP_DATA_BASE
 
 #define MAX_THREADS 32
 #define USE_APPROXIMATED_DISTANCES 1
@@ -54,41 +54,34 @@ typedef struct
 	int roundWeights;
     char inputFile[1000];
 	char name[200];
-    int threadsCount;	// if no value has been specified as argument its default value is the number of processors in the machine
+    int nThreads;	// if no value has been specified as argument its default value is the number of processors in the machine
 } Parameters;
 
 typedef struct
 {
-    float bestCost;    // best solution found cost
-	int bestRoundedSol;
-    int *bestSolution;  // array containing sequence of nodes representing the optimal solution
-} Solution;
-
-typedef struct
-{
-	// if we require rounded weights mat will be NULL and roundedMat will point to the allocated matrix
-	float * mat;
-	int * roundedMat;
-	size_t rowSizeMem;
-} EdgeCostMatStruct;
-
-
-typedef struct
-{
     // data
-    size_t nodesCount;
+    size_t nNodes;
     float *X;
     float *Y;
-    //double *coords;     // all x first and then the y
-    EdgeCostMatStruct edgeCost;   // matrix with the cost of all edges (can use -1 if edge does not exists)
 
     Parameters params;
-    
-    Solution solution;
-    
 } Instance;
 
-#endif //TSP_DATA_STRUCTURES
+typedef struct
+{
+    float bestCost;    // best solution found cost
+	int bestCostRounded;
+
+	double execTime;
+
+	// the solution
+	float *X;
+	float *Y;
+
+	Instance *instance;
+} Solution;
+
+#endif //TSP_DATA_BASE
 
 #ifndef TSP_UTILITIES
 #define TSP_UTILITIES
@@ -105,13 +98,17 @@ enum logLevel{
 	LOG_LVL_EVERYTHING // 6
 };
 
-// Initialize empty instance
-void initInstance(Instance *d);
+// Returns initialized/empty instance
+Instance newInstance ();
 
-/*Free whatever dynamic memory might be allocated in the Instance pointed by d.
-* d must be initialized with initInstance(d);
-*/
-void freeInstance(Instance *d);
+// Returns initialized solution struct for the specified Instance pointed by inst
+Solution newSolution (Instance *inst);
+
+// Frees the allocated memory in the Instance pointed by d
+void destroyInstance (Instance *inst);
+
+// Frees the allocated memory in the Solution pointed by s
+void destroySolution (Solution *sol);
 
 /*Function used to log informations with level.
 * lvl -> logLevel: Desired level of logging priority. If this value is greater than global value than LOG does not print anything
@@ -120,15 +117,15 @@ void freeInstance(Instance *d);
 int LOG (enum logLevel lvl, char * line, ...);
 
 // Launch fatal error, free memory and exit with code 1
-void throwError (Instance *d, char * line, ...);
+void throwError (Instance *inst, Solution *sol, char * line, ...);
 
-// Parse commandline arguments stored in argv and save relevant information to d->params
-void parseArgs (Instance *d, int argc, char *argv[]);
+// Parse commandline arguments stored in argv and save relevant information to inst->params
+void parseArgs (Instance *inst, int argc, char *argv[]);
 
 // Read file with .tsp extension according to tsplib specifications, complete with file sintax error checking
-void readFile (Instance *d);
+void readFile (Instance *inst);
 
-void saveSolution(Instance *d);
+void saveSolution(Solution *sol);
 
 /*Plot solution using gnuplot. Does NOT check for errors on input
 * d	-> Instance to plot
@@ -137,25 +134,24 @@ void saveSolution(Instance *d);
 * tourPointColor -> string: Color of the 'X' on top of the point circle of color pointColor. Format and types is the same as for pointColor
 * pointSize -> int: Size of the points
 */
-void plotSolution(Instance *d, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize);
+void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize);
+
+// print the solution as id array of the original order of the points
+size_t * getSolutionIDArray(Solution *sol);
+
+float computeSquaredCost_VEC(Solution *sol);
+
+float computeSquaredCost(Solution *sol);
 
 #endif //TSP_UTILITIES
 
-#ifndef DISTANCE_MATRIX
-#define DISTANCE_MATRIX
-
-void printDistanceMatrix(Instance *d, int showEndRowPlaceholder);
-
-double computeDistanceMatrix(Instance *d);
-
-#endif //DISTANCE_MATRIX
 
 #ifndef NEAREST_NEIGHBOUR
 #define NEAREST_NEIGHBOUR
 
 // Computes the Nearest Neighbour heuristic starting from every node, and saving the path with minimum cost into the Instance
 // Creates a thread for every logic processor in the machine
-double NearestNeighbour(Instance *d);
+Solution NearestNeighbour(Instance *inst);
 
 #endif //NEAREST_NEIGHBOUR
 
@@ -163,7 +159,7 @@ double NearestNeighbour(Instance *d);
 #ifndef EXTRA_MILEAGE
 #define EXTRA_MILEAGE
 
-double solveExtraMileage(Instance *d);
+double solveExtraMileage(Instance *inst);
 
 #endif //EXTRA_MILEAGE
 
@@ -171,6 +167,26 @@ double solveExtraMileage(Instance *d);
 #ifndef _2OPT
 #define _2OPT
 
-double _2optBestFix(Instance *d);
+double _2optBestFix(Instance *inst);
 
 #endif //_2OPT
+
+
+
+
+
+
+
+
+/*#####################################################################################################################################################
+// SMALL GLOBAL FUNCTIONS THAT REQUIRE HIGH PERFORMANCE
+#####################################################################################################################################################*/
+
+#ifndef DISTANCE_FUNCTIONS
+#define DISTANCE_FUNCTIONS
+// #############################################################################################################
+// EXACT DISTANCE FUNCTIONS DEFINITIONS
+
+
+
+#endif // DISTANCE_FUNCTIONS
