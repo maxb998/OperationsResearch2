@@ -176,3 +176,10 @@ double solveExtraMileage(Instance *d);
 double _2optBestFix(Instance *d);
 
 #endif //_2OPT
+
+#ifndef VARIABLE_NEIGHBORHOOD
+#define VARIABLE_NEIGHBORHOOD
+
+double VariableNeighborhood(Instance *d, int configuration);
+
+#endif // VARIABLE_NEIGHBORHOOD

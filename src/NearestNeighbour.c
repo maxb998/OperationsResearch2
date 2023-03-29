@@ -95,6 +95,8 @@ static void * threadNN(void *thInst)
         // at the end we set the starting node as successor of the last one to close the circuit
         iterationPath[th->d->nodesCount] = node;
 
+        // (TO IMPLEMENT) increment pathCost also for the last connection
+
         // to check if we have to update the best solution we use another mutex
         if((pthread_mutex_lock(&th->saveLock) == 0) && (th->d->solution.bestCost > pathCost))
         {

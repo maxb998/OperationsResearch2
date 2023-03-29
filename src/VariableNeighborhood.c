@@ -13,13 +13,31 @@ double VariableNeighborhood(Instance *d, int configuration)
         // Initialization of the time for the time limit
         time_t startingTime = time(NULL);
 
-        
         NearestNeighbour(d);
+        while((intmax_t)time(NULL) - startingTime < placeholder)
+        {
+            _2optBestFix(d);
+
+        }
 
     }else                       // Find local minimum with Extra Milage
     {
+        // Initialization of the time for the time limit
+        time_t startingTime = time(NULL);
 
+        solveExtraMileage(d);
+        while((intmax_t)time(NULL) - startingTime < placeholder)
+        {
+            _2optBestFix(d);
+            
+        }
     }
 
     return 0;
 }
+/*
+static void changeNeighborhood(Instance *d)
+{
+
+}
+*/

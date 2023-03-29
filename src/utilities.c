@@ -493,12 +493,12 @@ void plotSolution(Instance *d, const char * plotPixelSize, const char * pointCol
     fprintf(gnuplotPipe, "e\n");
     
     // second print the tour
-    for (int i = 0; i < d->nodesCount; i++)
+    for (int i = 0; i <= d->nodesCount; i++)    // SOLUTION IS ALREDY SAVED IN ARRAY OF NODESCOUNT+1 ELEMENTS
     {
         int successorID = d->solution.bestSolution[i];
         fprintf(gnuplotPipe, "%f %f\n", d->X[successorID], d->Y[successorID]);
     }
-    fprintf(gnuplotPipe, "%lf %lf\n", d->X[d->solution.bestSolution[0]], d->Y[d->solution.bestSolution[0]]);
+    //fprintf(gnuplotPipe, "%lf %lf\n", d->X[d->solution.bestSolution[0]], d->Y[d->solution.bestSolution[0]]);
     fprintf(gnuplotPipe, "e\n");
 
     // force write on stream
