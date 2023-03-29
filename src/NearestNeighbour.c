@@ -127,9 +127,6 @@ static void * threadNN(void *thInst)
         currentSolX[inst->nNodes] = currentSolX[0];
         currentSolY[inst->nNodes] = currentSolY[0];
 
-        if (th->startingNode == 41)
-            printf("HERE\n");
-
         // add last and previours to last edge weights
         pathCost += squaredEdgeCost(currentSolX[inst->nNodes-2], currentSolY[inst->nNodes-2], currentSolX[inst->nNodes-1], currentSolY[inst->nNodes-1], inst->params.edgeWeightType);
         pathCost += squaredEdgeCost(currentSolX[inst->nNodes-1], currentSolY[inst->nNodes-1], currentSolX[inst->nNodes], currentSolY[inst->nNodes], inst->params.edgeWeightType);
@@ -137,9 +134,6 @@ static void * threadNN(void *thInst)
         // to check if we have to update the best solution we use another mutex
         if((pthread_mutex_lock(&th->saveLock) == 0) && (sol->bestCost > pathCost))
         {
-            float rnd = squaredEdgeCost(currentSolX[inst->nNodes-1], currentSolY[inst->nNodes-1], currentSolX[inst->nNodes], currentSolY[inst->nNodes], inst->params.edgeWeightType);
-            printf("%f\n", rnd);
-
             sol->bestCost = pathCost;
 
             float * swapPtr = sol->X;
