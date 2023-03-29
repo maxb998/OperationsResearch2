@@ -7,10 +7,12 @@
 #include <unistd.h>
 #include <time.h>
 #include <string.h>
+#include <stdint.h>
 
 #include <stdarg.h> // used for logger va_list
 #include <getopt.h> // args parsing by POSIX
 #include <limits.h> // used to get hard limits mainly to do error checking(like overflows and such)
+#include <time.h>	// to manage the time limits for the meta-heuristics
 
 #include <pthread.h>    // for multithreadin
 #include <immintrin.h>  // for avx simd instructions

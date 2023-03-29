@@ -45,7 +45,7 @@ double NearestNeighbour(Instance *d)
 
     pthread_mutex_destroy(&thInst.nodeLock);
     pthread_mutex_destroy(&thInst.saveLock);
-    return -1;
+    return 0;
 }
 
 static void * threadNN(void *thInst)
