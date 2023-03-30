@@ -14,7 +14,7 @@ int main (int argc, char *argv[])
 
     // WORKS WITH THIS COMMENTED
     NearestNeighbour(&d);
-    _2optBestFix(&d);
+    //_2optBestFix(&d);
     
     for(int i = 0; i < d.nodesCount; i++) LOG(LOG_LVL_EVERYTHING, "Node %d in solution: %d", i, d.solution.bestSolution[i]);
 

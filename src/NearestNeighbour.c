@@ -94,8 +94,8 @@ static void * threadNN(void *thInst)
         }
         // at the end we set the starting node as successor of the last one to close the circuit and we update pathCost
         iterationPath[th->inst->nodesCount] = node;
-        if(th->inst->params.roundWeights == 0) pathCost += th->inst->edgeCost.mat[(th->inst->edgeCost.rowSizeMem)*node + currentNode];
-        else pathCost += th->inst->edgeCost.roundedMat[(th->inst->edgeCost.rowSizeMem)*node + currentNode];
+        if(th->inst->params.roundWeights == 0) pathCost += (double)th->inst->edgeCost.mat[(th->inst->edgeCost.rowSizeMem)*node + currentNode];
+        else pathCost += (double)th->inst->edgeCost.roundedMat[(th->inst->edgeCost.rowSizeMem)*node + currentNode];
         
         // to check if we have to update the best solution we use another mutex
         if((pthread_mutex_lock(&th->saveLock) == 0) && (th->inst->solution.bestCost > pathCost))
@@ -169,11 +169,11 @@ static inline int findSuccessor(Instance *inst, int *uncoveredNodes, int node, d
     if(inst->params.randomSeed != -1 && rand() > GRASP_COEFF && secondBestNode != -1)
     {
         uncoveredNodes[secondBestNode] = 1;
-        *pathCost += secondBestDistance;
+        *pathCost += (double)secondBestDistance;
         return secondBestNode;
     }else
     {    uncoveredNodes[currentBestNode] = 1;
-        *pathCost += bestDistance;
+        *pathCost += (double)bestDistance;
         return currentBestNode;
     }
 }
