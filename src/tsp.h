@@ -127,10 +127,17 @@ void throwError (Instance *d, char * line, ...);
 // Parse commandline arguments stored in argv and save relevant information to d->params
 void parseArgs (Instance *d, int argc, char *argv[]);
 
-// Read file with .tsp extension according to tsplib specifications, complete with file sintax error checking
-void readFile (Instance *d);
+/* Checks that:
+	1. First and last node in the path are the same (closed circuit)
+	2. Nodes are not getting covered more than once
+	3. All nodes are covered along the path*/
+int solutionCheck(Instance *inst);
 
-void saveSolution(Instance *d);
+// Read file with .tsp extension according to tsplib specifications, complete with file sintax error checking
+void readFile (Instance *inst);
+
+// Saves the current solution stored in the Instance inst in a .tour file
+void saveSolution(Instance *inst);
 
 /*Plot solution using gnuplot. Does NOT check for errors on input
 * d	-> Instance to plot
@@ -139,7 +146,7 @@ void saveSolution(Instance *d);
 * tourPointColor -> string: Color of the 'X' on top of the point circle of color pointColor. Format and types is the same as for pointColor
 * pointSize -> int: Size of the points
 */
-void plotSolution(Instance *d, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize);
+void plotSolution(Instance *inst, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize);
 
 #endif //TSP_UTILITIES
 
@@ -157,7 +164,7 @@ double computeDistanceMatrix(Instance *d);
 
 // Computes the Nearest Neighbour heuristic starting from every node, and saving the path with minimum cost into the Instance
 // Creates a thread for every logic processor in the machine
-double NearestNeighbour(Instance *d);
+double NearestNeighbour(Instance *inst);
 
 #endif //NEAREST_NEIGHBOUR
 
@@ -180,6 +187,6 @@ double _2optBestFix(Instance *d);
 #ifndef VARIABLE_NEIGHBORHOOD
 #define VARIABLE_NEIGHBORHOOD
 
-double VariableNeighborhood(Instance *d, int configuration);
+double VariableNeighborhood(Instance *inst, int configuration);
 
 #endif // VARIABLE_NEIGHBORHOOD

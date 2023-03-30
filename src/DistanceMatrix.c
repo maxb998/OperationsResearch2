@@ -257,7 +257,7 @@ static void * computeDistMatThread(void* d)
                 {
                 case EUC_2D:
                     if (USE_APPROXIMATED_DISTANCES == 1)
-                        dist = euclideanCost2DFastApprox(x1, y1, x2, y2);
+                        dist = euclideanCostSquared2D(x1, y1, x2, y2);
                     else
                         dist = euclideanCost2D(x1, y1, x2, y2); 
                     break;
@@ -270,7 +270,7 @@ static void * computeDistMatThread(void* d)
 
                 case ATT:
                     if (USE_APPROXIMATED_DISTANCES == 1)
-                        dist = attCost2DFastApprox(x1, y1, x2, y2);
+                        dist = attCostSquared2D(x1, y1, x2, y2);
                     else
                         dist = attCost2D(x1, y1, x2, y2);
                     break;

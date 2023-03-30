@@ -444,24 +444,53 @@ static inline int nProcessors()
     return numProcessors;
 }
 
-void saveSolution(Instance *d)
+int solutionCheck(Instance *inst)
+{
+    char * uncoveredNodes = malloc(inst->nodesCount * sizeof(char));
+    int currentNode;
+
+    // First and last node must be equal (the circuit is closed)
+    if(inst->solution.bestSolution[0] != inst->solution.bestSolution[inst->nodesCount]) 
+        throwError(LOG_LVL_ERROR, "SolutionCheck: first and last node in solution should coincide");
+    LOG(LOG_LVL_DEBUG, "SolutionCheck: first and last node in solution coincide.");
+
+    // Populate uncoveredNodes array, here we check if a node is repeated along the path
+    for(int i = 0; i < inst->nodesCount; i++)
+    {
+        currentNode = inst->solution.bestSolution[i];
+        if(uncoveredNodes[currentNode] == 1) throwError(LOG_LVL_ERROR, "SolutionCheck: node %d repeated in the solution.", currentNode);
+        else uncoveredNodes[currentNode] = 1;
+    }
+    LOG(LOG_LVL_DEBUG, "SolutionCheck: all nodes in the path are unique.");
+
+    // Check that all the nodes are covered in the path
+    for(int i = 0; i < inst->nodesCount; i++)
+    {
+        if(uncoveredNodes[i] == 0) throwError(LOG_LVL_ERROR, "SolutionCheck: node %d is not in the path", i);
+    }
+    LOG(LOG_LVL_DEBUG, "SolutionCheck: all the nodes are present in the path -> The solution is feasible.");
+
+    return 0;
+}
+
+void saveSolution(Instance *inst)
 {  
     // create file for the solution
     char fileName[50] = "run/";
-    strcat(fileName, d->params.name);
-    strcat(fileName, ".opt.tour");
+    strcat(fileName, inst->params.name);
+    strcat(fileName, ".tour");
     FILE *solutionFile = fopen(fileName, "w");
 
     // inserting headers of the file
     fprintf(solutionFile, "NAME : %s\n", fileName);
     fprintf(solutionFile, "TYPE : TOUR\n");
-    fprintf(solutionFile, "DIMENSION : %ld\n", d->nodesCount);
+    fprintf(solutionFile, "DIMENSION : %ld\n", inst->nodesCount);
     fprintf(solutionFile, "TOUR_SECTION\n");
 
     // populating the file with the solution
-    for (int i = 0; i < d->nodesCount; i++)
+    for (int i = 0; i < inst->nodesCount; i++)
     {
-        fprintf(solutionFile, "%d\n", d->solution.bestSolution[i] + 1);
+        fprintf(solutionFile, "%d\n", inst->solution.bestSolution[i] + 1);
     }
     fprintf(solutionFile, "-1\n");
 
@@ -470,13 +499,13 @@ void saveSolution(Instance *d)
      
 }
 
-void plotSolution(Instance *d, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize)
+void plotSolution(Instance *inst, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize)
 {
     // creating the pipeline for gnuplot
     FILE *gnuplotPipe = popen("gnuplot -persistent", "w");
 
     // gnuplot settings
-    fprintf(gnuplotPipe, "set title \"%s\"\n", d->params.name);
+    fprintf(gnuplotPipe, "set title \"%s\"\n", inst->params.name);
     fprintf(gnuplotPipe, "set terminal qt size %s\n", plotPixelSize);
 
     // set plot linestyles
@@ -488,15 +517,15 @@ void plotSolution(Instance *d, const char * plotPixelSize, const char * pointCol
     fprintf(gnuplotPipe, "plot '-' with point linestyle 1, '-' with linespoint linestyle 2\n");
 
     // first plot only the points
-    for (size_t i = 0; i < d->nodesCount; i++)
-        fprintf(gnuplotPipe, "%f %f\n", d->X[i], d->Y[i]);
+    for (size_t i = 0; i < inst->nodesCount; i++)
+        fprintf(gnuplotPipe, "%f %f\n", inst->X[i], inst->Y[i]);
     fprintf(gnuplotPipe, "e\n");
     
     // second print the tour
-    for (int i = 0; i <= d->nodesCount; i++)    // SOLUTION IS ALREDY SAVED IN ARRAY OF NODESCOUNT+1 ELEMENTS
+    for (int i = 0; i <= inst->nodesCount; i++)    // SOLUTION IS ALREDY SAVED IN ARRAY OF NODESCOUNT+1 ELEMENTS
     {
-        int successorID = d->solution.bestSolution[i];
-        fprintf(gnuplotPipe, "%f %f\n", d->X[successorID], d->Y[successorID]);
+        int successorID = inst->solution.bestSolution[i];
+        fprintf(gnuplotPipe, "%f %f\n", inst->X[successorID], inst->Y[successorID]);
     }
     //fprintf(gnuplotPipe, "%lf %lf\n", d->X[d->solution.bestSolution[0]], d->Y[d->solution.bestSolution[0]]);
     fprintf(gnuplotPipe, "e\n");
