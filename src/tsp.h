@@ -25,6 +25,7 @@
 
 #define MAX_THREADS 32
 #define USE_APPROXIMATED_DISTANCES 1
+#define LOG_LEVEL LOG_LVL_EVERYTHING
 
 // size of avx vector. 4 is vector of doubles 64bits, 8 is vector of floats 32bits
 #define AVX_VEC_SIZE 8
@@ -61,7 +62,7 @@ typedef struct
 
 typedef struct
 {
-    float bestCost;    // best solution found cost
+    double bestCost;    // best solution found cost
 	int bestRoundedSol;
     int *bestSolution;  // array containing sequence of nodes representing the optimal solution
 } Solution;
@@ -132,6 +133,9 @@ void parseArgs (Instance *d, int argc, char *argv[]);
 	2. Nodes are not getting covered more than once
 	3. All nodes are covered along the path*/
 int solutionCheck(Instance *inst);
+
+// Check the correctness of the cost of the solution stored in Instance inst.
+int costCheck(Instance *inst);
 
 // Read file with .tsp extension according to tsplib specifications, complete with file sintax error checking
 void readFile (Instance *inst);

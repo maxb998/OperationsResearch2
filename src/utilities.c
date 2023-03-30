@@ -1,6 +1,5 @@
 #include "tsp.h"
 
-static enum logLevel globLVL = LOG_LVL_EVERYTHING;
 
 const char * logLevelString [] = {
 	"\033[1;31mERR \033[0m", // 0
@@ -98,7 +97,7 @@ void freeInstance(Instance *d)
 int LOG (enum logLevel lvl, char * line, ...)
 {
     // check log level
-    if (lvl > globLVL) return 0;
+    if (lvl > LOG_LEVEL) return 0;
 
     // print log level
     printf("[%s] ", logLevelString[lvl]);
@@ -469,6 +468,25 @@ int solutionCheck(Instance *inst)
         if(uncoveredNodes[i] == 0) throwError(LOG_LVL_ERROR, "SolutionCheck: node %d is not in the path", i);
     }
     LOG(LOG_LVL_DEBUG, "SolutionCheck: all the nodes are present in the path -> The solution is feasible.");
+    
+    costCheck(inst);
+
+    return 0;
+}
+
+int costCheck(Instance *inst)
+{
+    double tempCost = 0;
+    int tempNode1;
+    int tempNode2;
+    for(int i = 0; i < inst->nodesCount; i++)
+    {
+        tempNode1 = inst->solution.bestSolution[i];
+        tempNode2 = inst->solution.bestSolution[i+1];
+        tempCost += (double)inst->edgeCost.mat[((int)inst->edgeCost.rowSizeMem)*tempNode1 + tempNode2];
+    }
+    if(tempCost != inst->solution.bestCost) throwError(inst, "costChek: Error in the computation of the pathCost.");
+    LOG(LOG_LVL_DEBUG, "costCheck: pathCost computed correctly.");
 
     return 0;
 }

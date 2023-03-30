@@ -104,6 +104,7 @@ static void * threadNN(void *thInst)
             int * temp = th->inst->solution.bestSolution;
             th->inst->solution.bestSolution = iterationPath;
             iterationPath = temp;
+            if(LOG_LEVEL > LOG_LVL_DEBUG) solutionCheck(th->inst);
             LOG(LOG_LVL_LOG, "Found better solution starting from node %d, cost: %lf", node, pathCost);
         }
         pthread_mutex_unlock(&th->saveLock);
