@@ -13,7 +13,7 @@ typedef struct
 static void * threadNN(void *thInst);
 
 // finds the closest unvisited node (pathCost is also updated in this method)
-static inline size_t findSuccessorID(float *X, float *Y, size_t iterNode, Instance *inst, float *pathCost, float *minVecStore, int *IDVecStore);
+static inline size_t findSuccessorID(float *X, float *Y, size_t iterNode, Instance *inst, double *pathCost, float *minVecStore, int *IDVecStore);
 
 static inline void swapf(float *arr, size_t pos1, size_t pos2);
 
@@ -106,7 +106,7 @@ static void * threadNN(void *thInst)
         currentSolY[inst->nNodes] = INFINITY;
 
         // initialize the cost of the path to zero
-        float pathCost = 0.;
+        double pathCost = 0.;
 
         for(size_t i = 1; i < inst->nNodes - 1; i++)    // for n nodes we want to run this loop n-1 times, at the end we set as successor of the last node the starting node
         {
@@ -162,7 +162,7 @@ static void * threadNN(void *thInst)
     pthread_exit((void*)threadTime);
 }
 
-static inline size_t findSuccessorID(float *X, float *Y, size_t iterNum, Instance *inst, float *pathCost, float *minVecStore, int *IDVecStore)
+static inline size_t findSuccessorID(float *X, float *Y, size_t iterNum, Instance *inst, double *pathCost, float *minVecStore, int *IDVecStore)
 {
     // to keep track of the first best distance
     __m256 min1Vec = _mm256_set1_ps(INFINITY);

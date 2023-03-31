@@ -548,35 +548,57 @@ size_t * getSolutionIDArray(Solution *sol)
     return solID;
 }
 
-float computeSquaredCost_VEC(Solution *sol)
+double computeSquaredCost_VEC(Solution *sol)
 {
-    register __m256 costVec = _mm256_setzero_ps(), x1, x2, y1, y2;
+    register __m256d costVec = _mm256_setzero_pd();
     size_t i = 0;
     while (i < sol->instance->nNodes - AVX_VEC_SIZE)
     {
+        register __m256 x1, x2, y1, y2;
         x1 = _mm256_loadu_ps(&sol->X[i]), y1 = _mm256_loadu_ps(&sol->Y[i]);
         x2 = _mm256_loadu_ps(&sol->X[i+1]), y2 = _mm256_loadu_ps(&sol->Y[i+1]);
 
-        costVec = _mm256_add_ps(costVec, squaredEdgeCost_VEC(x1, y1, x2, y2, sol->instance->params.edgeWeightType));
+        register __m256 costVecFloat = squaredEdgeCost_VEC(x1, y1, x2, y2, sol->instance->params.edgeWeightType);
+
+        // convert vector of floats into 2 vectors of doubles and add them to the total cost
+        // first half of the vector
+        register __m128 partOfCostVecFloat = _mm256_extractf128_ps(costVecFloat, 0);
+        register __m256d partOfCostVecDouble = _mm256_cvtps_pd(partOfCostVecFloat);
+        costVec = _mm256_add_pd(costVec, partOfCostVecDouble);
+        // second half of the vector
+        partOfCostVecFloat = _mm256_extractf128_ps(costVecFloat, 1);
+        partOfCostVecDouble = _mm256_cvtps_pd(partOfCostVecFloat);
+        costVec = _mm256_add_pd(costVec, partOfCostVecDouble);
 
         i += AVX_VEC_SIZE;
     }
 
     // here we do the last iteration. since all "extra" elements at the end of X and Y are NaNs they can cause issues on sum. so we use a maskload for the last vector
+    register __m256 x1, x2, y1, y2;
     x1 = _mm256_loadu_ps(&sol->X[i]); y1 = _mm256_loadu_ps(&sol->Y[i]);
     x2 = _mm256_loadu_ps(&sol->X[i+1]); y2 = _mm256_loadu_ps(&sol->Y[i+1]);
 
     register __m256 lastDist = squaredEdgeCost_VEC(x1, y1, x2, y2, sol->instance->params.edgeWeightType);
 
     // now we sustitute the NaNs in the vector with zeroes
-    //register __m256 nansVec = _mm256_set1_ps(NAN);
-    register __m256 mask = _mm256_cmp_ps(lastDist, lastDist, _CMP_EQ_OQ);
-    costVec = _mm256_add_ps( costVec, _mm256_blendv_ps(_mm256_setzero_ps(), lastDist, mask) );
+    register __m256 infinityVec = _mm256_set1_ps(INFINITY);
+    register __m256 mask = _mm256_cmp_ps(lastDist, infinityVec, _CMP_LT_OQ);
+    register __m256 costVecFloat = _mm256_blendv_ps(mask, squaredEdgeCost_VEC(x1, y1, x2, y2, sol->instance->params.edgeWeightType), mask);
 
-    float *vecStore = malloc(AVX_VEC_SIZE * sizeof(float));
-    _mm256_storeu_ps(vecStore, costVec);
+    // convert vector of floats into 2 vectors of doubles and add them to the total cost
+    // first half of the vector
+    register __m128 partOfCostVecFloat = _mm256_extractf128_ps(costVecFloat, 0);
+    register __m256d partOfCostVecDouble = _mm256_cvtps_pd(partOfCostVecFloat);
+    costVec = _mm256_add_pd(costVec, partOfCostVecDouble);
+    // second half of the vector
+    partOfCostVecFloat = _mm256_extractf128_ps(costVecFloat, 1);
+    partOfCostVecDouble = _mm256_cvtps_pd(partOfCostVecFloat);
+    costVec = _mm256_add_pd(costVec, partOfCostVecDouble);
+
+    double *vecStore = malloc(4 * sizeof(double));
+    _mm256_storeu_pd(vecStore, costVec);
     
-    float totalCost = 0.0;
+    double totalCost = 0.0;
     for (size_t i = 0; i < AVX_VEC_SIZE; i++)
         totalCost += vecStore[i];    
 
@@ -585,11 +607,11 @@ float computeSquaredCost_VEC(Solution *sol)
     return totalCost;
 }
 
-float computeSquaredCost(Solution *sol)
+double computeSquaredCost(Solution *sol)
 {
     double cost = 0.0;
     for (size_t i = 0; i < sol->instance->nNodes; i++)
         cost += (double)squaredEdgeCost(sol->X[i], sol->Y[i], sol->X[i+1], sol->Y[i+1], sol->instance->params.edgeWeightType);
     
-    return (float)cost;
+    return cost;
 }

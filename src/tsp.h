@@ -65,6 +65,7 @@ typedef struct
     float *Y;
 
     Parameters params;
+	void *bestSol;
 } Instance;
 
 typedef struct
@@ -139,9 +140,9 @@ void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointC
 // print the solution as id array of the original order of the points
 size_t * getSolutionIDArray(Solution *sol);
 
-float computeSquaredCost_VEC(Solution *sol);
+double computeSquaredCost_VEC(Solution *sol);
 
-float computeSquaredCost(Solution *sol);
+double computeSquaredCost(Solution *sol);
 
 #endif //TSP_UTILITIES
 

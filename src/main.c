@@ -19,7 +19,7 @@ int main (int argc, char *argv[])
     //saveSolution(&nn);
 
     LOG(LOG_LVL_WARNING, "Total cost of Solution recomputed is %f", computeSquaredCost_VEC(&nn));
-    LOG(LOG_LVL_WARNING, "Total cost of Solution recomputed is %f", computeSquaredCost(&nn));
+    LOG(LOG_LVL_WARNING, "Total cost of Solution recomputed is %lf", computeSquaredCost(&nn));
 
     //for(int i = 0; i < d.nNodes; i++) LOG(LOG_LVL_EVERYTHING, "Node %d in solution: %d", i, d.solution.bestSolution[i]);
 
