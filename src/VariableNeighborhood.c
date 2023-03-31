@@ -1,23 +1,26 @@
 #include "tsp.h"
 
-double VariableNeighborhood(Instance *d, int configuration)
+double VariableNeighborhood(Instance *inst, int configuration)
 {
     intmax_t placeholder = 1000000;
     // check if a seed for random has been passed as argument
-    if(d->params.randomSeed != -1) srand(d->params.randomSeed);
-    else throwError(d, "VariableNeighborhood: random seed has not been passed as argument");
+    if(inst->params.randomSeed != -1) srand(inst->params.randomSeed);
+    else throwError(inst, "VariableNeighborhood: random seed has not been passed as argument");
     
-    if(configuration != 0 && configuration != 1) throwError(d, "VariableNeighborhood: incorrect argument for configuration");
+    if(configuration != 0 && configuration != 1) throwError(inst, "VariableNeighborhood: incorrect argument for configuration");
     else if(configuration == 0) // Find local minimum with Nearest Neighbour
     {
         // Initialization of the time for the time limit
         time_t startingTime = time(NULL);
 
-        NearestNeighbour(d);
+        // Compute a solution with Nearest Neighbour and optimize it with 2-opt
+        NearestNeighbour(inst);
+        _2optBestFix(inst);
         while((intmax_t)time(NULL) - startingTime < placeholder)
         {
-            _2optBestFix(d);
-
+            changeNeighborhood(inst);
+            _2optBestFix(inst);
+            
         }
 
     }else                       // Find local minimum with Extra Milage
@@ -25,19 +28,20 @@ double VariableNeighborhood(Instance *d, int configuration)
         // Initialization of the time for the time limit
         time_t startingTime = time(NULL);
 
-        solveExtraMileage(d);
+        // Compute a solution with Extra Mileage and optimize it with 2-opt
+        solveExtraMileage(inst);
+        _2optBestFix(inst);
         while((intmax_t)time(NULL) - startingTime < placeholder)
         {
-            _2optBestFix(d);
+            _2optBestFix(inst);
             
         }
     }
 
     return 0;
 }
-/*
-static void changeNeighborhood(Instance *d)
+
+static inline void changeNeighborhood(Instance *inst)
 {
 
 }
-*/

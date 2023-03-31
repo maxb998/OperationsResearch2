@@ -465,49 +465,41 @@ static inline int nProcessors()
     return numProcessors;
 }
 
-int solutionCheck(Instance *inst)
+int solutionCheck(Solution *sol)
 {
-    int * uncoveredNodes = malloc(inst->nodesCount * sizeof(int));
+    int * uncoveredNodes = malloc(sol->instance->nNodes * sizeof(int));
     int currentNode;
 
     // First and last node must be equal (the circuit is closed)
-    if(inst->solution.bestSolution[0] != inst->solution.bestSolution[inst->nodesCount]) 
-        throwError(LOG_LVL_ERROR, "SolutionCheck: first and last node in solution should coincide");
+    if(sol->indexPath[0] != sol->indexPath[sol->instance->nNodes]) 
+        throwError(sol->instance, sol, "SolutionCheck: first and last node in solution should coincide");
     LOG(LOG_LVL_DEBUG, "SolutionCheck: first and last node in solution coincide.");
 
     // Populate uncoveredNodes array, here we check if a node is repeated along the path
-    for(int i = 0; i < inst->nodesCount; i++)
+    for(int i = 0; i < sol->instance->nNodes; i++)
     {
-        currentNode = inst->solution.bestSolution[i];
-        if(uncoveredNodes[currentNode] == 1) throwError(inst, "SolutionCheck: node %d repeated in the solution. Loop iteration %d", currentNode, i);
+        currentNode = sol->indexPath[i];
+        if(uncoveredNodes[currentNode] == 1) throwError(sol->instance, sol, "SolutionCheck: node %d repeated in the solution. Loop iteration %d", currentNode, i);
         else uncoveredNodes[currentNode] = 1;
     }
     LOG(LOG_LVL_DEBUG, "SolutionCheck: all nodes in the path are unique.");
 
     // Check that all the nodes are covered in the path
-    for(int i = 0; i < inst->nodesCount; i++)
+    for(int i = 0; i < sol->instance->nNodes; i++)
     {
         if(uncoveredNodes[i] == 0) throwError(LOG_LVL_ERROR, "SolutionCheck: node %d is not in the path", i);
     }
     LOG(LOG_LVL_DEBUG, "SolutionCheck: all the nodes are present in the path -> The solution is feasible.");
     
-    costCheck(inst);
+    costCheck(sol);
 
     return 0;
 }
 
-int costCheck(Instance *inst)
+int costCheck(Solution *sol)
 {
-    double tempCost = 0;
-    int tempNode1;
-    int tempNode2;
-    for(int i = 0; i < inst->nodesCount; i++)
-    {
-        tempNode1 = inst->solution.bestSolution[i];
-        tempNode2 = inst->solution.bestSolution[i+1];
-        tempCost += (double)inst->edgeCost.mat[((int)inst->edgeCost.rowSizeMem)*tempNode1 + tempNode2];
-    }
-    if(tempCost != inst->solution.bestCost) throwError(inst, "costChek: Error in the computation of the pathCost. tempCost: %lf pathCost: %lf", tempCost, inst->solution.bestCost);
+    double recomputedCost = computeSquaredCost(sol);
+    if(recomputedCost != sol->bestCost) throwError(sol->instance, sol, "costChek: Error in the computation of the pathCost. recomputedCost: %lf Cost in Solution: %lf", recomputedCost, sol->bestCost);
     LOG(LOG_LVL_DEBUG, "costCheck: pathCost computed correctly.");
 
     return 0;
