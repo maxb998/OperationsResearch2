@@ -132,10 +132,10 @@ void parseArgs (Instance *inst, int argc, char *argv[]);
 	1. First and last node in the path are the same (closed circuit)
 	2. Nodes are not getting covered more than once
 	3. All nodes are covered along the path*/
-int solutionCheck(Instance *inst);
+int solutionCheck(Solution *sol);
 
 // Check the correctness of the cost of the solution stored in Instance inst.
-int costCheck(Instance *inst);
+int costCheck(Solution *sol);
 
 // Read file with .tsp extension according to tsplib specifications, complete with file sintax error checking
 void readFile (Instance *inst);
