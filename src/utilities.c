@@ -445,7 +445,7 @@ static inline int nProcessors()
 
 int solutionCheck(Instance *inst)
 {
-    char * uncoveredNodes = malloc(inst->nodesCount * sizeof(char));
+    int * uncoveredNodes = malloc(inst->nodesCount * sizeof(int));
     int currentNode;
 
     // First and last node must be equal (the circuit is closed)
@@ -457,7 +457,7 @@ int solutionCheck(Instance *inst)
     for(int i = 0; i < inst->nodesCount; i++)
     {
         currentNode = inst->solution.bestSolution[i];
-        if(uncoveredNodes[currentNode] == 1) throwError(LOG_LVL_ERROR, "SolutionCheck: node %d repeated in the solution.", currentNode);
+        if(uncoveredNodes[currentNode] == 1) throwError(inst, "SolutionCheck: node %d repeated in the solution. Loop iteration %d", currentNode, i);
         else uncoveredNodes[currentNode] = 1;
     }
     LOG(LOG_LVL_DEBUG, "SolutionCheck: all nodes in the path are unique.");
@@ -485,7 +485,7 @@ int costCheck(Instance *inst)
         tempNode2 = inst->solution.bestSolution[i+1];
         tempCost += (double)inst->edgeCost.mat[((int)inst->edgeCost.rowSizeMem)*tempNode1 + tempNode2];
     }
-    if(tempCost != inst->solution.bestCost) throwError(inst, "costChek: Error in the computation of the pathCost.");
+    if(tempCost != inst->solution.bestCost) throwError(inst, "costChek: Error in the computation of the pathCost. tempCost: %lf pathCost: %lf", tempCost, inst->solution.bestCost);
     LOG(LOG_LVL_DEBUG, "costCheck: pathCost computed correctly.");
 
     return 0;

@@ -10,8 +10,15 @@ typedef struct
 
 static void * threadNN(void *thInst);
 
-// finds the closest unvisited node (pathCost is also updated in this method)
-static inline int findSuccessor(Instance *inst, int *uncoveredNodes, int node, double *pathCost);
+/* Returns:
+    1. Index of closest unvisited node 
+    2. -1 in case of error
+    3. -2 as flag if we alredy visited all the nodes
+*/
+static inline int findSuccessor(Instance *inst, int *uncoveredNodes, int node);
+
+// Given two nodes node1 and node2 updates the cost of the path.
+static inline void updatePathCost(Instance *inst, double *pathCost, int node1, int node2);
 
 double NearestNeighbour(Instance *inst)
 {
@@ -77,26 +84,28 @@ static void * threadNN(void *thInst)
 
         // we set the starting node as visited
         uncoveredNodes[node] = 1;
-        int currentNode = iterationPath[0] = node;
+        // we set the starting node in the path
+        int currentNode = iterationPath[0] = iterationPath[th->inst->nodesCount] = node;
         int successor;
-        for(int i = 1; i < th->inst->nodesCount; i++)    // for n nodes we want to run this loop n-1 times, at the end we set as successor of the last node the starting node
+        for(int i = 1; i < th->inst->nodesCount; i++)    // for n nodes we want to run this loop n-1 times
         {
-            successor = findSuccessor(th->inst, uncoveredNodes, currentNode, &pathCost);
+            successor = findSuccessor(th->inst, uncoveredNodes, currentNode);
 
-            // Control on validity of successor: must be in [0,nodesCount)
-            if(successor < 0 || successor >= th->inst->nodesCount)
+
+            // Control on validity of successor
+            if(successor < 0 || successor >= (int)th->inst->nodesCount)
                 throwError(th->inst, "threadNN: error computing successor %d, value returned: %d", i, successor);
             
             // set the successor in the path
             iterationPath[i] = successor;
             // update current node
             currentNode = successor;
+
+            // Update the cost of the path
+            updatePathCost(th->inst, &pathCost, iterationPath[i-1], iterationPath[i]);
         }
-        // at the end we set the starting node as successor of the last one to close the circuit and we update pathCost
-        iterationPath[th->inst->nodesCount] = node;
-        if(th->inst->params.roundWeights == 0) pathCost += (double)th->inst->edgeCost.mat[(th->inst->edgeCost.rowSizeMem)*node + currentNode];
-        else pathCost += (double)th->inst->edgeCost.roundedMat[(th->inst->edgeCost.rowSizeMem)*node + currentNode];
-        
+        updatePathCost(th->inst, &pathCost, iterationPath[th->inst->nodesCount-1], iterationPath[th->inst->nodesCount]);
+
         // to check if we have to update the best solution we use another mutex
         if((pthread_mutex_lock(&th->saveLock) == 0) && (th->inst->solution.bestCost > pathCost))
         {
@@ -113,56 +122,33 @@ static void * threadNN(void *thInst)
     return 0;
 }
 
-static inline int findSuccessor(Instance *inst, int *uncoveredNodes, int node, double *pathCost)
+static inline int findSuccessor(Instance *inst, int *uncoveredNodes, int node)
 {
     // to keep track of the closest node
     float bestDistance = INFINITY;
-    int currentBestNode = -1;
-    // to keep track of the second closest node
+    int bestNode = -1;
+    // to keep track of the second closest node (in case that we use GRASP)
     float secondBestDistance = INFINITY;
     int secondBestNode = -1;
 
     int currentDistance;    // stores the distance of the node that we are checking
-    // check if we are working with rounded weights
-    if(inst->params.roundWeights == 0)
+ 
+    for(int i = 0; i < inst->nodesCount; i++)
     {
-        for(int i = 0; i < inst->nodesCount; i++)
+    // check if the node has alredy been visited, if it's different from the current node
+        if(uncoveredNodes[i] == 0 && i != node)
         {
-        // check if the node has alredy been visited, if it's different from the current node
-            if(uncoveredNodes[i] == 0 && i != node)
+            currentDistance = inst->edgeCost.mat[(inst->edgeCost.rowSizeMem)*node + i];
+            // check if the distance is better than the best seen
+            if(currentDistance < bestDistance)
             {
-                currentDistance = inst->edgeCost.mat[(inst->edgeCost.rowSizeMem)*node + i];
-                // check if the distance is better than the best seen
-                if(currentDistance < bestDistance)
-                {
-                    currentBestNode = i;
-                    bestDistance = currentDistance;
-                }else if(currentDistance < secondBestDistance)
-                {
-                    secondBestNode = i;
-                    secondBestDistance = currentDistance;
-                }
-            }
-        }
-    }else   // here we are working with rounded weights, which are stored in d.edgeCost.roundedMat
-    {
-        for(int i = 0; i < inst->nodesCount; i++)
-        {
-            if(uncoveredNodes[i] == 0 && i != node)
+                bestNode = i;
+                bestDistance = currentDistance;
+            // if it's not we check if it's better than the second best distance
+            }else if(currentDistance < secondBestDistance)
             {
-                currentDistance = inst->edgeCost.roundedMat[(inst->edgeCost.rowSizeMem)*node + i];
-                // check if the distance is better than the best seen
-                if(currentDistance < bestDistance)
-                {
-                    secondBestNode = currentBestNode;
-                    secondBestDistance = currentDistance;
-                    currentBestNode = i;
-                    bestDistance = currentDistance;
-                }else if(currentDistance < secondBestDistance)
-                {
-                    secondBestNode = i;
-                    secondBestDistance = currentDistance;
-                }
+                secondBestNode = i;
+                secondBestDistance = currentDistance;
             }
         }
     }
@@ -170,11 +156,14 @@ static inline int findSuccessor(Instance *inst, int *uncoveredNodes, int node, d
     if(inst->params.randomSeed != -1 && rand() > GRASP_COEFF && secondBestNode != -1)
     {
         uncoveredNodes[secondBestNode] = 1;
-        *pathCost += (double)secondBestDistance;
         return secondBestNode;
     }else
-    {    uncoveredNodes[currentBestNode] = 1;
-        *pathCost += (double)bestDistance;
-        return currentBestNode;
+    {    uncoveredNodes[bestNode] = 1;
+        return bestNode;
     }
+}
+
+static inline void updatePathCost(Instance *inst, double *pathCost, int node1, int node2)
+{
+    *pathCost += inst->edgeCost.mat[inst->edgeCost.rowSizeMem*node1 + node2];
 }
