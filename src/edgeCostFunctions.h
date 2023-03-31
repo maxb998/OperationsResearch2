@@ -1,16 +1,11 @@
-#ifndef EDGE_COST_INCLUDES
-#define EDGE_COST_INCLUDES
+#ifndef EDGE_COST_FUNCTIONS
+#define EDGE_COST_FUNCTIONS
 
 #include "tsp.h"
 #include <math.h>
 
-#endif // EDGE_COST_INCLUDES
 
 
-
-
-#ifndef DISTANCE_FUNC
-#define DISTANCE_FUNC
 
 static inline float euclideanCostSquared2D(float x1, float y1, float x2, float y2)
 {
@@ -99,13 +94,29 @@ static inline float exactEdgeCost (float x1, float y1, float x2, float y2, enum 
 	}
 }
 
-#endif // DISTANCE_FUNC
+/*static inline float roundedExactEdgeCost (float x1, float y1, float x2, float y2, enum edgeWeightType edgeWgtType)
+{
+	if (edgeWgtType == ATT)
+		return exactEdgeCost (float x1, float y1, float x2, float y2, enum edgeWeightType edgeWgtType); // ceiling
+	else
+		return exactEdgeCost (float x1, float y1, float x2, float y2, enum edgeWeightType edgeWgtType); // floor
+}*/
+
+static inline float roundEdgeCost(float edgeCost, enum edgeWeightType edgeWgtType)
+{
+	if (edgeWgtType == ATT)
+		return ceilf(edgeCost);
+	else
+		return floorf(edgeCost);
+}
 
 
 
 
-#ifndef VEC_DISTANCE_FUNC
-#define VEC_DISTANCE_FUNC
+
+
+
+
 
 // Return vector containing the euclidean distance squared. Fastest
 static inline __m256 euclideanCostSquared2D_VEC(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
@@ -173,41 +184,6 @@ static inline __m256 attCost2DFastApprox_VEC(__m256 x1, __m256 y1, __m256 x2, __
 }
 
 // ###########################################################################################################
-// ROUNDED DISTANCE FUNCTIONS DEFINITIONS
-
-static inline 
-__m256i euclideanCost2DRounded_VEC(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
-{
-    return _mm256_cvttps_epi32(euclideanCost2D_VEC(x1,y1,x2,y2));
-}
-
-static inline __m256i euclideanCost2DFastApproxRounded_VEC(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
-{
-    return _mm256_cvttps_epi32(euclideanCost2DFastApprox_VEC(x1,y1,x2,y2));
-}
-
-static inline __m256i manhattanCost2DRounded_VEC(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
-{
-    return _mm256_cvttps_epi32(manhattanCost2D_VEC(x1,y1,x2,y2));
-}
-
-static inline __m256i maximumCost2DRounded_VEC(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
-{
-    return _mm256_cvttps_epi32(maximumCost2D_VEC(x1,y1,x2,y2));
-}
-
-static inline __m256i attCost2DRounded_VEC(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
-{
-    return _mm256_cvttps_epi32(_mm256_ceil_ps(attCost2D_VEC(x1,y1,x2,y2)));
-}
-
-static inline 
-__m256i attCost2DFastApproxRounded_VEC(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
-{
-    return _mm256_cvttps_epi32(_mm256_ceil_ps(attCost2DFastApprox_VEC(x1,y1,x2,y2)));
-}
-            
-// #############################################################################################################
 
 static inline __m256 squaredEdgeCost_VEC (__m256 x1, __m256 y1, __m256 x2, __m256 y2, enum edgeWeightType edgeWgtType)
 {
@@ -231,6 +207,32 @@ static inline __m256 squaredEdgeCost_VEC (__m256 x1, __m256 y1, __m256 x2, __m25
 	
 	default:  // euclidean 2D if cost is not known
 		return euclideanCostSquared2D_VEC(x1, y1, x2, y2);
+		break;
+	}
+}
+
+static inline __m256 exactEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2, __m256 y2, enum edgeWeightType edgeWgtType)
+{
+	switch (edgeWgtType)
+	{
+	case EUC_2D:
+		return euclideanCost2D_VEC(x1, y1, x2, y2);
+		break;
+	
+	case MAN_2D:
+		return manhattanCost2D_VEC(x1, y1, x2, y2);
+		break;
+
+	case MAX_2D:
+		return maximumCost2D_VEC(x1, y1, x2, y2);
+		break;
+
+	case ATT:
+		return attCost2D_VEC(x1, y1, x2, y2);
+		break;
+	
+	default:  // euclidean 2D if cost is not known
+		return euclideanCost2D_VEC(x1, y1, x2, y2);
 		break;
 	}
 }
@@ -261,4 +263,17 @@ static inline __m256 fastEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2, __m256 
 	}
 }
 
-#endif // VEC_DISTANCE_FUNCTIONS
+static inline __m256 computeEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2, __m256 y2, enum edgeWeightType edgeWgtType)
+{
+
+}
+
+static inline __m256 roundEdgeCost_VEC (__m256 distances, enum edgeWeightType edgeWgtType)
+{
+	if (edgeWgtType == ATT)
+		return _mm256_ceil_ps(distances);
+	else
+		return _mm256_floor_ps(distances);
+}
+
+#endif // EDGE_COST_FUNCTIONS

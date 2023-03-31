@@ -48,7 +48,7 @@ $(OBJ_DEBUG_DIR)/VariableNeighborhood.o: src/VariableNeighborhood.c $(HEADERS)
 
 # build options when testing performance
 buildExec: $(OBJ_EXEC_FILES)
-	$(CC) $(LDFLAGS_EXEC) $(OBJ_EXEC_FILES) -o $(BIN_EXEC_DIR)/main
+	$(CC) $(LDFLAGS_EXEC) $(OBJ_EXEC_FILES) -o $(BIN_EXEC_DIR)/main -lm
 
 $(OBJ_EXEC_DIR)/main.o: src/main.c $(HEADERS)
 	$(CC) $(CFLAGS_EXEC) src/main.c -o $(OBJ_EXEC_DIR)/main.o

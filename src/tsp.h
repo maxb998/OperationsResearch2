@@ -49,6 +49,13 @@ enum edgeWeightType{
 	SPECIAL // special type of distance documented elsewhere
 };
 
+enum costComputationType
+{
+	FAST_SQUARED,		// use squared weight when possible (avoids square root function which takes a lot of computing power)
+	MODERATE_APPROX,	// use square root approximation (approximation error of less than 0.1% (max error at around 0.073%))
+	SLOW_EXACT			// use standard square root function (basically accurate)
+};
+
 // data structures
 typedef struct
 {
@@ -62,10 +69,19 @@ typedef struct
 
 typedef struct
 {
+	float *data;
+	size_t rowElems;
+} EdgeCostMat;
+
+typedef struct
+{
     // data
     size_t nNodes;
     float *X;
     float *Y;
+
+	// edge cost mat data
+	EdgeCostMat edgeCost;
 
     Parameters params;
 	void *bestSol;
@@ -86,6 +102,7 @@ typedef struct
 
 	Instance *instance;
 } Solution;
+
 
 #endif //TSP_DATA_BASE
 
