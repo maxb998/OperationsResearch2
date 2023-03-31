@@ -81,6 +81,8 @@ typedef struct
 	// the solution
 	float *X;
 	float *Y;
+	// Stores in order of visit along the path, the original indexes of the points
+	int *indexPath;
 
 	Instance *instance;
 } Solution;
