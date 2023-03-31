@@ -1,5 +1,7 @@
 #include "tsp.h"
+#include "edgeCostFunctions.h"
 
+static enum logLevel globLVL = LOG_LVL_LOG;
 
 const char * logLevelString [] = {
 	"\033[1;31mERR \033[0m", // 0
@@ -51,48 +53,55 @@ const char * wgtTypeStr[] = {
 // file parsing functions
 
 // gets the string specified in the "NAME" keyword in the file
-static void getNameFromFile(char * line, int lineSize, char out[], Instance *d);
+static void getNameFromFile(char * line, int lineSize, char out[], Instance *inst);
 // checks that the file type is "TSP"
-static void checkFileType(char * line, int lineSize, Instance *d);
+static void checkFileType(char * line, int lineSize, Instance *inst);
 // get the value related with the keyword "DIMENSION" and returns it as a size_t
-static size_t getDimensionFromLine(char * line, int lineSize, Instance *d);
+static size_t getDimensionFromLine(char * line, int lineSize, Instance *inst);
 // check that the string associated with "EDGE_WEIGHT_TYPE" is correct and return it as a number
-static size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *d);
+static size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *inst);
 // Returns the number of processors of the machine
 static inline int nProcessors();
 
 
-void initInstance(Instance *d)
+Instance newInstance ()
 {
-    // set pointers to NULL
-    d->X = d->Y = d->edgeCost.mat = NULL;
-    d->edgeCost.roundedMat = d->solution.bestSolution = NULL;
+    Instance d = { .nNodes = 0, .X = NULL, .Y = NULL, .params = { .edgeWeightType = 0, .randomSeed = -1, .roundWeights = 0, .nThreads = nProcessors() } };
+    memset(d.params.inputFile, 0, sizeof(d.params.inputFile));
+    memset(d.params.name, 0, sizeof(d.params.name));
 
-    // initialize variables to standard value
-    d->params.edgeWeightType = -1; // so that it gives error
-    d->params.roundWeights = 0;
-    d->params.threadsCount = nProcessors();
-    d->nodesCount = 0;
-    d->solution.bestCost = INFINITY;
-    d->params.randomSeed = -1;
-    // make strings empty to check for errors (should only need to change first char to 0 but it's nicer this way)
-    memset(d->params.inputFile, 0, 1000);
-    memset(d->params.name, 0, 200);
+    return d;
 }
 
-void freeInstance(Instance *d)
+Solution newSolution (Instance *inst)
 {
-    // points
-    free(d->X);
-    free(d->Y);
+    Solution s = { .bestCost = INFINITY, .bestCostRounded = INT_MAX, .execTime = 0, .instance = inst };
 
-    // cost matrix
-    free(d->edgeCost.mat);
-    free(d->edgeCost.roundedMat);
+    // allocate memory (consider locality). Alse leave place at the end to repeat the first element of the solution(some algoritms benefits from it)
+    s.X = malloc((inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float));
+    s.Y = &s.X[inst->nNodes + AVX_VEC_SIZE];
 
-    // solution
-    free(d->solution.bestSolution);
+    return s;
 }
+
+void destroyInstance (Instance *inst)
+{
+    // memory has been allocated to X, no need to free Y
+    free(inst->X);
+
+    // reset pointers to NULL
+    inst->X = inst->Y = NULL;
+}
+
+void destroySolution (Solution *sol)
+{
+    // memory has been allocated to X, no need to free Y
+    free(sol->X);
+
+    // reset pointers to NULL
+    sol->X = sol->Y = NULL;
+}
+
 
 int LOG (enum logLevel lvl, char * line, ...)
 {
@@ -115,7 +124,7 @@ int LOG (enum logLevel lvl, char * line, ...)
     return 0;
 }
 
-void throwError (Instance *d, char * line, ...)
+void throwError (Instance *inst, Solution *sol, char * line, ...)
 {
     printf("[%s] ", logLevelString[0]);
 
@@ -126,12 +135,19 @@ void throwError (Instance *d, char * line, ...)
 
     printf("\n");
 
-    freeInstance(d);
+    // free allocated memory
+    if (inst)
+        destroyInstance(inst);
+    if (sol)
+    {
+        destroyInstance(sol->instance);
+        destroySolution(sol);
+    }
 
     exit(EXIT_FAILURE);
 }
 
-void parseArgs (Instance *d, int argc, char *argv[])
+void parseArgs (Instance *inst, int argc, char *argv[])
 {
     static int roundWeightsFlag = 0;
     static struct option options[] = 
@@ -146,7 +162,7 @@ void parseArgs (Instance *d, int argc, char *argv[])
             {0, 0, 0, 0}
         };
     // set flags in d
-    d->params.roundWeights = roundWeightsFlag;
+    inst->params.roundWeights = roundWeightsFlag;
 
 
     int option_index = 0;
@@ -157,18 +173,18 @@ void parseArgs (Instance *d, int argc, char *argv[])
         switch (opt)
         {
         case 's':
-            d->params.randomSeed = (int)strtol(optarg, NULL, 10);
+            inst->params.randomSeed = (int)strtol(optarg, NULL, 10);
             break;
 
         case 'f':
             if (access(optarg, R_OK) != 0)
-                throwError(d, "ERROR: File \"%s\" not found\n", optarg);
+                throwError(inst, NULL, "ERROR: File \"%s\" not found\n", optarg);
 
-            strncpy(d->params.inputFile, optarg, strlen(optarg)+1);
+            strncpy(inst->params.inputFile, optarg, strlen(optarg)+1);
             break;
         
         case 't':
-            d->params.threadsCount = strtoul(optarg, NULL, 10);
+            inst->params.nThreads = strtoul(optarg, NULL, 10);
             break;
         
         default:
@@ -177,19 +193,19 @@ void parseArgs (Instance *d, int argc, char *argv[])
     }
 
     // check necessary arguments were passed
-    if (d->params.inputFile[0] == 0)
-        throwError(d, "A file path must be specified with \"-f\" or \"--file\" options");
+    if (inst->params.inputFile[0] == 0)
+        throwError(inst, NULL, "A file path must be specified with \"-f\" or \"--file\" options");
 
     LOG(LOG_LVL_NOTICE, "Received arguments:");
-    LOG(LOG_LVL_NOTICE,"    Random Seed  = %d", d->params.randomSeed);
-    LOG(LOG_LVL_NOTICE,"    Filename     = %s", d->params.inputFile);
-    LOG(LOG_LVL_NOTICE,"    Thread Count = %d", d->params.threadsCount);
+    LOG(LOG_LVL_NOTICE,"    Random Seed  = %d", inst->params.randomSeed);
+    LOG(LOG_LVL_NOTICE,"    Filename     = %s", inst->params.inputFile);
+    LOG(LOG_LVL_NOTICE,"    Thread Count = %d", inst->params.nThreads);
 }
 
 
-void readFile (Instance *d)
+void readFile (Instance *inst)
 {
-    FILE *f = fopen(d->params.inputFile, "r");
+    FILE *f = fopen(inst->params.inputFile, "r");
 
     // check if was able to open file
     if (!f) { fprintf (stderr, "failed to open file for reading\n"); exit(EXIT_FAILURE); }
@@ -221,30 +237,30 @@ void readFile (Instance *d)
         }
 
         if (keywordsFound[keywordID] == 1)
-            throwError(d, "Keyword \"%s\" is present more than one time. Check the .tsp file", keywords[keywordID]);
+            throwError(inst, NULL, "Keyword \"%s\" is present more than one time. Check the .tsp file", keywords[keywordID]);
 
         switch (keywordID)
         {
         case NAME_KEYWORD_ID:
-            getNameFromFile(line, lineSize, d->params.name, d);
+            getNameFromFile(line, lineSize, inst->params.name, inst);
             // set flag
             keywordsFound[NAME_KEYWORD_ID] = 1;
             break;
 
         case TYPE_KEYWORD_ID:
-            checkFileType(line, lineSize, d);
+            checkFileType(line, lineSize, inst);
             // if this point is reached the has a correct type -> set the flag
             keywordsFound[TYPE_KEYWORD_ID] = 1;
             break;
         
         case DIMENSION_KEYWORD_ID:
-            d->nodesCount = getDimensionFromLine(line, lineSize, d);
+            inst->nNodes = getDimensionFromLine(line, lineSize, inst);
             // set the flag
             keywordsFound[DIMENSION_KEYWORD_ID] = 1;
             break;
 
         case EDGE_WEIGHT_TYPE_KEYWORD_ID:
-            d->params.edgeWeightType = getEdgeWeightTypeFromLine(line, lineSize, d);
+            inst->params.edgeWeightType = getEdgeWeightTypeFromLine(line, lineSize, inst);
             // if this point is reached a correct number for dimension has been taken from the file -> set the flag
             keywordsFound[EDGE_WEIGHT_TYPE_KEYWORD_ID] = 1;
             break;
@@ -259,7 +275,7 @@ void readFile (Instance *d)
             break;
 
         default:
-            throwError(d, "Wierd error upon reading keywords from file. Check the code");
+            throwError(inst, NULL, "Wierd error upon reading keywords from file. Check the code");
             break;
         }
     }
@@ -267,21 +283,19 @@ void readFile (Instance *d)
     // check all important keywords have been found
     for (size_t i = 0; i < KEYWORDS_COUNT; i++)
         if (keywordsFound[i] != 1)  // keyword has not been found in the loop above
-            throwError(d, "Important keyword \"%s\" has not been found/detected in the tsp file. Check the .tsp file", keywords[i]);
+            throwError(inst, NULL, "Important keyword \"%s\" has not been found/detected in the tsp file. Check the .tsp file", keywords[i]);
 
     // allocate memory
-    size_t memElemsToAlloc = d->nodesCount + AVX_VEC_SIZE; // allocate more than needed to avoid errors when reading with avx
-    d->X = aligned_alloc(32, memElemsToAlloc * sizeof(float));
-    d->Y = aligned_alloc(32, memElemsToAlloc * sizeof(float));
-
-    d->solution.bestSolution = aligned_alloc(32, memElemsToAlloc * sizeof(int));
+    // improve memory locality
+    inst->X = malloc((inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float)); // add AVX_VEC_SIZE extra elements at the end of each array for an easier time managing simd loads from this
+    inst->Y = &inst->X[inst->nNodes + AVX_VEC_SIZE];
 
     // fill the memory with data
     size_t i = 0;
     while (((lineSize = getline(&line, &lineMemSize, f)) != EOF) && (strncmp(line, "EOF", 3) != 0))
     {
         // check if the number of data lines are not more than the number specified in dimension
-        if (i >= d->nodesCount)
+        if (i >= inst->nNodes)
         {
             LOG(LOG_LVL_WARNING, "There may be more elements than the number specified with keyword \"DIMENSION\" in the .tsp file. Ignoring extra data");
             break;
@@ -291,59 +305,67 @@ void readFile (Instance *d)
         char * endPtr = NULL;
         size_t lineNumber = strtoul(line, &endPtr, 10);
         if (lineNumber == 0)
-            throwError(d, "Conversion at line %lu of the line number has gone wrong(must not be 0)", keywordsLinesCount + i + 1);
+            throwError(inst, NULL, "Conversion at line %lu of the line number has gone wrong(must not be 0)", keywordsLinesCount + i + 1);
         
         char * separatorPtr = strchr(line, ' ');
         if (!separatorPtr)
-            throwError(d, "Space separator at line %lu of file has not been found");
+            throwError(inst, NULL, "Space separator at line %lu of file has not been found");
         if (endPtr != separatorPtr)
-            throwError(d, "Conversion at line %lu of the line number has gone wrong(must be an integer separated from other value by a space at the end)", keywordsLinesCount + i + 1);
+            throwError(inst, NULL, "Conversion at line %lu of the line number has gone wrong(must be an integer separated from other value by a space at the end)", keywordsLinesCount + i + 1);
         
         if (lineNumber != i+1)
-            throwError(d, "Line number at line %lu of the file is not what is supposed to be (%lu instead of %lu)", keywordsLinesCount + i + 1, lineNumber, i+1);
+            throwError(inst, NULL, "Line number at line %lu of the file is not what is supposed to be (%lu instead of %lu)", keywordsLinesCount + i + 1, lineNumber, i+1);
 
         // now we can convert the actual coordinates
         char * xCoordStrPtr = separatorPtr + 1;
         separatorPtr = strchr(xCoordStrPtr, ' ');
         if (!separatorPtr)
-            throwError(d, "Space separator at line %lu of file has not been found");
+            throwError(inst, NULL, "Space separator at line %lu of file has not been found");
 
-        d->X[i] = strtof(xCoordStrPtr, &endPtr);
+        inst->X[i] = strtof(xCoordStrPtr, &endPtr);
 
         if (xCoordStrPtr == endPtr)
-            throwError(d, "Conversion of X coordinate at line %lu has gone wrong. Check the .tsp file", keywordsLinesCount + i + 1);
+            throwError(inst, NULL, "Conversion of X coordinate at line %lu has gone wrong. Check the .tsp file", keywordsLinesCount + i + 1);
         if (endPtr != separatorPtr)
-            throwError(d, "Conversion of X coordinate at line %lu has gone wrong. There are unwanted characters at the end ", keywordsLinesCount + i + 1);
-        if (fabsf(d->X[i]) == HUGE_VALF)
-            throwError(d, "Coordinate X at line %lu has caused overflow", keywordsLinesCount + i + 1);
+            throwError(inst, NULL, "Conversion of X coordinate at line %lu has gone wrong. There are unwanted characters at the end ", keywordsLinesCount + i + 1);
+        if (fabsf(inst->X[i]) == HUGE_VALF)
+            throwError(inst, NULL, "Coordinate X at line %lu has caused overflow", keywordsLinesCount + i + 1);
 
         char * yCoordStrPtr = separatorPtr + 1;
         separatorPtr = strchr(yCoordStrPtr, '\n');
         if (!separatorPtr)
-            throwError(d, "'\n' at line %lu of file has not been found");
+            throwError(inst, NULL, "'\n' at line %lu of file has not been found");
         
-        d->Y[i] = strtof(yCoordStrPtr, &endPtr);
+        inst->Y[i] = strtof(yCoordStrPtr, &endPtr);
 
         if (yCoordStrPtr == endPtr)
-            throwError(d, "Conversion of Y coordinate at line %lu has gone wrong. Check the .tsp file", keywordsLinesCount + i + 1);
+            throwError(inst, NULL, "Conversion of Y coordinate at line %lu has gone wrong. Check the .tsp file", keywordsLinesCount + i + 1);
         if (endPtr != separatorPtr)
-            throwError(d, "Conversion of Y coordinate at line %lu has gone wrong. There are unwanted characters at the end ", keywordsLinesCount + i + 1);
-        if (fabsf(d->Y[i]) == HUGE_VAL)
-            throwError(d, "Coordinate Y at line %lu has caused overflow", keywordsLinesCount + i + 1);
+            throwError(inst, NULL, "Conversion of Y coordinate at line %lu has gone wrong. There are unwanted characters at the end ", keywordsLinesCount + i + 1);
+        if (fabsf(inst->Y[i]) == HUGE_VAL)
+            throwError(inst, NULL, "Coordinate Y at line %lu has caused overflow", keywordsLinesCount + i + 1);
 
         i++;
     }
+
+    // set to infinite the empty <AVX_VEC_SIZE> elements at the end of X and Y
+    for (size_t i = inst->nNodes; i < inst->nNodes + AVX_VEC_SIZE; i++)
+    {
+        inst->X[i] = INFINITY;
+        inst->Y[i] = INFINITY;
+    }
+    
 
     fclose(f);
     if (line) free(line);
 
     // print the coordinates data with enough log level
-    for (size_t i = 0; i < d->nodesCount; i++)
-        LOG(LOG_LVL_EVERYTHING, "Node %4lu: [%.2e, %.2e]", i+1, d->X[i], d->Y[i]);
+    for (size_t i = 0; i < inst->nNodes; i++)
+        LOG(LOG_LVL_EVERYTHING, "Node %4lu: [%.2e, %.2e]", i+1, inst->X[i], inst->Y[i]);
 }
 
 
-static void getNameFromFile(char * line, int lineSize, char out[], Instance *d)
+static void getNameFromFile(char * line, int lineSize, char out[], Instance *inst)
 {
     memset(out, 0, 200); // set name array to 0
 
@@ -353,22 +375,22 @@ static void getNameFromFile(char * line, int lineSize, char out[], Instance *d)
 
     int nameLen = lineSize + line - nameBegin - 1;
     if (nameLen > 200)
-        throwError(d, "Name lenght exceeds 200 characters");
+        throwError(inst, NULL, "Name lenght exceeds 200 characters");
     memcpy(out, nameBegin, nameLen);
 }
 
-static void checkFileType(char * line, int lineSize, Instance *d)
+static void checkFileType(char * line, int lineSize, Instance *inst)
 {
     // here check if last 3 charaters(excludiing the '\n') are "TSP"
     char substr[3] = {0};
     memcpy(substr, &line[lineSize - 4], 3); // generate substring of 3 chars for logging/debugging purposes
     LOG(LOG_LVL_EVERYTHING, "Checking file TYPE keyword: comparing \"TSP\" with what is found at the of the line which is:%s", substr);
     if (strncmp(&line[lineSize - 4], "TSP", 3) != 0)
-        throwError(d, "The file is either not of type TSP, or there are some characters (even blank spaces) after \"TSP\" and before the next line. \n\
+        throwError(inst, NULL, "The file is either not of type TSP, or there are some characters (even blank spaces) after \"TSP\" and before the next line. \n\
                                      Check that the file used in input is of the correct type and correctly formatted. Only \"TSP\" files are currently supported");
 }
 
-static size_t getDimensionFromLine(char * line, int lineSize, Instance *d)
+static size_t getDimensionFromLine(char * line, int lineSize, Instance *inst)
 {
     // first find the pointer to the first number part of line and then convert it to integer checking for all errors
     char *numberFirstChar = strchr(line, ':');
@@ -385,21 +407,21 @@ static size_t getDimensionFromLine(char * line, int lineSize, Instance *d)
 
     // check for errors on conversion
     if (endPtr == numberFirstChar)
-        throwError(d, "Converting dimension number from file: first character that was supposed to be a number is not a number. \n\
+        throwError(inst, NULL, "Converting dimension number from file: first character that was supposed to be a number is not a number. \n\
                                         Dimension line in file is supposed to look like \"DIMENSION : <NUMBER>\" with just one separator \':\' and at most a \' \' after it before the numeric value");
     if (endPtr != &line[lineSize - 1])
-        throwError(d, "Converting dimension number from file: there are unrecognized character before end of line with keyword DIMENSION");
+        throwError(inst, NULL, "Converting dimension number from file: there are unrecognized character before end of line with keyword DIMENSION");
 
     // check for error on converted number
     if (dimension == 0)
-        throwError(d, "Could not properly convert dimension number in tsp file");
+        throwError(inst, NULL, "Could not properly convert dimension number in tsp file");
     if (dimension == ULONG_MAX)
-        throwError(d, "Dimension value in file is too great. Either too much data(unlikely) or the dimension value is wrong");
+        throwError(inst, NULL, "Dimension value in file is too great. Either too much data(unlikely) or the dimension value is wrong");
 
     return dimension;
 }
 
-static size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *d)
+static size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *inst)
 {
     // first find the pointer to the weight type descriptor
     char *firstWgtTypePtr = strchr(line, ':');
@@ -426,7 +448,7 @@ static size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *d)
 
     // check if no match has been found
     if (foundEdgeWeightTypeID == -1)
-        throwError(d, "Getting the edge weight type from file: Could not identify the \"EDGE_WEIGTH_TYPE property\"");
+        throwError(inst, NULL, "Getting the edge weight type from file: Could not identify the \"EDGE_WEIGTH_TYPE property\"");
 
     return foundEdgeWeightTypeID;
 }
@@ -491,61 +513,67 @@ int costCheck(Instance *inst)
     return 0;
 }
 
-void saveSolution(Instance *inst)
+void saveSolution(Solution *sol)
 {  
     // create file for the solution
     char fileName[50] = "run/";
-    strcat(fileName, inst->params.name);
-    strcat(fileName, ".tour");
+    strcat(fileName, sol->instance->params.name);
+    strcat(fileName, ".opt.tour");
     FILE *solutionFile = fopen(fileName, "w");
 
     // inserting headers of the file
     fprintf(solutionFile, "NAME : %s\n", fileName);
     fprintf(solutionFile, "TYPE : TOUR\n");
-    fprintf(solutionFile, "DIMENSION : %ld\n", inst->nodesCount);
+    fprintf(solutionFile, "DIMENSION : %ld\n", sol->instance->nNodes);
     fprintf(solutionFile, "TOUR_SECTION\n");
 
+    size_t *solID = getSolutionIDArray(sol);
+
     // populating the file with the solution
-    for (int i = 0; i < inst->nodesCount; i++)
-    {
-        fprintf(solutionFile, "%d\n", inst->solution.bestSolution[i] + 1);
-    }
+    for (int i = 0; i < sol->instance->nNodes; i++)
+        fprintf(solutionFile, "%ld\n", solID[i] + 1);
     fprintf(solutionFile, "-1\n");
+
+    
 
     // closing the tour file
     fclose(solutionFile);
-     
+    free(solID);
 }
 
-void plotSolution(Instance *inst, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize)
+void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize)
 {
     // creating the pipeline for gnuplot
     FILE *gnuplotPipe = popen("gnuplot -persistent", "w");
 
     // gnuplot settings
-    fprintf(gnuplotPipe, "set title \"%s\"\n", inst->params.name);
+    fprintf(gnuplotPipe, "set title \"%s\"\n", sol->instance->params.name);
     fprintf(gnuplotPipe, "set terminal qt size %s\n", plotPixelSize);
 
     // set plot linestyles
     fprintf(gnuplotPipe, "set style line 1 linecolor rgb '%s' pt 7 pointsize %d\n", pointColor, pointSize);
     fprintf(gnuplotPipe, "set style line 2 linecolor rgb '%s' pointsize %d\n", tourPointColor, pointSize);
 
+
+    // assign number to points
+    if (globLVL >= LOG_LVL_DEBUG)
+        for (size_t i = 0; i < sol->instance->nNodes; i++)
+            fprintf(gnuplotPipe, "set label \"%ld\" at %f,%f\n", i, sol->instance->X[i], sol->instance->Y[i]);
+
     // populating the plot
     
     fprintf(gnuplotPipe, "plot '-' with point linestyle 1, '-' with linespoint linestyle 2\n");
 
     // first plot only the points
-    for (size_t i = 0; i < inst->nodesCount; i++)
-        fprintf(gnuplotPipe, "%f %f\n", inst->X[i], inst->Y[i]);
+    for (size_t i = 0; i < sol->instance->nNodes; i++)
+        fprintf(gnuplotPipe, "%f %f\n", sol->instance->X[i], sol->instance->Y[i]);
     fprintf(gnuplotPipe, "e\n");
-    
+
     // second print the tour
-    for (int i = 0; i <= inst->nodesCount; i++)    // SOLUTION IS ALREDY SAVED IN ARRAY OF NODESCOUNT+1 ELEMENTS
+    for (int i = 0; i <= sol->instance->nNodes; i++)
     {
-        int successorID = inst->solution.bestSolution[i];
-        fprintf(gnuplotPipe, "%f %f\n", inst->X[successorID], inst->Y[successorID]);
+        fprintf(gnuplotPipe, "%f %f\n", sol->X[i], sol->Y[i]);
     }
-    //fprintf(gnuplotPipe, "%lf %lf\n", d->X[d->solution.bestSolution[0]], d->Y[d->solution.bestSolution[0]]);
     fprintf(gnuplotPipe, "e\n");
 
     // force write on stream
@@ -553,4 +581,85 @@ void plotSolution(Instance *inst, const char * plotPixelSize, const char * point
 
     // close stream
     pclose(gnuplotPipe);
+}
+
+size_t * getSolutionIDArray(Solution *sol)
+{
+    size_t n = sol->instance->nNodes;
+    size_t *solID = malloc(n * sizeof(size_t));
+
+    for (size_t i = 0; i < n; i++)
+        for (size_t j = 0; j < n; j++)
+            if ((sol->X[i] == sol->instance->X[j]) && (sol->Y[i] == sol->instance->Y[j]))
+                solID[i] = j;
+
+    return solID;
+}
+
+double computeSquaredCost_VEC(Solution *sol)
+{
+    register __m256d costVec = _mm256_setzero_pd();
+    size_t i = 0;
+    while (i < sol->instance->nNodes - AVX_VEC_SIZE)
+    {
+        register __m256 x1, x2, y1, y2;
+        x1 = _mm256_loadu_ps(&sol->X[i]), y1 = _mm256_loadu_ps(&sol->Y[i]);
+        x2 = _mm256_loadu_ps(&sol->X[i+1]), y2 = _mm256_loadu_ps(&sol->Y[i+1]);
+
+        register __m256 costVecFloat = squaredEdgeCost_VEC(x1, y1, x2, y2, sol->instance->params.edgeWeightType);
+
+        // convert vector of floats into 2 vectors of doubles and add them to the total cost
+        // first half of the vector
+        register __m128 partOfCostVecFloat = _mm256_extractf128_ps(costVecFloat, 0);
+        register __m256d partOfCostVecDouble = _mm256_cvtps_pd(partOfCostVecFloat);
+        costVec = _mm256_add_pd(costVec, partOfCostVecDouble);
+        // second half of the vector
+        partOfCostVecFloat = _mm256_extractf128_ps(costVecFloat, 1);
+        partOfCostVecDouble = _mm256_cvtps_pd(partOfCostVecFloat);
+        costVec = _mm256_add_pd(costVec, partOfCostVecDouble);
+
+        i += AVX_VEC_SIZE;
+    }
+
+    // here we do the last iteration. since all "extra" elements at the end of X and Y are NaNs they can cause issues on sum. so we use a maskload for the last vector
+    register __m256 x1, x2, y1, y2;
+    x1 = _mm256_loadu_ps(&sol->X[i]); y1 = _mm256_loadu_ps(&sol->Y[i]);
+    x2 = _mm256_loadu_ps(&sol->X[i+1]); y2 = _mm256_loadu_ps(&sol->Y[i+1]);
+
+    register __m256 lastDist = squaredEdgeCost_VEC(x1, y1, x2, y2, sol->instance->params.edgeWeightType);
+
+    // now we sustitute the NaNs in the vector with zeroes
+    register __m256 infinityVec = _mm256_set1_ps(INFINITY);
+    register __m256 mask = _mm256_cmp_ps(lastDist, infinityVec, _CMP_LT_OQ);
+    register __m256 costVecFloat = _mm256_blendv_ps(mask, squaredEdgeCost_VEC(x1, y1, x2, y2, sol->instance->params.edgeWeightType), mask);
+
+    // convert vector of floats into 2 vectors of doubles and add them to the total cost
+    // first half of the vector
+    register __m128 partOfCostVecFloat = _mm256_extractf128_ps(costVecFloat, 0);
+    register __m256d partOfCostVecDouble = _mm256_cvtps_pd(partOfCostVecFloat);
+    costVec = _mm256_add_pd(costVec, partOfCostVecDouble);
+    // second half of the vector
+    partOfCostVecFloat = _mm256_extractf128_ps(costVecFloat, 1);
+    partOfCostVecDouble = _mm256_cvtps_pd(partOfCostVecFloat);
+    costVec = _mm256_add_pd(costVec, partOfCostVecDouble);
+
+    double *vecStore = malloc(4 * sizeof(double));
+    _mm256_storeu_pd(vecStore, costVec);
+    
+    double totalCost = 0.0;
+    for (size_t i = 0; i < AVX_VEC_SIZE; i++)
+        totalCost += vecStore[i];    
+
+    free(vecStore);
+    
+    return totalCost;
+}
+
+double computeSquaredCost(Solution *sol)
+{
+    double cost = 0.0;
+    for (size_t i = 0; i < sol->instance->nNodes; i++)
+        cost += (double)squaredEdgeCost(sol->X[i], sol->Y[i], sol->X[i+1], sol->Y[i+1], sol->instance->params.edgeWeightType);
+    
+    return cost;
 }

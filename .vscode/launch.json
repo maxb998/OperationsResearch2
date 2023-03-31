@@ -19,7 +19,7 @@
             "preLaunchTask": "Build Exec",
             "request": "launch",
             "program": "${workspaceFolder}/bin/x64/main",
-            "args": ["--file", "data/att48.tsp", "--seed", "2023", "--threads", "4"],
+            "args": ["--file", "data/rl5915.tsp", "--seed", "-1", "--threads", "4"],
             "cwd": "${workspaceFolder}"
         }
     ]

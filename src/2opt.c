@@ -2,7 +2,7 @@
 
 typedef struct
 {
-    Instance *d;
+    Instance inst;
 
     // id of the next edge to be checked against all solution edges
     size_t nextEdge;
@@ -38,17 +38,19 @@ typedef struct
     int threadID;
 } ThreadInstWithID;
 
-
+/*
 static inline void bestSolutionUpdate(ThreadedInstance *th);
 
 static void *_2optBestFixThread(void *arg);
 
-double _2optBestFix(Instance *d)
+
+/*
+double _2optBestFix(Instance inst)
 {
     ThreadedInstance th = {.d = d, .nextEdge = 0, .finishedFlag = 0, .bestOffset = 0 };
 
     // copy first element to last position (memory allocation is AVX_VEC_SIZE elemens loose)
-    d->solution.bestSolution[d->nodesCount] = d->solution.bestSolution[0];
+    inst->solution.bestSolution[inst->nNodes] = inst->solution.bestSolution[0];
 
     // init mutexes & condition
     pthread_mutex_init(&th.mutex, NULL);
@@ -56,7 +58,7 @@ double _2optBestFix(Instance *d)
 
     // struct necessary to give each thread it's identifier correctly
     ThreadInstWithID thIDs[MAX_THREADS];
-    for (size_t i = 0; i < d->params.threadsCount; i++)
+    for (size_t i = 0; i < inst->params.nThreads; i++)
     {
         thIDs[i].th = &th;
         thIDs[i].threadID = i;
@@ -64,7 +66,7 @@ double _2optBestFix(Instance *d)
 
     // start threads
     pthread_t workers[MAX_THREADS];
-    for (size_t i = 0; i < d->params.threadsCount; i++)
+    for (size_t i = 0; i < inst->params.nThreads; i++)
     {
         pthread_create(&workers[i], NULL, _2optBestFixThread, &thIDs[i]);
         LOG(LOG_LVL_DEBUG, "2-Opt: Thread %ld created", i);
@@ -72,7 +74,7 @@ double _2optBestFix(Instance *d)
 
     // wait for threads and get execution time
     double maxThreadsTime = 0.0;
-    for (size_t i = 0; i < d->params.threadsCount; i++)
+    for (size_t i = 0; i < inst->params.nThreads; i++)
     {
         double *returnedTime;
         pthread_join(workers[i], (void **)&returnedTime);
@@ -96,12 +98,12 @@ static void *_2optBestFixThread(void *arg)
     start = clock();
 
     ThreadInstWithID *thID = (ThreadInstWithID*)arg;
-    ThreadedInstance *th = thID->th;
-    int threadID = thID->threadID;
+    ThreadedInstance *th = thIinst->th;
+    int threadID = thIinst->threadID;
 
     // setup "shortcuts" variables to declutter the code
-    size_t n = th->d->nodesCount;
-    int *bestSolShortcut = th->d->solution.bestSolution;
+    size_t n = th->inst->nNodes;
+    int *bestSolShortcut = th->inst->solution.bestSolution;
 
     while (th->finishedFlag == 0) // runs 2opt until no more moves are made in one iteration of 2opt
     {
@@ -118,14 +120,14 @@ static void *_2optBestFixThread(void *arg)
             pthread_mutex_unlock(&th->mutex);
             // // CRITICAL SECTION END
 
-            float solEdgeWgt1 = th->d->edgeCost.mat[bestSolShortcut[edgeID] * th->d->edgeCost.rowSizeMem + bestSolShortcut[edgeID + 1]];
+            float solEdgeWgt1 = th->inst->edgeCost.mat[bestSolShortcut[edgeID] * th->inst->edgeCost.rowSizeMem + bestSolShortcut[edgeID + 1]];
             for (size_t i = 2 + edgeID; (i < n - 1) || ((i < n) && (edgeID > 0)); i++)
             {
-                float solEdgeWgt2 = th->d->edgeCost.mat[bestSolShortcut[i] * th->d->edgeCost.rowSizeMem + bestSolShortcut[i + 1]];
+                float solEdgeWgt2 = th->inst->edgeCost.mat[bestSolShortcut[i] * th->inst->edgeCost.rowSizeMem + bestSolShortcut[i + 1]];
 
                 // check the combined weight other combination of edges
-                float altEdge1 = th->d->edgeCost.mat[bestSolShortcut[edgeID] * th->d->edgeCost.rowSizeMem + bestSolShortcut[i]];
-                float altEdge2 = th->d->edgeCost.mat[bestSolShortcut[i + 1] * th->d->edgeCost.rowSizeMem + bestSolShortcut[edgeID + 1]];
+                float altEdge1 = th->inst->edgeCost.mat[bestSolShortcut[edgeID] * th->inst->edgeCost.rowSizeMem + bestSolShortcut[i]];
+                float altEdge2 = th->inst->edgeCost.mat[bestSolShortcut[i + 1] * th->inst->edgeCost.rowSizeMem + bestSolShortcut[edgeID + 1]];
                 if (solEdgeWgt1 + solEdgeWgt2 > altEdge1 + altEdge2)
                 {
                     // update local best if current one is better
@@ -153,7 +155,7 @@ static void *_2optBestFixThread(void *arg)
         th->threadFinishFlag[threadID] = 1;
 
         int lastThreadFlag = 1; // if it remains one than this is the last thread going through this part at the end of the 2opt move search
-        for (size_t i = 0; i < th->d->params.threadsCount; i++)
+        for (size_t i = 0; i < th->inst->params.nThreads; i++)
             if (th->threadFinishFlag[i] == 0)
                 lastThreadFlag = 0;
         
@@ -190,7 +192,7 @@ static void *_2optBestFixThread(void *arg)
 
 static inline void bestSolutionUpdate(ThreadedInstance *th)
 {
-    int * bestSolShortcut = th->d->solution.bestSolution;
+    int * bestSolShortcut = th->inst->solution.bestSolution;
     if (th->bestOffset < -EPSILON) // avoid to do practically meaningless optimization and float precision errors(TO REVISE AND DO A RELATIVE COMPARISON)
     {
         /*
@@ -203,7 +205,7 @@ static inline void bestSolutionUpdate(ThreadedInstance *th)
          *     new bestSolution = { 2 5 8 7 0 1 4 9 6 3 }   with original indexes = { 0 1 2 3 8 7 6 5 4 9 }
          *
          * Which means that we must invert the elements of bestSolution from index 3(not inlcuded) to index 8(included)
-         */
+         /
 
         size_t smallID = th->bestOffsetIDs[0] + 1, bigID = th->bestOffsetIDs[1];
 
@@ -223,3 +225,5 @@ static inline void bestSolutionUpdate(ThreadedInstance *th)
 
 }
 
+
+*/
