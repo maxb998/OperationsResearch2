@@ -20,8 +20,8 @@
 #endif //TSP_INCLUDES
 
 
-#ifndef TSP_DATA_BASE
-#define TSP_DATA_BASE
+#ifndef TSP_BASE_DATA
+#define TSP_BASE_DATA
 
 #define MAX_THREADS 32
 #define USE_APPROXIMATED_DISTANCES 1
@@ -49,13 +49,6 @@ enum edgeWeightType{
 	SPECIAL // special type of distance documented elsewhere
 };
 
-enum costComputationType
-{
-	FAST_SQUARED,		// use squared weight when possible (avoids square root function which takes a lot of computing power)
-	MODERATE_APPROX,	// use square root approximation (approximation error of less than 0.1% (max error at around 0.073%))
-	SLOW_EXACT			// use standard square root function (basically accurate)
-};
-
 // data structures
 typedef struct
 {
@@ -69,19 +62,13 @@ typedef struct
 
 typedef struct
 {
-	float *data;
-	size_t rowElems;
-} EdgeCostMat;
-
-typedef struct
-{
     // data
     size_t nNodes;
     float *X;
     float *Y;
 
 	// edge cost mat data
-	EdgeCostMat edgeCost;
+	float *edgeCostMat;
 
     Parameters params;
 	void *bestSol;
@@ -97,14 +84,14 @@ typedef struct
 	// the solution
 	float *X;
 	float *Y;
-	// Stores in order of visit along the path, the original indexes of the points
+	// Stores in order of visit along the path, the original indexes (the ones contained in the Instance pointed by instance) of the points
 	int *indexPath;
 
 	Instance *instance;
 } Solution;
 
 
-#endif //TSP_DATA_BASE
+#endif //TSP_BASE_DATA
 
 #ifndef TSP_UTILITIES
 #define TSP_UTILITIES
@@ -168,11 +155,23 @@ void saveSolution(Solution *sol);
 */
 void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize);
 
-double computeSquaredCost_VEC(Solution *sol);
+float computeSolutionCostVectorizedFloat(Solution *sol);
 
-double computeSquaredCost(Solution *sol);
+double computeSolutionCostVectorizedDouble(Solution *sol);
+
+double computeSolutionCost(Solution *sol);
 
 #endif //TSP_UTILITIES
+
+
+#ifndef COST_MATRIX
+#define COST_MATRIX
+
+void printDistanceMatrix(Instance *inst);
+
+double computeDistanceMatrix(Instance *inst);
+
+#endif // COST_MATRIX
 
 
 #ifndef NEAREST_NEIGHBOUR
@@ -196,7 +195,7 @@ double solveExtraMileage(Instance *inst);
 #ifndef _2OPT
 #define _2OPT
 
-double _2optBestFix(Instance *inst);
+double _2optBestFix(Solution *sol);
 
 #endif //_2OPT
 

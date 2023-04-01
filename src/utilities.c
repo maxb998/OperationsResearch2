@@ -1,4 +1,3 @@
-#include "tsp.h"
 #include "edgeCostFunctions.h"
 
 static enum logLevel globLVL = LOG_LVL_LOG;
@@ -64,9 +63,11 @@ static size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *ins
 static inline int nProcessors();
 
 
+size_t * getSolutionIDArray(Solution *sol);
+
 Instance newInstance ()
 {
-    Instance d = { .nNodes = 0, .X = NULL, .Y = NULL, .params = { .edgeWeightType = 0, .randomSeed = -1, .roundWeights = 0, .nThreads = nProcessors() } };
+    Instance d = { .nNodes = 0, .X = NULL, .Y = NULL, .edgeCostMat = NULL, .params = { .edgeWeightType = 0, .randomSeed = -1, .roundWeights = 0, .nThreads = nProcessors() } };
     memset(d.params.inputFile, 0, sizeof(d.params.inputFile));
     memset(d.params.name, 0, sizeof(d.params.name));
 
@@ -80,6 +81,7 @@ Solution newSolution (Instance *inst)
     // allocate memory (consider locality). Alse leave place at the end to repeat the first element of the solution(some algoritms benefits from it)
     s.X = malloc((inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float));
     s.Y = &s.X[inst->nNodes + AVX_VEC_SIZE];
+    s.indexPath = malloc((inst->nNodes + 1) * sizeof(int));
 
     return s;
 }
@@ -88,15 +90,17 @@ void destroyInstance (Instance *inst)
 {
     // memory has been allocated to X, no need to free Y
     free(inst->X);
+    free(inst->edgeCostMat);
 
     // reset pointers to NULL
-    inst->X = inst->Y = NULL;
+    inst->X = inst->Y = inst->edgeCostMat = NULL;
 }
 
 void destroySolution (Solution *sol)
 {
     // memory has been allocated to X, no need to free Y
     free(sol->X);
+    free(sol->indexPath);
 
     // reset pointers to NULL
     sol->X = sol->Y = NULL;
@@ -487,7 +491,7 @@ int solutionCheck(Solution *sol)
     // Check that all the nodes are covered in the path
     for(int i = 0; i < sol->instance->nNodes; i++)
     {
-        if(uncoveredNodes[i] == 0) throwError(LOG_LVL_ERROR, "SolutionCheck: node %d is not in the path", i);
+        if(uncoveredNodes[i] == 0) throwError(NULL, sol, "SolutionCheck: node %d is not in the path", i);
     }
     LOG(LOG_LVL_DEBUG, "SolutionCheck: all the nodes are present in the path -> The solution is feasible.");
     
@@ -498,7 +502,7 @@ int solutionCheck(Solution *sol)
 
 int costCheck(Solution *sol)
 {
-    double recomputedCost = computeSquaredCost(sol);
+    double recomputedCost = computeSolutionCost(sol);
     if(recomputedCost != sol->bestCost) throwError(sol->instance, sol, "costChek: Error in the computation of the pathCost. recomputedCost: %lf Cost in Solution: %lf", recomputedCost, sol->bestCost);
     LOG(LOG_LVL_DEBUG, "costCheck: pathCost computed correctly.");
 
@@ -588,7 +592,46 @@ size_t * getSolutionIDArray(Solution *sol)
     return solID;
 }
 
-double computeSquaredCost_VEC(Solution *sol)
+
+float computeSolutionCostVectorizedFloat(Solution *sol)
+{
+    register __m256 costVec = _mm256_setzero_ps();
+    size_t i = 0;
+    while (i < sol->instance->nNodes - AVX_VEC_SIZE)
+    {
+        register __m256 x1, x2, y1, y2;
+        x1 = _mm256_loadu_ps(&sol->X[i]), y1 = _mm256_loadu_ps(&sol->Y[i]);
+        x2 = _mm256_loadu_ps(&sol->X[i+1]), y2 = _mm256_loadu_ps(&sol->Y[i+1]);
+
+        costVec = _mm256_add_ps(costVec, squaredEdgeCost_VEC(x1, y1, x2, y2, sol->instance->params.edgeWeightType));
+
+        i += AVX_VEC_SIZE;
+    }
+
+    // here we do the last iteration. since all "extra" elements at the end of X and Y are NaNs they can cause issues on sum. so we use a maskload for the last vector
+    register __m256 x1, x2, y1, y2;
+    x1 = _mm256_loadu_ps(&sol->X[i]); y1 = _mm256_loadu_ps(&sol->Y[i]);
+    x2 = _mm256_loadu_ps(&sol->X[i+1]); y2 = _mm256_loadu_ps(&sol->Y[i+1]);
+
+    register __m256 lastDist = squaredEdgeCost_VEC(x1, y1, x2, y2, sol->instance->params.edgeWeightType);
+
+    // now we sustitute the infinity and NaN in the vector with zeroes
+    register __m256 infinityVec = _mm256_set1_ps(INFINITY);
+    register __m256 mask = _mm256_cmp_ps(lastDist, infinityVec, _CMP_LT_OQ);
+    costVec = _mm256_add_ps(costVec, _mm256_blendv_ps(mask, squaredEdgeCost_VEC(x1, y1, x2, y2, sol->instance->params.edgeWeightType), mask));
+
+
+    float costVecStore[8];
+    _mm256_storeu_ps(costVecStore, costVec);
+    
+    double totalCost = 0.0;
+    for (size_t i = 0; i < AVX_VEC_SIZE; i++)
+        totalCost += costVecStore[i];
+    
+    return totalCost;
+}
+
+double computeSolutionCostVectorizedDouble(Solution *sol)
 {
     register __m256d costVec = _mm256_setzero_pd();
     size_t i = 0;
@@ -635,19 +678,17 @@ double computeSquaredCost_VEC(Solution *sol)
     partOfCostVecDouble = _mm256_cvtps_pd(partOfCostVecFloat);
     costVec = _mm256_add_pd(costVec, partOfCostVecDouble);
 
-    double *vecStore = malloc(4 * sizeof(double));
+    double vecStore[4];
     _mm256_storeu_pd(vecStore, costVec);
     
     double totalCost = 0.0;
-    for (size_t i = 0; i < AVX_VEC_SIZE; i++)
-        totalCost += vecStore[i];    
-
-    free(vecStore);
+    for (size_t i = 0; i < 4; i++)
+        totalCost += vecStore[i];
     
     return totalCost;
 }
 
-double computeSquaredCost(Solution *sol)
+double computeSolutionCost(Solution *sol)
 {
     double cost = 0.0;
     for (size_t i = 0; i < sol->instance->nNodes; i++)

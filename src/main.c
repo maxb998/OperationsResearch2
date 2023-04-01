@@ -8,25 +8,29 @@ int main (int argc, char *argv[])
 
     LOG (LOG_LVL_LOG, "file %s has been loaded succesfully", inst.params.inputFile);
 
-    //double computeMatrixTime = computeDistanceMatrix(&d);
+    double computeMatrixTime = computeDistanceMatrix(&inst);
     
-    //LOG(LOG_LVL_LOG, "Distance Matrix Done in %.3e seconds", computeMatrixTime);
+    LOG(LOG_LVL_LOG, "Distance Matrix done in %lf seconds", computeMatrixTime);
+    
+    //printDistanceMatrix(&inst);
 
     // WORKS WITH THIS COMMENTED
     Solution nn = NearestNeighbour(&inst);
-    //_2optBestFix(&d);
+    LOG(LOG_LVL_LOG, "Nearest Neighbour finished in %lf seconds", nn.execTime);
+    double _2optTime = _2optBestFix(&nn);
+    LOG(LOG_LVL_NOTICE, "2-Opt finished in %lf seconds", _2optTime);
     
     //saveSolution(&nn);
 
-    LOG(LOG_LVL_WARNING, "Total cost of Solution recomputed is %f", computeSquaredCost_VEC(&nn));
-    LOG(LOG_LVL_WARNING, "Total cost of Solution recomputed is %lf", computeSquaredCost(&nn));
+    //LOG(LOG_LVL_WARNING, "Total cost of Solution recomputed is %f", computeSolutionCostVectorizedDouble(&nn));
+    //LOG(LOG_LVL_WARNING, "Total cost of Solution recomputed is %lf", computeSolutionCost(&nn));
 
     //for(int i = 0; i < d.nNodes; i++) LOG(LOG_LVL_EVERYTHING, "Node %d in solution: %d", i, d.solution.bestSolution[i]);
 
     //saveSolution(&d);
     plotSolution(&nn, "1920,1080", "green", "black", 1);    
     //###########################################
-    destroySolution(&nn);
+    //destroySolution(&nn);
     destroyInstance(&inst);
 
 

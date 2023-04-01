@@ -1,4 +1,4 @@
-//#include "tsp.h"
+//#include "tsp.h" // included in edgeCostFunction.h
 #include "edgeCostFunctions.h"
 
 
@@ -8,19 +8,21 @@ typedef struct
     pthread_mutex_t nodeLock;
     pthread_mutex_t saveLock;
     size_t startingNode;
-}ThreadedInstance;
+}ThreadsData;
+
+// Swap elem1 and elem2. Can be done with any type of variable, however a temporary variable "tmp" of the same type of elem1 and elem2 MUST be provided.
+#define swapElems(elem1,elem2,tmp) tmp = elem1; elem1 = elem2; elem2 = tmp;
 
 static void * threadNN(void *thInst);
 
 // finds the closest unvisited node (pathCost is also updated in this method)
-static inline size_t findSuccessorID(float *X, float *Y, size_t iterNode, Instance *inst, double *pathCost, float *minVecStore, int *IDVecStore);
+static inline size_t findSuccessorID(float *X, float *Y, size_t iterNode, Instance *inst, double *pathCost, float minVecStore[8], int IDVecStore[8]);
 
-static inline void swapf(float *arr, size_t pos1, size_t pos2);
 
 Solution NearestNeighbour(Instance *inst)
 {
-    clock_t start, end;
-    start = clock();
+    struct timespec start, finish;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &start);
 
     Solution sol = newSolution(inst);
 
@@ -28,7 +30,7 @@ Solution NearestNeighbour(Instance *inst)
     if(inst->params.randomSeed != -1) srand(inst->params.randomSeed);
 
     // we create and initialize the threaded instance
-    ThreadedInstance th = {.sol = &sol, .startingNode = 0};
+    ThreadsData th = {.sol = &sol, .startingNode = 0};
 
     pthread_mutex_init(&th.nodeLock, NULL);
     pthread_mutex_init(&th.saveLock, NULL);
@@ -37,49 +39,38 @@ Solution NearestNeighbour(Instance *inst)
     for(int i = 0; i < inst->params.nThreads; i++)
     {
         pthread_create(&threads[i], NULL, threadNN, &th);
-        LOG(LOG_LVL_LOG, "Nearest Neighbour : Thread %d CREATED", i);
+        LOG(LOG_LVL_DEBUG, "Nearest Neighbour : Thread %d CREATED", i);
     }
 
-    double maxThreadTime = 0.0;
     for(int i = 0; i < inst->params.nThreads; i++)
     {
-        double *returnPtr;
-        pthread_join(threads[i], (void **)&returnPtr);
-
-        double threadTime = *returnPtr;
-        free(returnPtr);
-
-        if (maxThreadTime < threadTime)
-            maxThreadTime = threadTime;
-
-        LOG(LOG_LVL_LOG, "Nearest Neighbour : Thread %d finished in %e time", i, threadTime);
+        pthread_join(threads[i], NULL);
+        LOG(LOG_LVL_DEBUG, "Nearest Neighbour : Thread %d finished", i);
     }
 
     pthread_mutex_destroy(&th.nodeLock);
     pthread_mutex_destroy(&th.saveLock);
 
-    end = clock();
-    sol.execTime = maxThreadTime + ((double)(end - start))/CLOCKS_PER_SEC;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &finish);
+    sol.execTime = ((finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0);
 
     return sol;
 }
 
 static void * threadNN(void *thInst)
 {
-    clock_t start, end;
-    start = clock();
-
-    ThreadedInstance *th = (ThreadedInstance *)thInst;
+    ThreadsData *th = (ThreadsData *)thInst;
     Solution *sol = th->sol;
     Instance *inst = sol->instance;
 
     // Allocate memory to contain the work-in-progress solution
     float *currentSolX = malloc((inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float));
     float *currentSolY = &currentSolX[inst->nNodes + AVX_VEC_SIZE];
+    int *currentIndexPath = malloc((inst->nNodes + 1) * sizeof(int));
 
     // Allocate memory to store Vector register element (aligned for not apparent reason than it feels better)
-    float *minVecStore = aligned_alloc(32, 2 * AVX_VEC_SIZE * sizeof(float));
-    int *IDVecStore = aligned_alloc(32, 2 * AVX_VEC_SIZE * sizeof(int));
+    float minVecStore[8];
+    int IDVecStore[8];
 
     // We want the threads to repeat the computation for every node
     // For this we use a mutex on startingNode until it reaches nNodes
@@ -93,17 +84,28 @@ static void * threadNN(void *thInst)
         // after incrementing the value of startingNode we can unlock the mutex
         pthread_mutex_unlock(&th->nodeLock);
 
-
         // copy all the nodes in the original order from instance into currentSolX/Y (Take advantage of the way the memory is allocated for the best and current sol)
-        memcpy(currentSolX, inst->X, (inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float)); // this also copies Y
+        for (size_t i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
+            currentSolX[i] = inst->X[i];
+        //memcpy(currentSolX, inst->X, (inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float)); // this also copies Y
+
+        // reset currentIndexPath to match the original
 
         // set first element of currentSolX/Y to the element at index startingNode -> swap pos 0 with starting node
-        swapf(currentSolX, 0, iterNode);
-        swapf(currentSolY, 0, iterNode);
+        // swap coordinates
+        {
+            register float swapValFloat;
+            swapElems(currentSolX[0], currentSolX[iterNode], swapValFloat)
+            swapElems(currentSolY[0], currentSolY[iterNode], swapValFloat)
 
-        // reset last element
+            // swap index
+            register int swapValInt;
+            swapElems(currentIndexPath[0], currentIndexPath[iterNode], swapValInt)
+        }
+
+        /* // reset last element
         currentSolX[inst->nNodes] = INFINITY;
-        currentSolY[inst->nNodes] = INFINITY;
+        currentSolY[inst->nNodes] = INFINITY;*/
 
         // initialize the cost of the path to zero
         double pathCost = 0.;
@@ -119,8 +121,14 @@ static void * threadNN(void *thInst)
             // set successor by swapping the element corresponding to succesorID with element i
             if (successorID != i)
             {
-                swapf(currentSolX, i, successorID);
-                swapf(currentSolY, i, successorID);
+                // swap coordinates
+                register float swapValFloat;
+                swapElems(currentSolX[i], currentSolX[successorID], swapValFloat)
+                swapElems(currentSolY[i], currentSolY[successorID], swapValFloat)
+
+                // swap index
+                register int swapValInt;
+                swapElems(currentIndexPath[i], currentIndexPath[successorID], swapValInt)
             }
         }
         // at the end we set the starting node as successor of the last one to close the circuit
@@ -136,13 +144,13 @@ static void * threadNN(void *thInst)
         {
             sol->bestCost = pathCost;
 
-            float * swapPtr = sol->X;
-            sol->X = currentSolX;
-            currentSolX = swapPtr;
+            // swap pointers with a macro(swapPtr) to declutter code (macro is defined at the top)
+            register float *tempfPtr;
+            swapElems(sol->X,currentSolX,tempfPtr)
+            swapElems(sol->Y, currentSolY, tempfPtr)
 
-            swapPtr = sol->Y;
-            sol->Y = currentSolY;
-            currentSolY = swapPtr;
+            register int *tempiPtr;
+            swapElems(sol->indexPath, currentIndexPath, tempiPtr)
 
             LOG(LOG_LVL_LOG, "Found better solution starting from node %ld, cost: %f", iterNode, pathCost);
         }
@@ -151,18 +159,13 @@ static void * threadNN(void *thInst)
 
     pthread_mutex_unlock(&th->nodeLock);
 
+    free(currentSolX);
+    free(currentIndexPath);
 
-    free(minVecStore);
-    free(IDVecStore);
-
-    double *threadTime = malloc(sizeof(double));
-    end = clock();
-    *threadTime = ((double)(end - start))/CLOCKS_PER_SEC;
-
-    pthread_exit((void*)threadTime);
+    pthread_exit(NULL);
 }
 
-static inline size_t findSuccessorID(float *X, float *Y, size_t iterNum, Instance *inst, double *pathCost, float *minVecStore, int *IDVecStore)
+static inline size_t findSuccessorID(float *X, float *Y, size_t iterNum, Instance *inst, double *pathCost, float minVecStore[8], int IDVecStore[8])
 {
     // to keep track of the first best distance
     __m256 min1Vec = _mm256_set1_ps(INFINITY);
@@ -176,22 +179,22 @@ static inline size_t findSuccessorID(float *X, float *Y, size_t iterNum, Instanc
 
     //__m256 infinite = _mm256_set1_ps(INFINITY);
 
-    __m256i idsVec = _mm256_setr_epi32(0,1,2,3,4,5,6,7), increment = _mm256_set1_epi32(AVX_VEC_SIZE);
-    __m256 x1Vec = _mm256_set1_ps(X[iterNum-1]), y1Vec = _mm256_set1_ps(Y[iterNum-1]);
+    __m256i ids = _mm256_setr_epi32(0,1,2,3,4,5,6,7), increment = _mm256_set1_epi32(AVX_VEC_SIZE);
+    __m256 x1 = _mm256_set1_ps(X[iterNum-1]), y1 = _mm256_set1_ps(Y[iterNum-1]);
     
-    // set idsVec to right starting position
-    idsVec = _mm256_add_epi32(idsVec, _mm256_set1_epi32((int)iterNum));
+    // set ids to right starting position
+    ids = _mm256_add_epi32(ids, _mm256_set1_epi32((int)iterNum));
 
     // check if we are working with rounded weights
     for (size_t i = iterNum; i < inst->nNodes; i += AVX_VEC_SIZE)
     {
         // get distance first
-        __m256 x2Vec = _mm256_loadu_ps(&X[i]), y2Vec = _mm256_loadu_ps(&Y[i]);
-        __m256 dist = squaredEdgeCost_VEC(x1Vec, y1Vec, x2Vec, y2Vec, inst->params.edgeWeightType);
+        __m256 x2 = _mm256_loadu_ps(&X[i]), y2 = _mm256_loadu_ps(&Y[i]);
+        __m256 dist = squaredEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType);
 
         // get first minimum
         __m256i mask = _mm256_castps_si256(_mm256_cmp_ps(dist, min1Vec, _CMP_LT_OQ)); // set for "non-signaling" -> if one element is NaN than set as false
-        min1IDsVec = _mm256_blendv_epi8(min1IDsVec, idsVec, mask);  // get 1stMin id
+        min1IDsVec = _mm256_blendv_epi8(min1IDsVec, ids, mask);  // get 1stMin id
         min1Vec = _mm256_min_ps(min1Vec, dist); // get 1st minumum value
 
         // replace elements that has been inserted into min1Vec with INFINITE so that they don't get inserted in min2Vec as well
@@ -199,36 +202,36 @@ static inline size_t findSuccessorID(float *X, float *Y, size_t iterNum, Instanc
 
         // get second minimum
         //mask = _mm256_castps_si256(_mm256_cmp_ps(dist, min2Vec, _CMP_LT_OQ));
-        //min2IDsVec = _mm256_blendv_epi8(min2IDsVec, idsVec, mask);
+        //min2IDsVec = _mm256_blendv_epi8(min2IDsVec, ids, mask);
         //min2Vec = _mm256_min_ps(min2Vec, dist);
 
         // increment ids
-        idsVec = _mm256_add_epi32(idsVec, increment);
+        ids = _mm256_add_epi32(ids, increment);
     }
 
     // store vectors
-    _mm256_store_ps(minVecStore, min1Vec);
+    _mm256_storeu_ps(minVecStore, min1Vec);
     //_mm256_store_ps(&minVecStore[AVX_VEC_SIZE], min2Vec);
-    _mm256_store_si256((__m256i*)IDVecStore, min1IDsVec);
+    _mm256_storeu_si256((__m256i*)IDVecStore, min1IDsVec);
     //_mm256_store_si256((__m256i*)&IDVecStore[AVX_VEC_SIZE], min2IDsVec);
 
-    // find id of minimum and second minimum in 16 elements
-    size_t minIDID = 0, secondMinIDID = 0; // are IDs of that must be placed int IDVecStore[] to get the real minID so they are IDs of IDs(? not sure if explanation is good but it works)
-    float min = INFINITY;// secondMin = INFINITY;
+    // find id of minimum and second minimum in 8 elements
+    size_t minIDID = -1, secondMinIDID = -1; // are IDs of that must be placed int IDVecStore[] to get the real minID so they are IDs of IDs(? not sure if explanation is good but it works)
+    float min = INFINITY, secondMin = INFINITY;
     for (size_t i = 0; i < AVX_VEC_SIZE /* * 2 */; i++)
     {
         if (min > minVecStore[i])
         {
-            //secondMin = min;
-            //secondMinIDID = minIDID;
+            secondMin = min;
+            secondMinIDID = minIDID;
             min = minVecStore[i];
             minIDID = i;
         }
-        /*else if (secondMin > minVecStore[i]) // also check that it's not the same value as minIDID
+        else if (secondMin > minVecStore[i])
         {
             secondMin = minVecStore[i];
             secondMinIDID = i;
-        }*/
+        }
     }
 
     // We choose what node of the two best we return if GRASP has been required
@@ -242,11 +245,4 @@ static inline size_t findSuccessorID(float *X, float *Y, size_t iterNum, Instanc
         *pathCost += minVecStore[minIDID];
         return (size_t)IDVecStore[minIDID];
     }
-}
-
-static inline void swapf(float *arr, size_t pos1, size_t pos2)
-{
-    float swapVal = arr[pos1];
-    arr[pos1] = arr[pos2];
-    arr[pos2] = swapVal;
 }

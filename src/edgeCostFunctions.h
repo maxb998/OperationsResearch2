@@ -4,6 +4,14 @@
 #include "tsp.h"
 #include <math.h>
 
+enum costComputationType
+{
+	FAST_SQUARED,		// use squared weight when possible (avoids square root function which takes a lot of computing power)
+	MODERATE_APPROX,	// use square root approximation (approximation error of less than 0.1% (max error at around 0.073%))
+	SLOW_EXACT			// use standard square root function (basically accurate)
+};
+
+#define COMPUTATION_TYPE FAST_SQUARED
 
 
 
@@ -94,6 +102,21 @@ static inline float exactEdgeCost (float x1, float y1, float x2, float y2, enum 
 	}
 }
 
+
+static inline float computeEdgeCost (float x1, float y1, float x2, float y2, enum edgeWeightType edgeWgtType)
+{
+	switch (COMPUTATION_TYPE)
+	{
+	case FAST_SQUARED:
+		return squaredEdgeCost (x1, y1, x2, y2, edgeWgtType);
+		break;
+	
+	case SLOW_EXACT:
+		return exactEdgeCost (x1, y1, x2, y2, edgeWgtType);
+		break;
+	}
+}
+
 /*static inline float roundedExactEdgeCost (float x1, float y1, float x2, float y2, enum edgeWeightType edgeWgtType)
 {
 	if (edgeWgtType == ATT)
@@ -118,7 +141,7 @@ static inline float roundEdgeCost(float edgeCost, enum edgeWeightType edgeWgtTyp
 
 
 
-// Return vector containing the euclidean distance squared. Fastest
+// Return vector containing the euclidean cost squared. Fastest
 static inline __m256 euclideanCostSquared2D_VEC(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
 {
     register __m256 xDiff, yDiff, dist;
@@ -129,12 +152,12 @@ static inline __m256 euclideanCostSquared2D_VEC(__m256 x1, __m256 y1, __m256 x2,
 
     return dist;
 }
-// Return vector containing the most accurate euclidean distance. Slow
+// Return vector containing the most accurate euclidean cost. Slow
 static inline __m256 euclideanCost2D_VEC(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
 {
     return _mm256_sqrt_ps(euclideanCostSquared2D_VEC(x1,y1,x2,y2));
 }
-// Return vector containig the approximations of euclidean distances. Maximum relative error is 3*2^-12. Fast euclidean distance
+// Return vector containig the approximations of euclidean costs. Maximum relative error is 3*2^-12. Fast euclidean cost
 static inline __m256 euclideanCost2DFastApprox_VEC(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
 {
     return _mm256_rcp_ps(_mm256_rsqrt_ps(euclideanCostSquared2D_VEC(x1,y1,x2,y2)));
@@ -265,15 +288,28 @@ static inline __m256 fastEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2, __m256 
 
 static inline __m256 computeEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2, __m256 y2, enum edgeWeightType edgeWgtType)
 {
-
+	switch (COMPUTATION_TYPE)
+	{
+	case FAST_SQUARED:
+		return squaredEdgeCost_VEC (x1, y1, x2, y2, edgeWgtType);
+		break;
+	
+	case MODERATE_APPROX:
+		return fastEdgeCost_VEC (x1, y1, x2, y2, edgeWgtType);
+		break;
+	
+	case SLOW_EXACT:
+		return exactEdgeCost_VEC (x1, y1, x2, y2, edgeWgtType);
+		break;
+	}
 }
 
-static inline __m256 roundEdgeCost_VEC (__m256 distances, enum edgeWeightType edgeWgtType)
+static inline __m256 roundEdgeCost_VEC (__m256 costs, enum edgeWeightType edgeWgtType)
 {
 	if (edgeWgtType == ATT)
-		return _mm256_ceil_ps(distances);
+		return _mm256_ceil_ps(costs);
 	else
-		return _mm256_floor_ps(distances);
+		return _mm256_floor_ps(costs);
 }
 
 #endif // EDGE_COST_FUNCTIONS
