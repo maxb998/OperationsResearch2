@@ -1,4 +1,10 @@
-#include "tsp.h"
+#include "TspUtilities.h"
+#include "TspFileUtils.h"
+
+#include "CostMatrix.h"
+
+#include "NearestNeighbor.h"
+#include "2Opt.h"
 
 int main (int argc, char *argv[])
 {
@@ -8,11 +14,11 @@ int main (int argc, char *argv[])
 
     LOG (LOG_LVL_LOG, "file %s has been loaded succesfully", inst.params.inputFile);
 
-    double computeMatrixTime = computeDistanceMatrix(&inst);
+    double computeMatrixTime = computeCostMatrix(&inst);
     
     LOG(LOG_LVL_LOG, "Distance Matrix done in %lf seconds", computeMatrixTime);
     
-    //printDistanceMatrix(&inst);
+    //printCostMatrix(&inst);
 
     // WORKS WITH THIS COMMENTED
     Solution nn = NearestNeighbour(&inst);

@@ -1,8 +1,9 @@
 #ifndef EDGE_COST_FUNCTIONS
 #define EDGE_COST_FUNCTIONS
 
-#include "tsp.h"
+#include "TspBase.h"
 #include <math.h>
+#include <immintrin.h>
 
 enum costComputationType
 {
@@ -117,14 +118,6 @@ static inline float computeEdgeCost (float x1, float y1, float x2, float y2, enu
 	}
 }
 
-/*static inline float roundedExactEdgeCost (float x1, float y1, float x2, float y2, enum edgeWeightType edgeWgtType)
-{
-	if (edgeWgtType == ATT)
-		return exactEdgeCost (float x1, float y1, float x2, float y2, enum edgeWeightType edgeWgtType); // ceiling
-	else
-		return exactEdgeCost (float x1, float y1, float x2, float y2, enum edgeWeightType edgeWgtType); // floor
-}*/
-
 static inline float roundEdgeCost(float edgeCost, enum edgeWeightType edgeWgtType)
 {
 	if (edgeWgtType == ATT)
@@ -132,10 +125,6 @@ static inline float roundEdgeCost(float edgeCost, enum edgeWeightType edgeWgtTyp
 	else
 		return floorf(edgeCost);
 }
-
-
-
-
 
 
 

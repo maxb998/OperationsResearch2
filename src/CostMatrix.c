@@ -1,4 +1,11 @@
-#include "edgeCostFunctions.h"
+#include "CostMatrix.h"
+#include "EdgeCostFunctions.h"
+#include "TspUtilities.h"
+
+#include <pthread.h>
+#include <time.h>
+#include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
+#include <stdio.h>
 
 typedef struct
 {
@@ -10,7 +17,7 @@ typedef struct
 // method to compute edges weights with multiple threads using AVX2 instructions
 static void * computeDistMatThread(void * arg);
 
-void printDistanceMatrix(Instance *inst)
+void printCostMatrix(Instance *inst)
 {
     LOG(LOG_LVL_LOG, "Printing the distance matrix");
 
@@ -24,7 +31,7 @@ void printDistanceMatrix(Instance *inst)
 }
 
 
-double computeDistanceMatrix(Instance *inst)
+double computeCostMatrix(Instance *inst)
 {
     struct timespec start, finish;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &start);

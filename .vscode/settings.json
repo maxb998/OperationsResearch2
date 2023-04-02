@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "edgecostfunctions.h": "c",
+        "unistd.h": "c"
+    }
+}

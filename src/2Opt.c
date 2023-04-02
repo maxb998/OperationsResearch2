@@ -1,4 +1,11 @@
-#include "tsp.h"
+#include "2Opt.h"
+#include "TspUtilities.h"
+
+#include <pthread.h>
+#include <time.h>
+#include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
+
+
 
 typedef struct
 {
@@ -165,7 +172,8 @@ static void *_2optBestFixCostMatrixThread(void *arg)
             bestSolutionUpdate(th);
 
             // reset all the threadFinishFlag to 0
-            memset(th->threadFinishFlag, 0, sizeof(th->threadFinishFlag));
+            for (size_t i = 0; i < inst->params.nThreads; i++)
+                th->threadFinishFlag[i] = 0;
 
             // signal other threads that bestSolution update has been done
             pthread_cond_broadcast(&th->conditionBestSolUpdated);

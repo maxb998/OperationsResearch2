@@ -1,5 +1,10 @@
-//#include "tsp.h" // included in edgeCostFunction.h
-#include "edgeCostFunctions.h"
+#include "NearestNeighbor.h"
+#include "EdgeCostFunctions.h"
+#include "TspUtilities.h"
+
+#include <pthread.h>
+#include <time.h>
+#include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
 
 typedef struct
@@ -235,7 +240,7 @@ static inline size_t findSuccessorID(float *X, float *Y, size_t iterNum, Instanc
     }
 
     // We choose what node of the two best we return if GRASP has been required
-    if (inst->params.randomSeed != -1 && rand() > GRASP_COEFF && IDVecStore[secondMinIDID] != -1)
+    if (inst->params.randomSeed != -1 && rand() > NN_GRASP_COEFF && IDVecStore[secondMinIDID] != -1)
     {
         *pathCost += minVecStore[secondMinIDID];
         return (size_t)IDVecStore[secondMinIDID];

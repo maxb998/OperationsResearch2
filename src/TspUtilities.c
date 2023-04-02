@@ -1,0 +1,385 @@
+#include "TspUtilities.h"
+#include "EdgeCostFunctions.h"
+
+#include <stdio.h>
+#include <unistd.h>
+#include <limits.h>
+#include <string.h>
+#include <stdarg.h> // used for logger va_list
+#include <getopt.h> // args parsing by POSIX
+#include <math.h>
+
+#include <immintrin.h>
+
+static enum logLevel globLVL = LOG_LVL_LOG;
+
+const char * logLevelString [] = {
+	"\033[1;31mERR \033[0m", // 0
+	"\033[1;35mCRIT\033[0m", // 1
+	"\033[1;33mWARN\033[0m", // 2
+	"\033[1;36mNOTI\033[0m", // 3
+	"\033[1;34mLOG \033[0m", // 4
+	"\033[1;32mDEBG\033[0m", // 5
+	"\033[1;90mALL \033[0m"	// 6
+};
+
+
+// Returns the number of processors of the machine
+static inline int nProcessors();
+
+
+size_t * getSolutionIDArray(Solution *sol);
+
+Instance newInstance ()
+{
+    Instance d = { .nNodes = 0, .X = NULL, .Y = NULL, .edgeCostMat = NULL, .params = { .edgeWeightType = 0, .randomSeed = -1, .roundWeights = 0, .nThreads = nProcessors() } };
+    memset(d.params.inputFile, 0, sizeof(d.params.inputFile));
+    memset(d.params.name, 0, sizeof(d.params.name));
+
+    return d;
+}
+
+Solution newSolution (Instance *inst)
+{
+    Solution s = { .bestCost = INFINITY, .bestCostRounded = INT_MAX, .execTime = 0, .instance = inst };
+
+    // allocate memory (consider locality). Alse leave place at the end to repeat the first element of the solution(some algoritms benefits from it)
+    s.X = malloc((inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float));
+    s.Y = &s.X[inst->nNodes + AVX_VEC_SIZE];
+    s.indexPath = malloc((inst->nNodes + 1) * sizeof(int));
+
+    return s;
+}
+
+void destroyInstance (Instance *inst)
+{
+    // memory has been allocated to X, no need to free Y
+    free(inst->X);
+    free(inst->edgeCostMat);
+
+    // reset pointers to NULL
+    inst->X = inst->Y = inst->edgeCostMat = NULL;
+}
+
+void destroySolution (Solution *sol)
+{
+    // memory has been allocated to X, no need to free Y
+    free(sol->X);
+    free(sol->indexPath);
+
+    // reset pointers to NULL
+    sol->X = sol->Y = NULL;
+}
+
+
+int LOG (enum logLevel lvl, char * line, ...)
+{
+    // check log level
+    if (lvl > LOG_LEVEL) return 0;
+
+    // print log level
+    printf("[%s] ", logLevelString[lvl]);
+
+    // print passed message and values
+    va_list params;
+    va_start(params, line);
+    vprintf(line, params);
+    va_end(params);
+    
+    // add new line at the end
+    if (line[strlen(line)-1] != '\n')
+        printf("\n");
+
+    return 0;
+}
+
+void throwError (Instance *inst, Solution *sol, char * line, ...)
+{
+    printf("[%s] ", logLevelString[0]);
+
+    va_list params;
+    va_start(params, line);
+    vprintf(line, params);
+    va_end(params);
+
+    printf("\n");
+
+    // free allocated memory
+    if (inst)
+        destroyInstance(inst);
+    if (sol)
+    {
+        destroyInstance(sol->instance);
+        destroySolution(sol);
+    }
+
+    exit(EXIT_FAILURE);
+}
+
+void parseArgs (Instance *inst, int argc, char *argv[])
+{
+    static int roundWeightsFlag = 0;
+    static struct option options[] = 
+        {
+            {"seed", required_argument, 0, 's'},
+            {"s", required_argument, 0, 's'},
+            {"file", required_argument, 0, 'f'},
+            {"f", required_argument, 0, 'f'},
+            {"threads", required_argument, 0, 't'},
+            {"t", required_argument, 0, 't'},
+            {"roundWeigths", no_argument, &roundWeightsFlag, 1},
+            {0, 0, 0, 0}
+        };
+    // set flags in d
+    inst->params.roundWeights = roundWeightsFlag;
+
+
+    int option_index = 0;
+    int opt;
+
+    while ((opt = getopt_long(argc, argv, "s:f:t:", options, &option_index)) != -1)
+    {
+        switch (opt)
+        {
+        case 's':
+            inst->params.randomSeed = (int)strtol(optarg, NULL, 10);
+            break;
+
+        case 'f':
+            if (access(optarg, R_OK) != 0)
+                throwError(inst, NULL, "ERROR: File \"%s\" not found\n", optarg);
+
+            strncpy(inst->params.inputFile, optarg, strlen(optarg)+1);
+            break;
+        
+        case 't':
+            inst->params.nThreads = strtoul(optarg, NULL, 10);
+            break;
+        
+        default:
+            abort();
+        }
+    }
+
+    // check necessary arguments were passed
+    if (inst->params.inputFile[0] == 0)
+        throwError(inst, NULL, "A file path must be specified with \"-f\" or \"--file\" options");
+
+    LOG(LOG_LVL_NOTICE, "Received arguments:");
+    LOG(LOG_LVL_NOTICE,"    Random Seed  = %d", inst->params.randomSeed);
+    LOG(LOG_LVL_NOTICE,"    Filename     = %s", inst->params.inputFile);
+    LOG(LOG_LVL_NOTICE,"    Thread Count = %d", inst->params.nThreads);
+}
+
+
+static inline int nProcessors()
+{
+    FILE *commandPipe;
+    char *command = "nproc";
+    char temp[10];
+    commandPipe = (FILE*)popen(command, "r");
+    fgets(temp, sizeof(temp), commandPipe);
+    pclose(commandPipe);
+    int numProcessors = atoi(temp);
+    return numProcessors;
+}
+
+int solutionCheck(Solution *sol)
+{
+    int * uncoveredNodes = malloc(sol->instance->nNodes * sizeof(int));
+    int currentNode;
+
+    // First and last node must be equal (the circuit is closed)
+    if(sol->indexPath[0] != sol->indexPath[sol->instance->nNodes]) 
+        throwError(sol->instance, sol, "SolutionCheck: first and last node in solution should coincide");
+    LOG(LOG_LVL_DEBUG, "SolutionCheck: first and last node in solution coincide.");
+
+    // Populate uncoveredNodes array, here we check if a node is repeated along the path
+    for(int i = 0; i < sol->instance->nNodes; i++)
+    {
+        currentNode = sol->indexPath[i];
+        if(uncoveredNodes[currentNode] == 1) throwError(sol->instance, sol, "SolutionCheck: node %d repeated in the solution. Loop iteration %d", currentNode, i);
+        else uncoveredNodes[currentNode] = 1;
+    }
+    LOG(LOG_LVL_DEBUG, "SolutionCheck: all nodes in the path are unique.");
+
+    // Check that all the nodes are covered in the path
+    for(int i = 0; i < sol->instance->nNodes; i++)
+    {
+        if(uncoveredNodes[i] == 0) throwError(NULL, sol, "SolutionCheck: node %d is not in the path", i);
+    }
+    LOG(LOG_LVL_DEBUG, "SolutionCheck: all the nodes are present in the path -> The solution is feasible.");
+    
+    costCheck(sol);
+
+    return 0;
+}
+
+int costCheck(Solution *sol)
+{
+    double recomputedCost = computeSolutionCost(sol);
+    if(recomputedCost != sol->bestCost) throwError(sol->instance, sol, "costChek: Error in the computation of the pathCost. recomputedCost: %lf Cost in Solution: %lf", recomputedCost, sol->bestCost);
+    LOG(LOG_LVL_DEBUG, "costCheck: pathCost computed correctly.");
+
+    return 0;
+}
+
+void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize)
+{
+    // creating the pipeline for gnuplot
+    FILE *gnuplotPipe = popen("gnuplot -persistent", "w");
+
+    // gnuplot settings
+    fprintf(gnuplotPipe, "set title \"%s\"\n", sol->instance->params.name);
+    fprintf(gnuplotPipe, "set terminal qt size %s\n", plotPixelSize);
+
+    // set plot linestyles
+    fprintf(gnuplotPipe, "set style line 1 linecolor rgb '%s' pt 7 pointsize %d\n", pointColor, pointSize);
+    fprintf(gnuplotPipe, "set style line 2 linecolor rgb '%s' pointsize %d\n", tourPointColor, pointSize);
+
+
+    // assign number to points
+    if (globLVL >= LOG_LVL_DEBUG)
+        for (size_t i = 0; i < sol->instance->nNodes; i++)
+            fprintf(gnuplotPipe, "set label \"%ld\" at %f,%f\n", i, sol->instance->X[i], sol->instance->Y[i]);
+
+    // populating the plot
+    
+    fprintf(gnuplotPipe, "plot '-' with point linestyle 1, '-' with linespoint linestyle 2\n");
+
+    // first plot only the points
+    for (size_t i = 0; i < sol->instance->nNodes; i++)
+        fprintf(gnuplotPipe, "%f %f\n", sol->instance->X[i], sol->instance->Y[i]);
+    fprintf(gnuplotPipe, "e\n");
+
+    // second print the tour
+    for (int i = 0; i <= sol->instance->nNodes; i++)
+    {
+        fprintf(gnuplotPipe, "%f %f\n", sol->X[i], sol->Y[i]);
+    }
+    fprintf(gnuplotPipe, "e\n");
+
+    // force write on stream
+    fflush(gnuplotPipe);
+
+    // close stream
+    pclose(gnuplotPipe);
+}
+
+size_t * getSolutionIDArray(Solution *sol)
+{
+    size_t n = sol->instance->nNodes;
+    size_t *solID = malloc(n * sizeof(size_t));
+
+    for (size_t i = 0; i < n; i++)
+        for (size_t j = 0; j < n; j++)
+            if ((sol->X[i] == sol->instance->X[j]) && (sol->Y[i] == sol->instance->Y[j]))
+                solID[i] = j;
+
+    return solID;
+}
+
+
+float computeSolutionCostVectorizedFloat(Solution *sol)
+{
+    register __m256 costVec = _mm256_setzero_ps();
+    size_t i = 0;
+    while (i < sol->instance->nNodes - AVX_VEC_SIZE)
+    {
+        register __m256 x1, x2, y1, y2;
+        x1 = _mm256_loadu_ps(&sol->X[i]), y1 = _mm256_loadu_ps(&sol->Y[i]);
+        x2 = _mm256_loadu_ps(&sol->X[i+1]), y2 = _mm256_loadu_ps(&sol->Y[i+1]);
+
+        costVec = _mm256_add_ps(costVec, squaredEdgeCost_VEC(x1, y1, x2, y2, sol->instance->params.edgeWeightType));
+
+        i += AVX_VEC_SIZE;
+    }
+
+    // here we do the last iteration. since all "extra" elements at the end of X and Y are NaNs they can cause issues on sum. so we use a maskload for the last vector
+    register __m256 x1, x2, y1, y2;
+    x1 = _mm256_loadu_ps(&sol->X[i]); y1 = _mm256_loadu_ps(&sol->Y[i]);
+    x2 = _mm256_loadu_ps(&sol->X[i+1]); y2 = _mm256_loadu_ps(&sol->Y[i+1]);
+
+    register __m256 lastDist = squaredEdgeCost_VEC(x1, y1, x2, y2, sol->instance->params.edgeWeightType);
+
+    // now we sustitute the infinity and NaN in the vector with zeroes
+    register __m256 infinityVec = _mm256_set1_ps(INFINITY);
+    register __m256 mask = _mm256_cmp_ps(lastDist, infinityVec, _CMP_LT_OQ);
+    costVec = _mm256_add_ps(costVec, _mm256_blendv_ps(mask, squaredEdgeCost_VEC(x1, y1, x2, y2, sol->instance->params.edgeWeightType), mask));
+
+
+    float costVecStore[8];
+    _mm256_storeu_ps(costVecStore, costVec);
+    
+    double totalCost = 0.0;
+    for (size_t i = 0; i < AVX_VEC_SIZE; i++)
+        totalCost += costVecStore[i];
+    
+    return totalCost;
+}
+
+double computeSolutionCostVectorizedDouble(Solution *sol)
+{
+    register __m256d costVec = _mm256_setzero_pd();
+    size_t i = 0;
+    while (i < sol->instance->nNodes - AVX_VEC_SIZE)
+    {
+        register __m256 x1, x2, y1, y2;
+        x1 = _mm256_loadu_ps(&sol->X[i]), y1 = _mm256_loadu_ps(&sol->Y[i]);
+        x2 = _mm256_loadu_ps(&sol->X[i+1]), y2 = _mm256_loadu_ps(&sol->Y[i+1]);
+
+        register __m256 costVecFloat = squaredEdgeCost_VEC(x1, y1, x2, y2, sol->instance->params.edgeWeightType);
+
+        // convert vector of floats into 2 vectors of doubles and add them to the total cost
+        // first half of the vector
+        register __m128 partOfCostVecFloat = _mm256_extractf128_ps(costVecFloat, 0);
+        register __m256d partOfCostVecDouble = _mm256_cvtps_pd(partOfCostVecFloat);
+        costVec = _mm256_add_pd(costVec, partOfCostVecDouble);
+        // second half of the vector
+        partOfCostVecFloat = _mm256_extractf128_ps(costVecFloat, 1);
+        partOfCostVecDouble = _mm256_cvtps_pd(partOfCostVecFloat);
+        costVec = _mm256_add_pd(costVec, partOfCostVecDouble);
+
+        i += AVX_VEC_SIZE;
+    }
+
+    // here we do the last iteration. since all "extra" elements at the end of X and Y are NaNs they can cause issues on sum. so we use a maskload for the last vector
+    register __m256 x1, x2, y1, y2;
+    x1 = _mm256_loadu_ps(&sol->X[i]); y1 = _mm256_loadu_ps(&sol->Y[i]);
+    x2 = _mm256_loadu_ps(&sol->X[i+1]); y2 = _mm256_loadu_ps(&sol->Y[i+1]);
+
+    register __m256 lastDist = squaredEdgeCost_VEC(x1, y1, x2, y2, sol->instance->params.edgeWeightType);
+
+    // now we sustitute the NaNs in the vector with zeroes
+    register __m256 infinityVec = _mm256_set1_ps(INFINITY);
+    register __m256 mask = _mm256_cmp_ps(lastDist, infinityVec, _CMP_LT_OQ);
+    register __m256 costVecFloat = _mm256_blendv_ps(mask, squaredEdgeCost_VEC(x1, y1, x2, y2, sol->instance->params.edgeWeightType), mask);
+
+    // convert vector of floats into 2 vectors of doubles and add them to the total cost
+    // first half of the vector
+    register __m128 partOfCostVecFloat = _mm256_extractf128_ps(costVecFloat, 0);
+    register __m256d partOfCostVecDouble = _mm256_cvtps_pd(partOfCostVecFloat);
+    costVec = _mm256_add_pd(costVec, partOfCostVecDouble);
+    // second half of the vector
+    partOfCostVecFloat = _mm256_extractf128_ps(costVecFloat, 1);
+    partOfCostVecDouble = _mm256_cvtps_pd(partOfCostVecFloat);
+    costVec = _mm256_add_pd(costVec, partOfCostVecDouble);
+
+    double vecStore[4];
+    _mm256_storeu_pd(vecStore, costVec);
+    
+    double totalCost = 0.0;
+    for (size_t i = 0; i < 4; i++)
+        totalCost += vecStore[i];
+    
+    return totalCost;
+}
+
+double computeSolutionCost(Solution *sol)
+{
+    double cost = 0.0;
+    for (size_t i = 0; i < sol->instance->nNodes; i++)
+        cost += (double)squaredEdgeCost(sol->X[i], sol->Y[i], sol->X[i+1], sol->Y[i+1], sol->instance->params.edgeWeightType);
+    
+    return cost;
+}
