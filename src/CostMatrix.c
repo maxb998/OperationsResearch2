@@ -75,16 +75,18 @@ static void * computeDistMatThread(void* arg)
     ThreadsData *th = (ThreadsData*)arg;
     Instance *inst = th->inst;
 
-    register size_t n = inst->nNodes;
+    size_t n = inst->nNodes;
 
     // initialize mask outside loop to avoid doing it over and over(useless beacuse the compiler should do this automatically but whatever)
     int mask[AVX_VEC_SIZE];
 
     // since it has the same value for each row we can define it here, outside the loops
-    register size_t  avxVecExtraElems = AVX_VEC_SIZE - (n % AVX_VEC_SIZE);
-    for (register size_t j = 0; j < avxVecExtraElems; j++)
+    size_t lastVecElemsCount = (n % AVX_VEC_SIZE);
+    if (lastVecElemsCount == 0)
+        lastVecElemsCount = 8;
+    for (size_t j = 0; j < lastVecElemsCount; j++)
         mask[j] = -1; // this row last elements
-    for (register size_t j = avxVecExtraElems; j < AVX_VEC_SIZE; j++)
+    for (size_t j = lastVecElemsCount; j < AVX_VEC_SIZE; j++)
         mask[j] = 0; // next row first elements (DO NOT WRITE THIS IN THE STORE -> so we use maskstore)
 
     while ( (pthread_mutex_lock(&th->mutex) == 0) && (th->nextRow < th->inst->nNodes) )    // lock mutex before checking nextRow
@@ -92,23 +94,23 @@ static void * computeDistMatThread(void* arg)
         // CRITICAL REGION STARTED(INCLUDING WHILE CONDITION) ######################
         // here thread gets it's workspace
 
-        register size_t row = th->nextRow;
+        size_t row = th->nextRow;
         th->nextRow++; // prevent other threads threads to access this thread working row
 
         pthread_mutex_unlock (&th->mutex);
         // CRITICAL REGION END #####################################################
 
         // now the thread can compute the distance matrix inside it's workspace (row)
-        register __m256 x1 = _mm256_set1_ps(th->inst->X[row]);
-        register __m256 y1 = _mm256_set1_ps(th->inst->Y[row]);
+        __m256 x1 = _mm256_set1_ps(th->inst->X[row]);
+        __m256 y1 = _mm256_set1_ps(th->inst->Y[row]);
 
-        register size_t i;
+        size_t i;
         for (i = 0; i < n - AVX_VEC_SIZE; i += AVX_VEC_SIZE)
         {
-            register __m256 x2 = _mm256_loadu_ps(&th->inst->X[i]);
-            register __m256 y2 = _mm256_loadu_ps(&th->inst->Y[i]);
+            __m256 x2 = _mm256_loadu_ps(&th->inst->X[i]);
+            __m256 y2 = _mm256_loadu_ps(&th->inst->Y[i]);
 
-            register __m256 dist = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType, inst->params.roundWeights);
+            __m256 dist = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType, inst->params.roundWeights);
 
             // store result in memory
             _mm256_storeu_ps(&inst->edgeCostMat[row * n + i], dist);
@@ -117,9 +119,9 @@ static void * computeDistMatThread(void* arg)
         // last elements must be done differently since a vector may override the contents of the next line
 
         // do the same as in the loop
-        register __m256 x2 = _mm256_loadu_ps(&th->inst->X[i]);
-        register __m256 y2 = _mm256_loadu_ps(&th->inst->Y[i]);
-        register __m256 dist = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType, inst->params.roundWeights);
+        __m256 x2 = _mm256_loadu_ps(&th->inst->X[i]);
+        __m256 y2 = _mm256_loadu_ps(&th->inst->Y[i]);
+        __m256 dist = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType, inst->params.roundWeights);
 
         // maskstore the result avoiding to overwrite data
         _mm256_maskstore_ps(&inst->edgeCostMat[row * n + i], _mm256_loadu_si256((__m256i*)mask), dist);

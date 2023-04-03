@@ -21,8 +21,10 @@ int main (int argc, char *argv[])
     //printCostMatrix(&inst);
 
     // WORKS WITH THIS COMMENTED
+    //inst.params.nThreads = 12;
     Solution nn = NearestNeighbour(&inst);
     LOG(LOG_LVL_LOG, "Nearest Neighbour finished in %lf seconds", nn.execTime);
+    inst.params.nThreads = 1;
     double _2optTime = apply2OptBestFix(&nn, _2OPT_AVX);
     LOG(LOG_LVL_LOG, "2-Opt finished in %lf seconds", _2optTime);
     

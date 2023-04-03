@@ -7,6 +7,7 @@
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
 
+#define USE_FAST_SOLUTION_UPDATE 0
 
 typedef struct
 {
@@ -50,6 +51,15 @@ typedef struct
 static inline void checkInput(Solution *sol, enum _2OptOptions *option);
 
 static inline void solutionUpdate(ThreadsData *th);
+
+// Updates solution using avx instructions when possible (eg. a lot of elements to invert)
+static inline void fastSolutionUpdate(ThreadsData *th);
+
+// Loads inverts and stores two vectors of floats according to update solution procedure. Speeds Up update procedure
+static inline void invertVectorSizeElemsF(float *firstPtr, float *secondPtr);
+
+// Loads inverts and stores two vectors of int according to update solution procedure. Speeds Up update procedure
+static inline void invertVectorSizeElemsD(int *firstPtr, int *secondPtr);
 
 
 // Basic approach that computes the costs every time, one at a time. Use this with _2OPT_BASE
@@ -185,6 +195,13 @@ static inline void solutionUpdate(ThreadsData *th)
 
         size_t smallID = th->bestOffsetIDs[0] + 1, bigID = th->bestOffsetIDs[1];
 
+        static int updateCount = 0;
+        updateCount++;
+
+        LOG(LOG_LVL_EVERYTHING, "2Opt: [%d] Updating solution by switching edge (%d,%d) with edge (%d,%d) improving cost by %f", updateCount,
+                sol->indexPath[th->bestOffsetIDs[0]], sol->indexPath[th->bestOffsetIDs[0]+1], 
+                sol->indexPath[th->bestOffsetIDs[1]], sol->indexPath[th->bestOffsetIDs[1]+1], th->bestOffset);
+
         while (smallID < bigID)
         {
             {   // swap index path elements
@@ -206,6 +223,105 @@ static inline void solutionUpdate(ThreadsData *th)
     }
     else // NO COST IMPROVING 2opt MOVE HAS BEEN FOUND
         th->finishedFlag = 1;
+}
+
+static inline void fastSolutionUpdate(ThreadsData *th)
+{
+    Solution *sol = th->sol;
+    if (th->bestOffset < -EPSILON) // avoid to do practically meaningless optimization and float precision errors(TO REVISE AND DO A RELATIVE COMPARISON)
+    {
+        /*
+         * UPDATE BEST SOLUTION ########################################################################################
+         *      bestSolIDs = { 0 1 2 3 4 5 6 7 8 9 }
+         * if bestSolution = { 2 5 8 7 6 9 4 1 0 3 } and bestOffsetIDs = { 3 8 }
+         *          -> means edges to swapped are (7,6) and (0,3) with (7,0) and (0,6)
+         * at the end of the swap, the new bestSolution will be { 2 5 8 7 0 1 4 9 6 3 }     ^         ^
+         *     old bestSolution = { 2 5 8 7 6 9 4 1 0 3 }   with original indexes = { 0 1 2 3 4 5 6 7 8 9 }
+         *     new bestSolution = { 2 5 8 7 0 1 4 9 6 3 }   with original indexes = { 0 1 2 3 8 7 6 5 4 9 }
+         *
+         * Which means that we must invert the elements of bestSolution from index 3(not inlcuded) to index 8(included)
+         */
+
+        size_t smallID = th->bestOffsetIDs[0] + 1, bigID = th->bestOffsetIDs[1];
+
+        static int updateCount = 0;
+        updateCount++;
+
+        LOG(LOG_LVL_EVERYTHING, "2Opt: [%d] Updating solution by switching edge (%d,%d) with edge (%d,%d) improving cost by %f", updateCount,
+                sol->indexPath[th->bestOffsetIDs[0]], sol->indexPath[th->bestOffsetIDs[0]+1], 
+                sol->indexPath[th->bestOffsetIDs[1]], sol->indexPath[th->bestOffsetIDs[1]+1], th->bestOffset);
+
+        while (bigID - smallID >= 2 * AVX_VEC_SIZE)  // condition checks that we two 256 bits vectors fit in between smallID and bigID and can be used to copy the data
+        {
+            bigID -= AVX_VEC_SIZE;
+
+            invertVectorSizeElemsF(&sol->X[smallID], &sol->X[bigID+1]);
+            invertVectorSizeElemsF(&sol->Y[smallID], &sol->Y[bigID+1]);
+
+            invertVectorSizeElemsD(&sol->indexPath[smallID], &sol->indexPath[bigID+1]);
+
+            smallID += AVX_VEC_SIZE;
+        }
+
+        //smallID++;
+        //bigID--;
+        
+        // handles remaining elements without vector (it would be a real pain to implement also this part)
+        while (smallID < bigID)
+        {
+            {   // swap index path elements
+                register int temp;
+                swapElems(sol->indexPath[smallID], sol->indexPath[bigID], temp);
+            }
+
+            {   // swap solution coordinates
+                register float temp;
+                swapElems(sol->X[smallID], sol->X[bigID], temp);
+                swapElems(sol->Y[smallID], sol->Y[bigID], temp);
+            }
+
+            smallID++;
+            bigID--;
+        }
+
+        th->bestOffset = 0;
+    }
+    else // NO COST IMPROVING 2opt MOVE HAS BEEN FOUND
+        th->finishedFlag = 1;
+}
+
+static inline void invertVectorSizeElemsF(float *firstPtr, float *secondPtr)
+{
+    static int inversionMask[AVX_VEC_SIZE] = { 7, 6, 5, 4, 3, 2, 1, 0 };
+
+    // load data into vectors
+    __m256 firstVec = _mm256_loadu_ps(firstPtr);
+    __m256 secondVec = _mm256_loadu_ps(secondPtr);
+
+    // invert smallVec and bigVec
+    firstVec = _mm256_permutevar8x32_ps(firstVec, _mm256_loadu_si256((__m256i *)inversionMask));
+    secondVec = _mm256_permutevar8x32_ps(secondVec, _mm256_loadu_si256((__m256i *)inversionMask));
+
+    // store inverted
+    _mm256_storeu_ps(firstPtr, secondVec);
+    _mm256_storeu_ps(secondPtr, firstVec);
+}
+
+static inline void invertVectorSizeElemsD(int *firstPtr, int *secondPtr)
+{
+    static int inversionMask[AVX_VEC_SIZE] = { 7, 6, 5, 4, 3, 2, 1, 0 };
+
+    // load data into vectors
+    __m256i firstVec = _mm256_loadu_si256((__m256i*)firstPtr);
+    __m256i secondVec = _mm256_loadu_si256((__m256i*)secondPtr);
+
+    // invert smallVec and bigVec
+    firstVec = _mm256_permutevar8x32_epi32(firstVec, _mm256_loadu_si256((__m256i *)inversionMask));
+    secondVec = _mm256_permutevar8x32_epi32(secondVec, _mm256_loadu_si256((__m256i *)inversionMask));
+
+    // store inverted
+    _mm256_storeu_si256((__m256i*)firstPtr, secondVec);
+    _mm256_storeu_si256((__m256i*)secondPtr, firstVec);
 }
 
 
@@ -240,7 +356,7 @@ static void *_2optBestFixBaseThread(void *arg)
             float solEdgeWgt1 = computeEdgeCost(sol->X[edgeID], sol->Y[edgeID], sol->X[edgeID+1], sol->Y[edgeID+1], edgeWgtType, roundFlag); ///inst->edgeCostMat[sol->indexPath[edgeID] * n + sol->indexPath[edgeID + 1]];
             for (size_t i = 2 + edgeID; (i < n - 1) || ((i < n) && (edgeID > 0)); i++)
             {
-                float solEdgeWgt2 = inst->edgeCostMat[sol->indexPath[i] * n + sol->indexPath[i + 1]];
+                float solEdgeWgt2 = computeEdgeCost(sol->X[i], sol->Y[i], sol->X[i+1], sol->Y[i+1], edgeWgtType, roundFlag);// inst->edgeCostMat[sol->indexPath[i] * n + sol->indexPath[i + 1]];
 
                 // check the combined weight other combination of edges
                 float altEdge1 = computeEdgeCost(sol->X[edgeID], sol->Y[edgeID], sol->X[i], sol->Y[i], edgeWgtType, roundFlag);//inst->edgeCostMat[sol->indexPath[edgeID] * n + sol->indexPath[i]];
@@ -281,7 +397,10 @@ static void *_2optBestFixBaseThread(void *arg)
         if (lastThreadFlag == 1)
         {
             // update the best solution
-            solutionUpdate(th);
+            if (USE_FAST_SOLUTION_UPDATE == 1)
+                fastSolutionUpdate(th);
+            else
+                solutionUpdate(th);
 
             // reset all the threadFinishFlag to 0
             for (size_t i = 0; i < inst->params.nThreads; i++)
@@ -345,13 +464,13 @@ static void *_2OptBestFixAVXThread(void *arg)
             for (size_t i = 2 + edgeID; (i < n - 1) || ((i < n) && (edgeID > 0)); i += AVX_VEC_SIZE)
             {
                 __m256 altEdgeWgt, solEdgeWgt;
-                //{   // scope "force" a thing compiler should do automatically -> x3,y3,x4,y4 destroyed as soon as we don't need them anymore
+                {   // scope "force" a thing compiler should do automatically -> x3,y3,x4,y4 destroyed as soon as we don't need them anymore
                     __m256 x3 = _mm256_loadu_ps(&sol->X[i]), y3 = _mm256_loadu_ps(&sol->Y[i]);
                     __m256 x4 = _mm256_loadu_ps(&sol->X[i + 1]), y4 = _mm256_loadu_ps(&sol->Y[i + 1]);
                     solEdgeWgt = _mm256_add_ps(partialSolEdgeWgt, computeEdgeCost_VEC(x3, y3, x4, y4, edgeWgtType, roundFlag));
 
                     altEdgeWgt = _mm256_add_ps(computeEdgeCost_VEC(x1, y1, x3, y3, edgeWgtType, roundFlag), computeEdgeCost_VEC(x2, y2, x4, y4, edgeWgtType, roundFlag));
-                //}
+                }
 
                 __m256 offsetVec = _mm256_sub_ps(altEdgeWgt, solEdgeWgt); // value is negative if altEdgeWgt is better
 
@@ -405,7 +524,10 @@ static void *_2OptBestFixAVXThread(void *arg)
         if (lastThreadFlag == 1)
         {
             // update the best solution
-            solutionUpdate(th);
+            if (USE_FAST_SOLUTION_UPDATE == 1)
+                fastSolutionUpdate(th);
+            else
+                solutionUpdate(th);
 
             // reset all the threadFinishFlag to 0
             for (size_t i = 0; i < inst->params.nThreads; i++)
@@ -496,7 +618,10 @@ static void *_2optBestFixCostMatrixThread(void *arg)
         if (lastThreadFlag == 1)
         {
             // update the best solution
-            solutionUpdate(th);
+            if (USE_FAST_SOLUTION_UPDATE == 1)
+                fastSolutionUpdate(th);
+            else
+                solutionUpdate(th);
 
             // reset all the threadFinishFlag to 0
             for (size_t i = 0; i < inst->params.nThreads; i++)
