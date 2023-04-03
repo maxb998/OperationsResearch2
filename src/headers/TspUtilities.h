@@ -28,6 +28,8 @@ void destroyInstance (Instance *inst);
 // Frees the allocated memory in the Solution pointed by s
 void destroySolution (Solution *sol);
 
+Solution cloneSolution(Solution *sol);
+
 /*Function used to log informations with level.
 * lvl -> logLevel: Desired level of logging priority. If this value is greater than global value than LOG does not print anything
 * line, ... -> string, args: Arguments that are directly fed to printf
@@ -40,14 +42,18 @@ void throwError (Instance *inst, Solution *sol, char * line, ...);
 // Parse commandline arguments stored in argv and save relevant information to d->params
 void parseArgs (Instance *inst, int argc, char *argv[]);
 
-/* Checks that:
+/* Checks on sol.indexPath that:
 	1. First and last node in the path are the same (closed circuit)
 	2. Nodes are not getting covered more than once
 	3. All nodes are covered along the path*/
-int solutionCheck(Solution *sol);
+void basicSolutionCheck(Solution *sol);
+
+/* Checks that the solution is feasible.
+	Checks sol.X, sol.Y, sol.indexPath and also that the cost is correct*/
+void fullSolutionCheck(Solution *sol);
 
 // Check the correctness of the cost of the solution stored in Instance inst.
-int costCheck(Solution *sol);
+void costCheck(Solution *sol);
 
 /*Plot solution using gnuplot. Does NOT check for errors on input
 * d	-> Instance to plot

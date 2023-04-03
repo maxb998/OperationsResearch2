@@ -68,7 +68,7 @@ static void * threadNN(void *thInst)
     // Allocate memory to contain the work-in-progress solution
     float *currentSolX = malloc((inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float));
     float *currentSolY = &currentSolX[inst->nNodes + AVX_VEC_SIZE];
-    unsigned int *currentIndexPath = malloc((inst->nNodes + 1) * sizeof(int));
+    int *currentIndexPath = malloc((inst->nNodes + 1) * sizeof(int));
 
     // Allocate memory to store Vector register element (aligned for not apparent reason than it feels better)
     float minVecStore[8];
@@ -92,7 +92,7 @@ static void * threadNN(void *thInst)
         //memcpy(currentSolX, inst->X, (inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float)); // this also copies Y
 
         // reset currentIndexPath to match the original
-        for (unsigned int i = 0; i < (unsigned int)inst->nNodes + 1; i++)
+        for (int i = 0; i < (int)inst->nNodes + 1; i++)
             currentIndexPath[i] = i;
 
         // set first element of currentSolX/Y to the element at index startingNode -> swap pos 0 with starting node
@@ -104,7 +104,7 @@ static void * threadNN(void *thInst)
         }
         {
             // swap index
-            register unsigned int temp;
+            register int temp;
             swapElems(currentIndexPath[0], currentIndexPath[iterNode], temp);
         }
 
@@ -133,7 +133,7 @@ static void * threadNN(void *thInst)
                 }
 
                 { // swap index
-                    register unsigned int temp;
+                    register int temp;
                     swapElems(currentIndexPath[i], currentIndexPath[successorID], temp);
                 }
             }
@@ -158,7 +158,7 @@ static void * threadNN(void *thInst)
                 swapElems(sol->Y, currentSolY, temp);
             }
             {
-                register unsigned int *temp;
+                register int *temp;
                 swapElems(sol->indexPath, currentIndexPath, temp);
             }
 

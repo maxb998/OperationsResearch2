@@ -320,7 +320,7 @@ void saveSolution(Solution *sol)
     fprintf(solutionFile, "DIMENSION : %ld\n", sol->instance->nNodes);
     fprintf(solutionFile, "TOUR_SECTION\n");
 
-    unsigned int *solID = sol->indexPath;
+    int *solID = sol->indexPath;
 
     // populating the file with the solution
     for (int i = 0; i < sol->instance->nNodes; i++)

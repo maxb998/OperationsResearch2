@@ -11,6 +11,8 @@ enum _2OptOptions
     _2OPT_PRECOMPUTED_COSTS_AVX
 };
 
+Solution _2OptBestFix(Solution *sol, enum _2OptOptions option);
+
 double apply2OptBestFix(Solution *sol, enum _2OptOptions option);
 
 #endif // _2OPT

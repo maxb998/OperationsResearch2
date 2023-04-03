@@ -23,7 +23,7 @@ SPECIFIC_HEADERS = src/headers/CostMatrix.h src/headers/NearestNeighbor.h src/he
 
 # build options when debugging
 buildDebug: $(OBJ_DEBUG_FILES)
-	$(CC) $(LDFLAGS_DEBUG) $(OBJ_DEBUG_FILES) -o $(BIN_DEBUG_DIR)/main
+	$(CC) $(OBJ_DEBUG_FILES) -o $(BIN_DEBUG_DIR)/main $(LDFLAGS_DEBUG)
 
 $(OBJ_DEBUG_DIR)/main.o: src/main.c $(GLOBAL_HEADERS) $(SPECIFIC_HEADERS)
 	$(CC) $(CFLAGS_DEBUG) src/main.c -o $(OBJ_DEBUG_DIR)/main.o
@@ -51,7 +51,7 @@ $(OBJ_DEBUG_DIR)/VariableNeighborhood.o: src/VariableNeighborhood.c src/headers/
 
 # build options when testing performance
 buildExec: $(OBJ_EXEC_FILES)
-	$(CC) $(LDFLAGS_EXEC) $(OBJ_EXEC_FILES) -o $(BIN_EXEC_DIR)/main
+	$(CC) $(OBJ_EXEC_FILES) -o $(BIN_EXEC_DIR)/main $(LDFLAGS_EXEC)
 
 $(OBJ_EXEC_DIR)/main.o: src/main.c $(GLOBAL_HEADERS) $(SPECIFIC_HEADERS)
 	$(CC) $(CFLAGS_EXEC) src/main.c -o $(OBJ_EXEC_DIR)/main.o

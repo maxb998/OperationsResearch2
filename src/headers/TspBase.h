@@ -57,7 +57,6 @@ typedef struct
 typedef struct
 {
     float bestCost;    // best solution found cost
-	int bestCostRounded;
 
 	double execTime;
 
@@ -65,7 +64,7 @@ typedef struct
 	float *X;
 	float *Y;
 	// Stores in order of visit along the path, the original indexes (the ones contained in the Instance pointed by instance) of the points
-	unsigned int *indexPath;
+	int *indexPath;
 
 	Instance *instance;
 } Solution;

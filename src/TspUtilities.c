@@ -40,7 +40,7 @@ Instance newInstance ()
 
 Solution newSolution (Instance *inst)
 {
-    Solution s = { .bestCost = INFINITY, .bestCostRounded = INT_MAX, .execTime = 0, .instance = inst };
+    Solution s = { .bestCost = INFINITY, .execTime = 0., .instance = inst };
 
     // allocate memory (consider locality). Alse leave place at the end to repeat the first element of the solution(some algoritms benefits from it)
     s.X = malloc((inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float));
@@ -68,6 +68,20 @@ void destroySolution (Solution *sol)
 
     // reset pointers to NULL
     sol->X = sol->Y = NULL;
+}
+
+Solution cloneSolution(Solution *sol)
+{
+    Solution s = newSolution(sol->instance);
+    s.bestCost = sol->bestCost;
+
+    for (size_t i = 0; i < (s.instance->nNodes + AVX_VEC_SIZE * 2); i++)
+        s.X[i] = sol->X[i];
+    
+    for (size_t i = 0; i < s.instance->nNodes + 1; i++)
+        s.indexPath[i] = sol->indexPath[i];
+    
+    return s;
 }
 
 
@@ -179,44 +193,77 @@ static inline int nProcessors()
     return numProcessors;
 }
 
-int solutionCheck(Solution *sol)
+void basicSolutionCheck(Solution *sol)
 {
-    int * uncoveredNodes = malloc(sol->instance->nNodes * sizeof(int));
-    int currentNode;
+    Instance *inst = sol->instance;
+
+    char * coveredNodes = calloc(sol->instance->nNodes, sizeof(char));
 
     // First and last node must be equal (the circuit is closed)
-    if(sol->indexPath[0] != sol->indexPath[sol->instance->nNodes]) 
-        throwError(sol->instance, sol, "SolutionCheck: first and last node in solution should coincide");
-    LOG(LOG_LVL_DEBUG, "SolutionCheck: first and last node in solution coincide.");
+    if (sol->indexPath[0] != sol->indexPath[sol->instance->nNodes]) 
+        throwError(sol->instance, sol, "BasicSolutionCheck: first and last node in sol.indexPath should coincide, but they do not");
+
+    LOG(LOG_LVL_DEBUG, "BasicSolutionCheck: first and last node in sol.indexPath coincide.");
 
     // Populate uncoveredNodes array, here we check if a node is repeated along the path
-    for(int i = 0; i < sol->instance->nNodes; i++)
+    for (int i = 0; i < inst->nNodes; i++)
     {
-        currentNode = sol->indexPath[i];
-        if(uncoveredNodes[currentNode] == 1) throwError(sol->instance, sol, "SolutionCheck: node %d repeated in the solution. Loop iteration %d", currentNode, i);
-        else uncoveredNodes[currentNode] = 1;
+        int currentNode = sol->indexPath[i];
+
+        if(coveredNodes[currentNode] == 1)
+            throwError(inst, sol, "BasicSolutionCheck: node %d repeated in the solution. Loop iteration %d", currentNode, i);
+        else
+            coveredNodes[currentNode] = 1;
     }
-    LOG(LOG_LVL_DEBUG, "SolutionCheck: all nodes in the path are unique.");
+    LOG(LOG_LVL_EVERYTHING, "BasicSolutionCheck: all nodes in the path are unique.");
 
     // Check that all the nodes are covered in the path
-    for(int i = 0; i < sol->instance->nNodes; i++)
+    for (int i = 0; i < inst->nNodes; i++)
     {
-        if(uncoveredNodes[i] == 0) throwError(NULL, sol, "SolutionCheck: node %d is not in the path", i);
+        if(coveredNodes[i] == 0)
+            throwError(inst, sol, "BasicSolutionCheck: node %d is not in the path", i);
     }
-    LOG(LOG_LVL_DEBUG, "SolutionCheck: all the nodes are present in the path -> The solution is feasible.");
-    
-    costCheck(sol);
+    free(coveredNodes);
+    LOG(LOG_LVL_EVERYTHING, "BasicSolutionCheck: all the nodes are present in the path");
 
-    return 0;
+
+    LOG(LOG_LVL_DEBUG, "BasicSolutionCheck: solution described by sol.indexPath is feasible");
+
+    costCheck(sol);
 }
 
-int costCheck(Solution *sol)
+void fullSolutionCheck(Solution *sol)
+{
+    Instance *inst = sol->instance;
+
+    // also check for sol.X and sol.Y
+    if (sol->X[0] != sol->X[inst->nNodes])
+        throwError(inst, sol, "FullSolutionCheck: first and last node in sol.X should coincide, but they do not");
+    if (sol->Y[0] != sol->Y[inst->nNodes])
+        throwError(inst, sol, "FullSolutionCheck: first and last node in sol.Y should coincide, but they do not");
+
+    LOG(LOG_LVL_DEBUG, "FullSolutionCheck: first and last node in sol.X and sol.Y coincide.");
+
+    // Check sol.X and sol.Y if they correspond correctly to inst.X and inst.Y given the indexes in sol.indexPath
+    for (size_t i = 0; i < inst->nNodes; i++)
+    {
+        if (sol->X[i] != inst->X[sol->indexPath[i]])
+            throwError(inst, sol, "FullSolutionCheck: sol.X[sol.indexPath[%ld]] = %.3e and does not correspond with inst.X[%ld] = %.3e", i, inst->X[sol->indexPath[i]], i, sol->X[i]);
+        if (sol->Y[i] != inst->Y[sol->indexPath[i]])
+            throwError(inst, sol, "FullSolutionCheck: sol.Y[sol.indexPath[%ld]] = %.3e and does not correspond with inst.Y[%ld] = %.3e", i, inst->Y[sol->indexPath[i]], i, sol->Y[i]);
+    }
+
+    LOG(LOG_LVL_DEBUG, "FullSolutionCheck: solution is coherent and feasible");
+}
+
+void costCheck(Solution *sol)
 {
     double recomputedCost = computeSolutionCost(sol);
-    if(recomputedCost != sol->bestCost) throwError(sol->instance, sol, "costChek: Error in the computation of the pathCost. recomputedCost: %lf Cost in Solution: %lf", recomputedCost, sol->bestCost);
-    LOG(LOG_LVL_DEBUG, "costCheck: pathCost computed correctly.");
 
-    return 0;
+    if (recomputedCost != sol->bestCost)
+        throwError(sol->instance, sol, "costChek: Error in the computation of the pathCost. recomputedCost: %lf Cost in Solution: %lf", recomputedCost, sol->bestCost);
+    
+    LOG(LOG_LVL_DEBUG, "costCheck: Cost of solution is correct");
 }
 
 void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize)
