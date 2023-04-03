@@ -23,7 +23,7 @@ int main (int argc, char *argv[])
     // WORKS WITH THIS COMMENTED
     Solution nn = NearestNeighbour(&inst);
     LOG(LOG_LVL_LOG, "Nearest Neighbour finished in %lf seconds", nn.execTime);
-    double _2optTime = apply2OptBestFix(&nn, _2OPT_BASE);
+    double _2optTime = apply2OptBestFix(&nn, _2OPT_AVX);
     LOG(LOG_LVL_LOG, "2-Opt finished in %lf seconds", _2optTime);
     
     //saveSolution(&nn);

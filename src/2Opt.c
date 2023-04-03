@@ -1,6 +1,5 @@
 #include "2Opt.h"
 #include "TspUtilities.h"
-#include "CostMatrix.h"
 #include "EdgeCostFunctions.h"
 
 #include <pthread.h>
@@ -53,14 +52,14 @@ static inline void checkInput(Solution *sol, enum _2OptOptions *option);
 static inline void solutionUpdate(ThreadsData *th);
 
 
-
+// Basic approach that computes the costs every time, one at a time. Use this with _2OPT_BASE
 static void *_2optBestFixBaseThread(void *arg);
 
+// Fastest type of approach that computes costs every time using avx vectorization. Use this with _2OPT_AVX
 static void *_2OptBestFixAVXThread(void *arg);
 
+// Approach that requires to have the precomputed costs. Use this with _2OPT_PRECOMPUTED_COSTS
 static void *_2optBestFixCostMatrixThread(void *arg);
-
-static void *_2optBestFixCostMatrixAVXThread(void *arg);
 
 
 
@@ -117,9 +116,6 @@ double apply2OptBestFix(Solution *sol, enum _2OptOptions option)
         case _2OPT_PRECOMPUTED_COSTS:
             pthread_create(&workers[i], NULL, _2optBestFixCostMatrixThread, &thIDs[i]);
             break;
-        case _2OPT_PRECOMPUTED_COSTS_AVX:
-            pthread_create(&workers[i], NULL, _2optBestFixCostMatrixAVXThread, &thIDs[i]);
-            break;
         }
         LOG(LOG_LVL_DEBUG, "2-Opt: Thread %ld created", i);
     }
@@ -157,12 +153,12 @@ static inline void checkInput(Solution *sol, enum _2OptOptions *option)
         // always check solution
         fullSolutionCheck(sol);
 
-        if (*option == _2OPT_PRECOMPUTED_COSTS || *option == _2OPT_PRECOMPUTED_COSTS_AVX)
+        if (*option == _2OPT_PRECOMPUTED_COSTS)
         {
             if (inst->edgeCostMat == NULL)
             {
-                LOG(LOG_LVL_WARNING, "2Opt: Required cost matrix, as specified in option parameter, is not available/not been computed.\n Computing it now");
-                computeCostMatrix(inst);
+                LOG(LOG_LVL_WARNING, "2Opt: Required cost matrix, as specified in option parameter, is not available/not been computed.\n Switching to _2OPT_AVX");
+                *option = _2OPT_AVX;
             }
         }
     }
@@ -342,20 +338,20 @@ static void *_2OptBestFixAVXThread(void *arg)
             __m256 partialSolEdgeWgt = computeEdgeCost_VEC(x1, y1, x2, y2, edgeWgtType, roundFlag); //inst->edgeCostMat[sol->indexPath[edgeID] * n + sol->indexPath[edgeID + 1]];
             __m256 bestOffsetVec = _mm256_set1_ps(INFINITY);
 
-            __m256i idsVec = _mm256_add_epi32((_mm256_set_epi32(7,6,5,4,3,2,1,0)), _mm256_set1_epi32((int)edgeID));
+            __m256i idsVec = _mm256_add_epi32((_mm256_set_epi32(9,8,7,6,5,4,3,2)), _mm256_set1_epi32((int)edgeID));
             __m256i increment = _mm256_set1_epi32(AVX_VEC_SIZE);
             __m256i bestIDsVec = _mm256_set1_epi32(-1);
 
             for (size_t i = 2 + edgeID; (i < n - 1) || ((i < n) && (edgeID > 0)); i += AVX_VEC_SIZE)
             {
                 __m256 altEdgeWgt, solEdgeWgt;
-                {   // scope "force" a thing compiler should do automatically -> x3,y3,x4,y4 destroyed as soon as we don't need them anymore
-                    __m256 x3 = _mm256_broadcast_ss(&sol->X[i]), y3 = _mm256_broadcast_ss(&sol->Y[i]);
-                    __m256 x4 = _mm256_broadcast_ss(&sol->X[i + 1]), y4 = _mm256_broadcast_ss(&sol->Y[i + 1]);
+                //{   // scope "force" a thing compiler should do automatically -> x3,y3,x4,y4 destroyed as soon as we don't need them anymore
+                    __m256 x3 = _mm256_loadu_ps(&sol->X[i]), y3 = _mm256_loadu_ps(&sol->Y[i]);
+                    __m256 x4 = _mm256_loadu_ps(&sol->X[i + 1]), y4 = _mm256_loadu_ps(&sol->Y[i + 1]);
                     solEdgeWgt = _mm256_add_ps(partialSolEdgeWgt, computeEdgeCost_VEC(x3, y3, x4, y4, edgeWgtType, roundFlag));
 
                     altEdgeWgt = _mm256_add_ps(computeEdgeCost_VEC(x1, y1, x3, y3, edgeWgtType, roundFlag), computeEdgeCost_VEC(x2, y2, x4, y4, edgeWgtType, roundFlag));
-                }
+                //}
 
                 __m256 offsetVec = _mm256_sub_ps(altEdgeWgt, solEdgeWgt); // value is negative if altEdgeWgt is better
 
@@ -372,7 +368,7 @@ static void *_2OptBestFixAVXThread(void *arg)
             
             // update the localBest variables
             _mm256_storeu_ps(vecStore, bestOffsetVec);
-            _mm256_storeu_si256((__m256i*)idsVecStore, idsVec);
+            _mm256_storeu_si256((__m256i*)idsVecStore, bestIDsVec);
 
             for (size_t i = 0; i < AVX_VEC_SIZE; i++)
             {
@@ -518,11 +514,5 @@ static void *_2optBestFixCostMatrixThread(void *arg)
         // CRITICAL SECTION END
     }
 
-    pthread_exit(NULL);
-}
-
-
-static void *_2optBestFixCostMatrixAVXThread(void *arg)
-{
     pthread_exit(NULL);
 }
