@@ -10,7 +10,7 @@
             "preLaunchTask": "Build Debug",
             "request": "launch",
             "program": "${workspaceFolder}/bin/debug/main",
-            "args": ["--file", "data/att48.tsp", "--seed", "-1", "--threads", "4"],
+            "args": ["--file", "data/att48.tsp", "--seed", "-1", "--threads", "1"],
             "cwd": "${workspaceFolder}"
        },
        {

@@ -11,7 +11,6 @@
 
 #include <immintrin.h>
 
-static enum logLevel globLVL = LOG_LVL_LOG;
 
 const char * logLevelString [] = {
 	"\033[1;31mERR \033[0m", // 0
@@ -161,10 +160,6 @@ void parseArgs (Instance *inst, int argc, char *argv[])
         }
     }
 
-    // check necessary arguments were passed
-    if (inst->params.inputFile[0] == 0)
-        throwError(inst, NULL, "A file path must be specified with \"-f\" or \"--file\" options");
-
     LOG(LOG_LVL_NOTICE, "Received arguments:");
     LOG(LOG_LVL_NOTICE,"    Random Seed  = %d", inst->params.randomSeed);
     LOG(LOG_LVL_NOTICE,"    Filename     = %s", inst->params.inputFile);
@@ -239,7 +234,7 @@ void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointC
 
 
     // assign number to points
-    if (globLVL >= LOG_LVL_DEBUG)
+    if (LOG_LEVEL >= LOG_LVL_DEBUG)
         for (size_t i = 0; i < sol->instance->nNodes; i++)
             fprintf(gnuplotPipe, "set label \"%ld\" at %f,%f\n", i, sol->instance->X[i], sol->instance->Y[i]);
 

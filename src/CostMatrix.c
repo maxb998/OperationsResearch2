@@ -75,10 +75,17 @@ static void * computeDistMatThread(void* arg)
     ThreadsData *th = (ThreadsData*)arg;
     Instance *inst = th->inst;
 
+    register size_t n = inst->nNodes;
+
     // initialize mask outside loop to avoid doing it over and over(useless beacuse the compiler should do this automatically but whatever)
     int mask[AVX_VEC_SIZE];
 
-    register size_t n = inst->nNodes;
+    // since it has the same value for each row we can define it here, outside the loops
+    register size_t  avxVecExtraElems = AVX_VEC_SIZE - (n % AVX_VEC_SIZE);
+    for (register size_t j = 0; j < avxVecExtraElems; j++)
+        mask[j] = -1; // this row last elements
+    for (register size_t j = avxVecExtraElems; j < AVX_VEC_SIZE; j++)
+        mask[j] = 0; // next row first elements (DO NOT WRITE THIS IN THE STORE -> so we use maskstore)
 
     while ( (pthread_mutex_lock(&th->mutex) == 0) && (th->nextRow < th->inst->nNodes) )    // lock mutex before checking nextRow
     {
@@ -114,15 +121,8 @@ static void * computeDistMatThread(void* arg)
         register __m256 y2 = _mm256_loadu_ps(&th->inst->Y[i]);
         register __m256 dist = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType);
 
-        // then build a mask
-        register size_t j = 0;
-        for (; j < n - i; j++)
-            mask [j] = -1;  // this row last elements
-        for (; j < AVX_VEC_SIZE; j++)
-            mask[j] = 0;    // next row first elements (DO NOT WRITE THIS IN THE STORE -> so we use maskstore)
-
         // maskstore the result avoiding to overwrite data
-        _mm256_maskstore_ps(&inst->edgeCostMat[i], _mm256_loadu_si256((__m256i*)mask), dist);
+        _mm256_maskstore_ps(&inst->edgeCostMat[row * n + i], _mm256_loadu_si256((__m256i*)mask), dist);
     }
 
     // unlock mutex that was locked in the while condition

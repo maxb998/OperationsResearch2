@@ -15,9 +15,6 @@ typedef struct
     size_t startingNode;
 }ThreadsData;
 
-// Swap elem1 and elem2. Can be done with any type of variable, however a temporary variable "tmp" of the same type of elem1 and elem2 MUST be provided.
-#define swapElems(elem1,elem2,tmp) tmp = elem1; elem1 = elem2; elem2 = tmp;
-
 static void * threadNN(void *thInst);
 
 // finds the closest unvisited node (pathCost is also updated in this method)
@@ -71,7 +68,7 @@ static void * threadNN(void *thInst)
     // Allocate memory to contain the work-in-progress solution
     float *currentSolX = malloc((inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float));
     float *currentSolY = &currentSolX[inst->nNodes + AVX_VEC_SIZE];
-    int *currentIndexPath = malloc((inst->nNodes + 1) * sizeof(int));
+    unsigned int *currentIndexPath = malloc((inst->nNodes + 1) * sizeof(int));
 
     // Allocate memory to store Vector register element (aligned for not apparent reason than it feels better)
     float minVecStore[8];
@@ -95,17 +92,20 @@ static void * threadNN(void *thInst)
         //memcpy(currentSolX, inst->X, (inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float)); // this also copies Y
 
         // reset currentIndexPath to match the original
+        for (unsigned int i = 0; i < (unsigned int)inst->nNodes + 1; i++)
+            currentIndexPath[i] = i;
 
         // set first element of currentSolX/Y to the element at index startingNode -> swap pos 0 with starting node
         // swap coordinates
         {
-            register float swapValFloat;
-            swapElems(currentSolX[0], currentSolX[iterNode], swapValFloat)
-            swapElems(currentSolY[0], currentSolY[iterNode], swapValFloat)
-
+            register float temp;
+            swapElems(currentSolX[0], currentSolX[iterNode], temp);
+            swapElems(currentSolY[0], currentSolY[iterNode], temp);
+        }
+        {
             // swap index
-            register int swapValInt;
-            swapElems(currentIndexPath[0], currentIndexPath[iterNode], swapValInt)
+            register unsigned int temp;
+            swapElems(currentIndexPath[0], currentIndexPath[iterNode], temp);
         }
 
         /* // reset last element
@@ -126,19 +126,22 @@ static void * threadNN(void *thInst)
             // set successor by swapping the element corresponding to succesorID with element i
             if (successorID != i)
             {
-                // swap coordinates
-                register float swapValFloat;
-                swapElems(currentSolX[i], currentSolX[successorID], swapValFloat)
-                swapElems(currentSolY[i], currentSolY[successorID], swapValFloat)
+                {   // swap coordinates
+                    register float temp;
+                    swapElems(currentSolX[i], currentSolX[successorID], temp);
+                    swapElems(currentSolY[i], currentSolY[successorID], temp);
+                }
 
-                // swap index
-                register int swapValInt;
-                swapElems(currentIndexPath[i], currentIndexPath[successorID], swapValInt)
+                { // swap index
+                    register unsigned int temp;
+                    swapElems(currentIndexPath[i], currentIndexPath[successorID], temp);
+                }
             }
         }
         // at the end we set the starting node as successor of the last one to close the circuit
         currentSolX[inst->nNodes] = currentSolX[0];
         currentSolY[inst->nNodes] = currentSolY[0];
+        currentIndexPath[inst->nNodes] = currentIndexPath[0];
 
         // add last and previours to last edge weights
         pathCost += squaredEdgeCost(currentSolX[inst->nNodes-2], currentSolY[inst->nNodes-2], currentSolX[inst->nNodes-1], currentSolY[inst->nNodes-1], inst->params.edgeWeightType);
@@ -149,13 +152,15 @@ static void * threadNN(void *thInst)
         {
             sol->bestCost = pathCost;
 
-            // swap pointers with a macro(swapPtr) to declutter code (macro is defined at the top)
-            register float *tempfPtr;
-            swapElems(sol->X,currentSolX,tempfPtr)
-            swapElems(sol->Y, currentSolY, tempfPtr)
-
-            register int *tempiPtr;
-            swapElems(sol->indexPath, currentIndexPath, tempiPtr)
+            { // swap pointers with a macro(swapPtr) to declutter code (macro is defined at the top)
+                register float *temp;
+                swapElems(sol->X, currentSolX, temp);
+                swapElems(sol->Y, currentSolY, temp);
+            }
+            {
+                register unsigned int *temp;
+                swapElems(sol->indexPath, currentIndexPath, temp);
+            }
 
             LOG(LOG_LVL_LOG, "Found better solution starting from node %ld, cost: %f", iterNode, pathCost);
         }

@@ -46,7 +46,7 @@ typedef struct
 } ThreadsDataWithID;
 
 
-static inline void bestSolutionUpdate(ThreadsData *th);
+static inline void solutionUpdate(ThreadsData *th);
 
 static void *_2optBestFixCostMatrixThread(void *arg);
 
@@ -169,7 +169,7 @@ static void *_2optBestFixCostMatrixThread(void *arg)
         if (lastThreadFlag == 1)
         {
             // update the best solution
-            bestSolutionUpdate(th);
+            solutionUpdate(th);
 
             // reset all the threadFinishFlag to 0
             for (size_t i = 0; i < inst->params.nThreads; i++)
@@ -190,8 +190,24 @@ static void *_2optBestFixCostMatrixThread(void *arg)
     pthread_exit(NULL);
 }
 
+static void _2OptBestFixVectorized(void *arg)
+{
+    ThreadsDataWithID *thID = (ThreadsDataWithID*)arg;
+    ThreadsData *th = thID->th;
+    int threadID = thID->threadID;
+    Solution *sol = th->sol;
+    Instance *inst = sol->instance;
 
-static inline void bestSolutionUpdate(ThreadsData *th)
+    // setup "shortcuts" variables to declutter the code
+    size_t n = inst->nNodes;
+
+
+
+
+    pthread_exit(NULL);
+}
+
+static inline void solutionUpdate(ThreadsData *th)
 {
     Solution *sol = th->sol;
     if (th->bestOffset < -EPSILON) // avoid to do practically meaningless optimization and float precision errors(TO REVISE AND DO A RELATIVE COMPARISON)
@@ -212,9 +228,17 @@ static inline void bestSolutionUpdate(ThreadsData *th)
 
         while (smallID < bigID)
         {
-            int temp = sol->indexPath[smallID];
-            sol->indexPath[smallID] = sol->indexPath[bigID];
-            sol->indexPath[bigID] = temp;
+            {   // swap index path elements
+                register unsigned int temp;
+                swapElems(sol->indexPath[smallID], sol->indexPath[bigID], temp);
+            }
+
+            {   // swap solution coordinates
+                register float temp;
+                swapElems(sol->X[smallID], sol->X[bigID], temp);
+                swapElems(sol->Y[smallID], sol->Y[bigID], temp);
+            }
+
             smallID++;
             bigID--;
         }

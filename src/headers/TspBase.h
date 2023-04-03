@@ -5,7 +5,8 @@
 
 #define MAX_THREADS 32
 #define USE_APPROXIMATED_DISTANCES 1
-#define LOG_LEVEL LOG_LVL_EVERYTHING
+
+#define LOG_LEVEL LOG_LVL_DEBUG
 
 // size of avx vector. 4 is vector of doubles 64bits, 8 is vector of floats 32bits
 #define AVX_VEC_SIZE 8

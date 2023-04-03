@@ -324,7 +324,7 @@ void saveSolution(Solution *sol)
 
     // populating the file with the solution
     for (int i = 0; i < sol->instance->nNodes; i++)
-        fprintf(solutionFile, "%ld\n", solID[i] + 1);
+        fprintf(solutionFile, "%d\n", solID[i] + 1);
     fprintf(solutionFile, "-1\n");
 
     

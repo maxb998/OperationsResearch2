@@ -13,6 +13,9 @@ enum logLevel{
 	LOG_LVL_EVERYTHING // 6
 };
 
+// Swap elem1 and elem2. Can be done with any type of variable, however a temporary variable "tmp" of the same type of elem1 and elem2 MUST be provided.
+#define swapElems(elem1,elem2,tmp) tmp = elem1; elem1 = elem2; elem2 = tmp
+
 // Returns initialized/empty instance
 Instance newInstance ();
 
