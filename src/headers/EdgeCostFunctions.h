@@ -103,27 +103,36 @@ static inline float exactEdgeCost (float x1, float y1, float x2, float y2, enum 
 	}
 }
 
-
-static inline float computeEdgeCost (float x1, float y1, float x2, float y2, enum edgeWeightType edgeWgtType)
-{
-	switch (COMPUTATION_TYPE)
-	{
-	case FAST_SQUARED:
-		return squaredEdgeCost (x1, y1, x2, y2, edgeWgtType);
-		break;
-	
-	case SLOW_EXACT:
-		return exactEdgeCost (x1, y1, x2, y2, edgeWgtType);
-		break;
-	}
-}
-
 static inline float roundEdgeCost(float edgeCost, enum edgeWeightType edgeWgtType)
 {
 	if (edgeWgtType == ATT)
 		return ceilf(edgeCost);
 	else
 		return floorf(edgeCost);
+}
+
+static inline float computeEdgeCost (float x1, float y1, float x2, float y2, enum edgeWeightType edgeWgtType, int roundFlag)
+{
+	register float cost;
+	switch (COMPUTATION_TYPE)
+	{
+	case FAST_SQUARED:
+		cost = squaredEdgeCost (x1, y1, x2, y2, edgeWgtType);
+		break;
+	
+	case MODERATE_APPROX:
+		cost = exactEdgeCost (x1, y1, x2, y2, edgeWgtType);
+		break;
+
+	case SLOW_EXACT:
+		cost = exactEdgeCost (x1, y1, x2, y2, edgeWgtType);
+		break;
+	}
+
+	if (roundFlag == 1)
+		cost = roundEdgeCost (cost, edgeWgtType);
+	
+	return cost;
 }
 
 
@@ -275,30 +284,36 @@ static inline __m256 fastEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2, __m256 
 	}
 }
 
-static inline __m256 computeEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2, __m256 y2, enum edgeWeightType edgeWgtType)
-{
-	switch (COMPUTATION_TYPE)
-	{
-	case FAST_SQUARED:
-		return squaredEdgeCost_VEC (x1, y1, x2, y2, edgeWgtType);
-		break;
-	
-	case MODERATE_APPROX:
-		return fastEdgeCost_VEC (x1, y1, x2, y2, edgeWgtType);
-		break;
-	
-	case SLOW_EXACT:
-		return exactEdgeCost_VEC (x1, y1, x2, y2, edgeWgtType);
-		break;
-	}
-}
-
 static inline __m256 roundEdgeCost_VEC (__m256 costs, enum edgeWeightType edgeWgtType)
 {
 	if (edgeWgtType == ATT)
 		return _mm256_ceil_ps(costs);
 	else
 		return _mm256_floor_ps(costs);
+}
+
+static inline __m256 computeEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2, __m256 y2, enum edgeWeightType edgeWgtType, int roundFlag)
+{
+	register __m256 costVec;
+	switch (COMPUTATION_TYPE)
+	{
+	case FAST_SQUARED:
+		costVec = squaredEdgeCost_VEC (x1, y1, x2, y2, edgeWgtType);
+		break;
+	
+	case MODERATE_APPROX:
+		costVec = fastEdgeCost_VEC (x1, y1, x2, y2, edgeWgtType);
+		break;
+	
+	case SLOW_EXACT:
+		costVec = exactEdgeCost_VEC (x1, y1, x2, y2, edgeWgtType);
+		break;
+	}
+
+	if (roundFlag == 1)
+		costVec = roundEdgeCost_VEC(costVec, edgeWgtType);
+	
+	return costVec;
 }
 
 #endif // EDGE_COST_FUNCTIONS

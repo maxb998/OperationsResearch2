@@ -108,7 +108,7 @@ static void * computeDistMatThread(void* arg)
             register __m256 x2 = _mm256_loadu_ps(&th->inst->X[i]);
             register __m256 y2 = _mm256_loadu_ps(&th->inst->Y[i]);
 
-            register __m256 dist = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType);
+            register __m256 dist = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType, inst->params.roundWeights);
 
             // store result in memory
             _mm256_storeu_ps(&inst->edgeCostMat[row * n + i], dist);
@@ -119,7 +119,7 @@ static void * computeDistMatThread(void* arg)
         // do the same as in the loop
         register __m256 x2 = _mm256_loadu_ps(&th->inst->X[i]);
         register __m256 y2 = _mm256_loadu_ps(&th->inst->Y[i]);
-        register __m256 dist = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType);
+        register __m256 dist = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType, inst->params.roundWeights);
 
         // maskstore the result avoiding to overwrite data
         _mm256_maskstore_ps(&inst->edgeCostMat[row * n + i], _mm256_loadu_si256((__m256i*)mask), dist);

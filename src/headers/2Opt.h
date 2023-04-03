@@ -3,6 +3,14 @@
 
 #include "TspBase.h"
 
-double _2optBestFix(Solution *sol);
+enum _2OptOptions
+{
+    _2OPT_BASE,
+    _2OPT_AVX,
+    _2OPT_PRECOMPUTED_COSTS,
+    _2OPT_PRECOMPUTED_COSTS_AVX
+};
+
+double apply2OptBestFix(Solution *sol, enum _2OptOptions option);
 
 #endif // _2OPT
