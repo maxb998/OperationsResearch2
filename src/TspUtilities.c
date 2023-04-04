@@ -43,9 +43,9 @@ Solution newSolution (Instance *inst)
     Solution s = { .bestCost = INFINITY, .execTime = 0., .instance = inst };
 
     // allocate memory (consider locality). Alse leave place at the end to repeat the first element of the solution(some algoritms benefits from it)
-    s.X = malloc((inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float));
+    s.X = malloc((inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float) + (inst->nNodes + 1) * sizeof(int));
     s.Y = &s.X[inst->nNodes + AVX_VEC_SIZE];
-    s.indexPath = malloc((inst->nNodes + 1) * sizeof(int));
+    s.indexPath = (int*)&s.Y[inst->nNodes + AVX_VEC_SIZE];
 
     return s;
 }
@@ -62,12 +62,12 @@ void destroyInstance (Instance *inst)
 
 void destroySolution (Solution *sol)
 {
-    // memory has been allocated to X, no need to free Y
+    // memory has been allocated to X, no need to free Y or indexPath
     free(sol->X);
-    free(sol->indexPath);
+    //free(sol->indexPath);
 
     // reset pointers to NULL
-    sol->X = sol->Y = NULL;
+    sol->X = sol->Y = sol->indexPath = NULL;
 }
 
 Solution cloneSolution(Solution *sol)

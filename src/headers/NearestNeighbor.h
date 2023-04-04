@@ -6,6 +6,6 @@
 
 #define NN_GRASP_COEFF (int)((double)RAND_MAX/0.8)
 
-Solution NearestNeighbour(Instance *inst);
+Solution NearestNeighbor(Instance *inst);
 
 #endif // TSP_HEURISTICS_H

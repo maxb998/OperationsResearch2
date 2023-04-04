@@ -7,9 +7,9 @@
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
 
-typedef struct 
+
+
+Solution ExtraMileage(Instance *inst)
 {
-    Instance inst;
-    pthread_mutex_t mutex;
-    int *isUncovered; // when an element is set to -1 it means the point with that id is uncovered, if it's 0 than the element is covered
-} ThreadInstance;
+    Solution sol = newSolution(inst);
+}

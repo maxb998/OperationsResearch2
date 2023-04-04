@@ -733,9 +733,6 @@ static void _2OptBestFixAVXSingleThread(Solution *sol)
                 solutionUpdate(sol, bestOffsetEdges, bestOffset);
         }
         else
-        {
-            finishedFlag == 1;
-            break;
-        }
+            finishedFlag = 1;
     }
 }
