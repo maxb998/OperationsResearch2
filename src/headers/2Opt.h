@@ -5,9 +5,10 @@
 
 enum _2OptOptions
 {
-    _2OPT_BASE,
-    _2OPT_AVX,
-    _2OPT_PRECOMPUTED_COSTS
+    _2OPT_AVX_ST,
+    _2OPT_BASE_MT,
+    _2OPT_AVX_MT,
+    _2OPT_PRECOMPUTED_COSTS_MT
 };
 
 Solution _2OptBestFix(Solution *sol, enum _2OptOptions option);
