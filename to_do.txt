@@ -1,1 +1,3 @@
 aggiungere tempo di esecuzione per thread
+aggiungere un parametro per la configurazione di VNS (NN o extra milage)
+gestione configurazioni dei metodi da riga di comando
