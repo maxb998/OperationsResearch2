@@ -23,7 +23,7 @@
 
 /* Checks wheter the time passed since the initialization of start has passed timeLimit.
     Returns 1 in that case, 0 otherwise.*/
-static inline int checkTime(struct timespec start, double timeLimit);
+/*static inline int checkTime(struct timespec start, double timeLimit);
 
 Solution VariableNeighborhood(Instance *inst, int configuration)
 {
@@ -79,3 +79,4 @@ static inline int checkTime(struct timespec start, double timeLimit)
     if(elapsed < timeLimit) return 0;
     else return 1;
 }
+*/

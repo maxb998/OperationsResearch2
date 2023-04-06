@@ -67,7 +67,8 @@ void destroySolution (Solution *sol)
     //free(sol->indexPath);
 
     // reset pointers to NULL
-    sol->X = sol->Y = sol->indexPath = NULL;
+    sol->X = sol->Y = NULL;
+    sol->indexPath = NULL;
 }
 
 Solution cloneSolution(Solution *sol)
@@ -277,11 +278,11 @@ void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointC
 
     // set plot linestyles
     fprintf(gnuplotPipe, "set style line 1 linecolor rgb '%s' pt 7 pointsize %d\n", pointColor, pointSize);
-    fprintf(gnuplotPipe, "set style line 2 linecolor rgb '%s' pointsize %d\n", tourPointColor, pointSize);
+    fprintf(gnuplotPipe, "set style line 2 linecolor rgb '%s' pointsize 0\n", tourPointColor);//, pointSize);
 
 
     // assign number to points
-    if (LOG_LEVEL >= LOG_LVL_DEBUG)
+    if (1)
         for (size_t i = 0; i < sol->instance->nNodes; i++)
             fprintf(gnuplotPipe, "set label \"%ld\" at %f,%f\n", i, sol->instance->X[i], sol->instance->Y[i]);
 

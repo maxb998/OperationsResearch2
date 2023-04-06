@@ -6,7 +6,6 @@
 #include <time.h>
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
-
 #define USE_FAST_SOLUTION_UPDATE 0
 
 typedef struct
@@ -128,6 +127,8 @@ double apply2OptBestFix(Solution *sol, enum _2OptOptions option)
                 break;
             case _2OPT_PRECOMPUTED_COSTS_MT:
                 pthread_create(&workers[i], NULL, _2optBestFixCostMatrixThread, &thIDs[i]);
+                break;
+            default: // removes compile warning
                 break;
             }
             LOG(LOG_LVL_DEBUG, "2-Opt: Thread %ld created", i);
