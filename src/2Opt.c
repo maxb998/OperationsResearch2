@@ -49,10 +49,7 @@ typedef struct
 
 static inline void checkInput(Solution *sol, enum _2OptOptions *option);
 
-static inline void solutionUpdate(Solution *sol, size_t bestOffsetEdges[2], float bestOffset);
-
-// Updates solution using avx instructions when possible (eg. a lot of elements to invert)
-static inline void fastSolutionUpdate(Solution *sol, size_t bestOffsetEdges[2], float bestOffset);
+static inline void updateSolutionNN(Solution *sol, size_t bestOffsetEdges[2], float bestOffset);
 
 // Loads inverts and stores two vectors of floats according to update solution procedure. Speeds Up update procedure
 static inline void invertVectorSizeElemsF(float *firstPtr, float *secondPtr);
@@ -184,7 +181,7 @@ static inline void checkInput(Solution *sol, enum _2OptOptions *option)
     LOG(LOG_LVL_DEBUG, "2Opt: Input check completed: All ok");
 }
 
-static inline void solutionUpdate(Solution *sol, size_t bestOffsetEdges[2], float bestOffset)
+static inline void updateSolutionNN(Solution *sol, size_t bestOffsetEdges[2], float bestOffset)
 {
     /*
      * UPDATE BEST SOLUTION ########################################################################################
@@ -207,63 +204,21 @@ static inline void solutionUpdate(Solution *sol, size_t bestOffsetEdges[2], floa
         sol->indexPath[bestOffsetEdges[0]], sol->indexPath[bestOffsetEdges[0] + 1],
         sol->indexPath[bestOffsetEdges[1]], sol->indexPath[bestOffsetEdges[1] + 1], bestOffset);
 
-    while (smallID < bigID)
+    if (USE_FAST_SOLUTION_UPDATE)
     {
-        { // swap index path elements
-            register int temp;
-            swapElems(sol->indexPath[smallID], sol->indexPath[bigID], temp);
+        while (bigID - smallID >= 2 * AVX_VEC_SIZE) // condition checks that we two 256 bits vectors fit in between smallID and bigID and can be used to copy the data
+        {
+            bigID -= AVX_VEC_SIZE;
+
+            invertVectorSizeElemsF(&sol->X[smallID], &sol->X[bigID + 1]);
+            invertVectorSizeElemsF(&sol->Y[smallID], &sol->Y[bigID + 1]);
+
+            invertVectorSizeElemsD(&sol->indexPath[smallID], &sol->indexPath[bigID + 1]);
+
+            smallID += AVX_VEC_SIZE;
         }
-
-        { // swap solution coordinates
-            register float temp;
-            swapElems(sol->X[smallID], sol->X[bigID], temp);
-            swapElems(sol->Y[smallID], sol->Y[bigID], temp);
-        }
-
-        smallID++;
-        bigID--;
-    }
-}
-
-static inline void fastSolutionUpdate(Solution *sol, size_t bestOffsetEdges[2], float bestOffset)
-{
-    /*
-     * UPDATE BEST SOLUTION ########################################################################################
-     *      bestSolIDs = { 0 1 2 3 4 5 6 7 8 9 }
-     * if bestSolution = { 2 5 8 7 6 9 4 1 0 3 } and bestOffsetEdges = { 3 8 }
-     *          -> means edges to swapped are (7,6) and (0,3) with (7,0) and (0,6)
-     * at the end of the swap, the new bestSolution will be { 2 5 8 7 0 1 4 9 6 3 }     ^         ^
-     *     old bestSolution = { 2 5 8 7 6 9 4 1 0 3 }   with original indexes = { 0 1 2 3 4 5 6 7 8 9 }
-     *     new bestSolution = { 2 5 8 7 0 1 4 9 6 3 }   with original indexes = { 0 1 2 3 8 7 6 5 4 9 }
-     *
-     * Which means that we must invert the elements of bestSolution from index 3(not inlcuded) to index 8(included)
-     */
-
-    size_t smallID = bestOffsetEdges[0] + 1, bigID = bestOffsetEdges[1];
-
-    static int updateCount = 0;
-    updateCount++;
-
-    LOG(LOG_LVL_EVERYTHING, "2Opt: [%d] Updating solution by switching edge (%d,%d) with edge (%d,%d) improving cost by %f", updateCount,
-        sol->indexPath[bestOffsetEdges[0]], sol->indexPath[bestOffsetEdges[0] + 1],
-        sol->indexPath[bestOffsetEdges[1]], sol->indexPath[bestOffsetEdges[1] + 1], bestOffset);
-
-    while (bigID - smallID >= 2 * AVX_VEC_SIZE) // condition checks that we two 256 bits vectors fit in between smallID and bigID and can be used to copy the data
-    {
-        bigID -= AVX_VEC_SIZE;
-
-        invertVectorSizeElemsF(&sol->X[smallID], &sol->X[bigID + 1]);
-        invertVectorSizeElemsF(&sol->Y[smallID], &sol->Y[bigID + 1]);
-
-        invertVectorSizeElemsD(&sol->indexPath[smallID], &sol->indexPath[bigID + 1]);
-
-        smallID += AVX_VEC_SIZE;
     }
 
-    // smallID++;
-    // bigID--;
-
-    // handles remaining elements without vector (it would be a real pain to implement also this part)
     while (smallID < bigID)
     {
         { // swap index path elements
@@ -389,13 +344,7 @@ static void *_2optBestFixBaseThread(void *arg)
         if (lastThreadFlag == 1)
         {
             if (th->bestOffset < -EPSILON)
-            {
-                // update the best solution
-                if (USE_FAST_SOLUTION_UPDATE == 1)
-                    fastSolutionUpdate(sol, th->bestOffsetEdges, th->bestOffset);
-                else
-                    solutionUpdate(sol, th->bestOffsetEdges, th->bestOffset);
-            }
+                updateSolutionNN(sol, th->bestOffsetEdges, th->bestOffset);
             else
                 th->finishedFlag = 1;
 
@@ -524,13 +473,7 @@ static void *_2OptBestFixAVXThread(void *arg)
         if (lastThreadFlag == 1)
         {
             if (th->bestOffset < -EPSILON)
-            {
-                // update the best solution
-                if (USE_FAST_SOLUTION_UPDATE == 1)
-                    fastSolutionUpdate(sol, th->bestOffsetEdges, th->bestOffset);
-                else
-                    solutionUpdate(sol, th->bestOffsetEdges, th->bestOffset);
-            }
+                updateSolutionNN(sol, th->bestOffsetEdges, th->bestOffset);
             else
                 th->finishedFlag = 1;
             
@@ -626,13 +569,7 @@ static void *_2optBestFixCostMatrixThread(void *arg)
         if (lastThreadFlag == 1)
         {
             if (th->bestOffset < -EPSILON)
-            {
-                // update the best solution
-                if (USE_FAST_SOLUTION_UPDATE == 1)
-                    fastSolutionUpdate(sol, th->bestOffsetEdges, th->bestOffset);
-                else
-                    solutionUpdate(sol, th->bestOffsetEdges, th->bestOffset);
-            }
+                updateSolutionNN(sol, th->bestOffsetEdges, th->bestOffset);
             else
                 th->finishedFlag = 1;
 
@@ -727,12 +664,7 @@ static void _2OptBestFixAVXSingleThread(Solution *sol)
         }
 
         if (bestOffset < -EPSILON)
-        {
-            if (USE_FAST_SOLUTION_UPDATE == 1)
-                fastSolutionUpdate(sol, bestOffsetEdges, bestOffset);
-            else
-                solutionUpdate(sol, bestOffsetEdges, bestOffset);
-        }
+            updateSolutionNN(sol, bestOffsetEdges, bestOffset);
         else
             finishedFlag = 1;
     }

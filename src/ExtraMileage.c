@@ -6,8 +6,11 @@
 #include <time.h>
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
+// Flag to define at compile time whether to use or not the AVX instruction to move the data
 #define EM_USE_FAST_SOLUTION_UPDATE 0
-#define EM_FAST_SOLUTION_ELEMS_THRESHOLD 500
+
+// Threshold of the number of elements to move in the solution needed to use AVX to improve update speed
+#define EM_FAST_SOLUTION_ELEMS_THRESHOLD 8*20
 
 
 static size_t initialization(Solution *sol, enum EMInitType emType);
@@ -16,15 +19,13 @@ static void extremeCoordsPointsInit(Solution *sol);
 
 static void farthestPointsInit(Solution *sol);
 
-static inline void swapSolutions(Solution *s1, Solution *s2);
-
 static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos2);
 
-static inline void updateSolutionExtraMileage(Solution *sol, size_t posCovered, size_t bestMileageIndex, size_t anchorIndex);
+static inline void updateSolutionEM(Solution *sol, size_t posCovered, size_t bestMileageIndex, size_t anchorIndex);
 
 static void extraMileageST(Solution *sol, size_t nCovered);
 
-static void extraMileageVectorizedST(Solution *sol, enum EMInitType emType);
+static void extraMileageVectorizedST(Solution *sol, size_t nCovered);
 
 
 
@@ -40,24 +41,10 @@ Solution ExtraMileage(Instance *inst, enum EMInitType emType)
 
     size_t coveredNodes = initialization(&sol, emType);
 
-    extraMileageST(&sol, coveredNodes);
+    //extraMileageST(&sol, coveredNodes);
+    extraMileageVectorizedST(&sol, coveredNodes);
 
     return sol;
-}
-
-void runExtraMileageOnce(Solution *sol, size_t nCovered)
-{
-    size_t n = sol->instance->nNodes;
-
-    for (size_t u = nCovered+1; u <= n; u++)
-    {
-        for (size_t i = 0; i <= nCovered+1; i++)
-        {
-            /* code */
-        }
-        
-    }
-    
 }
 
 static size_t initialization(Solution *sol, enum EMInitType emType)
@@ -165,9 +152,6 @@ static void extremeCoordsPointsInit(Solution *sol)
         if (xVecStore[index] < xVecStore[i])
             index = i;
     swapElementsInSolution(sol, 0, IDVecStore[index]);
-    //sol->X[0] = inst->X[IDVecStore[index]];
-    //sol->Y[0] = inst->Y[IDVecStore[index]];
-    //sol->indexPath[0] = IDVecStore[index];
 
     // find and save point two
     _mm256_storeu_ps(xVecStore, minXVec);
@@ -177,9 +161,6 @@ static void extremeCoordsPointsInit(Solution *sol)
         if (xVecStore[index] > xVecStore[i])
             index = i;
     swapElementsInSolution(sol, 1, IDVecStore[index]);
-    //sol->X[1] = inst->X[IDVecStore[index]];
-    //sol->Y[1] = inst->Y[IDVecStore[index]];
-    //sol->indexPath[1] = IDVecStore[index];
 }
 
 static void farthestPointsInit(Solution *sol)
@@ -255,7 +236,6 @@ static void farthestPointsInit(Solution *sol)
 
     // now maxCost, maxRowIDsVec, maxColIDsVec should contain only the value corresponding to the element with maximum cost so we can extract such values
     // from any position in the vector
-    //_MM_EXTRACT_FLOAT();
     int maxCost = _mm_extract_ps(_mm256_castps256_ps128(maxCostVec), 0);
     LOG(LOG_LVL_DEBUG, "Extra Mileage EM_INIT_FARTHEST_POINTS: maximum cost found is %f", *(float*)&maxCost);
     int maxIndex0 = _mm_extract_epi32(_mm256_castsi256_si128(maxRowIDsVec), 0);
@@ -264,25 +244,6 @@ static void farthestPointsInit(Solution *sol)
     // initialize solution
     swapElementsInSolution(sol, 0, maxIndex0);
     swapElementsInSolution(sol, 1, maxIndex1);
-    /*sol->indexPath[0] = maxIndex0;
-    sol->indexPath[1] = maxIndex1;
-    sol->X[0] = inst->X[maxIndex0];
-    sol->X[1] = inst->X[maxIndex1];
-    sol->Y[0] = inst->Y[maxIndex0];
-    sol->Y[1] = inst->Y[maxIndex1];// */
-}
-
-static inline void swapSolutions(Solution *s1, Solution *s2)
-{
-    register float swapCost;
-    swapElems(s1->bestCost, s2->bestCost, swapCost);
-
-    register float *swapf;
-    swapElems(s1->X, s2->X, swapf);
-    swapElems(s1->Y, s2->Y, swapf);
-
-    register int *swapi;
-    swapElems(s1->indexPath, s2->indexPath, swapi);
 }
 
 static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos2)
@@ -294,7 +255,7 @@ static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos
     swapElems(sol->indexPath[pos1], sol->indexPath[pos2], tempi);
 }
 
-static inline void updateSolutionExtraMileage(Solution *sol, size_t posCovered, size_t bestMileageIndex, size_t anchorIndex)
+static inline void updateSolutionEM(Solution *sol, size_t posCovered, size_t bestMileageIndex, size_t anchorIndex)
 {
     // save best value
     float bestX = sol->X[bestMileageIndex], bestY = sol->Y[bestMileageIndex];
@@ -380,11 +341,101 @@ static void extraMileageST(Solution *sol, size_t nCovered)
         }
         // reached this point we found the absolute best combination of anchors and u possible for this iteration
         // we must update the solution now
-        updateSolutionExtraMileage(sol, posCovered, bestMileageNodeID, bestMileageAnchor);
+        updateSolutionEM(sol, posCovered, bestMileageNodeID, bestMileageAnchor);
     }
-    //sol->X[n] = sol->X[0];
-    //sol->Y[n] = sol->Y[0];
-    //sol->indexPath[n] = sol->indexPath[0];
 }
 
+
+
+static void extraMileageVectorizedST(Solution *sol, size_t nCovered)
+{
+    // shortcuts/decluttering
+    Instance *inst = sol->instance;
+    size_t n = inst->nNodes;
+    enum edgeWeightType ewt = inst->params.edgeWeightType;
+    int roundW = inst->params.roundWeights;
+
+    for (size_t posCovered = nCovered + 1; posCovered <= n; posCovered++) // until there are uncored nodes (each iteration adds one to posCovered)
+    {
+        // Contains best mileage values
+        __m256 bestExtraMileageVec = _mm256_set1_ps(INFINITY);
+        // Contains the indexes of the nodes from which the best (chosen according to bestMileageVec) one will be added to the solution at the end of the iteration
+        __m256i bestExtraMileageNodeIDVec = _mm256_set1_epi32(-1);
+        // Contains the indexes corresponding to the edge that will be removed/ splitted to accomodate the new node
+        __m256i bestExtraMileageAnchorIDVec = _mm256_set1_epi32(-1);
+
+        // approach is opposite compared to the non-vectorized approach: check for each edge (i) in the tour all uncovered nodes
+        // we do this to avoid the need of checking the last elements loaded by _mm256_loadu -> exploit the "INFINITY" placed at the end of the last elements in sol.X and sol.Y
+        for (size_t i = 0; i < posCovered-1; i++)
+        {
+            // Create vectors containig necessary data on the points attached to the edge i
+            __m256 x1Vec = _mm256_broadcast_ss(&sol->X[i]), y1Vec = _mm256_broadcast_ss(&sol->Y[i]);
+            __m256 x2Vec = _mm256_broadcast_ss(&sol->X[i+1]), y2Vec = _mm256_broadcast_ss(&sol->Y[i+1]);
+
+            // Vector that contains only the cost of the current edge
+            __m256 curEdgeCostVec = computeEdgeCost_VEC(x1Vec, y1Vec, x2Vec, y2Vec, ewt, roundW);
+
+            // Vector that contains only the index of the current edge
+            __m256i curEdgeID = _mm256_set1_epi32((int)i);
+
+            // Vector that keeps track of the IDs of the best candidates for the current edge
+            __m256i bestCostUncIDsVec = _mm256_set1_epi32(-1);
+            __m256i idsVec = _mm256_add_epi32(_mm256_set_epi32( 7, 6, 5, 4, 3, 2, 1, 0 ), _mm256_set1_epi32( posCovered ) );
+            __m256i incrementVec = _mm256_set1_epi32( AVX_VEC_SIZE );
+
+            // check for each edge which ones are the best
+            for (size_t u = posCovered; u <= n; u += AVX_VEC_SIZE, idsVec = _mm256_add_epi32(idsVec, incrementVec))
+            {
+                __m256 curExtraMileageVec;
+                {
+                    __m256 xuVec = _mm256_loadu_ps(&sol->X[u]), yuVec = _mm256_loadu_ps(&sol->Y[u]);
+                    __m256 altEdge1CostVec = computeEdgeCost_VEC(xuVec, yuVec, x1Vec, y1Vec, ewt, roundW);
+                    __m256 altEdge2CostVec = computeEdgeCost_VEC(xuVec, yuVec, x2Vec, y2Vec, ewt, roundW);
+                    __m256 altEdgeCostVec = _mm256_add_ps(altEdge1CostVec, altEdge2CostVec);
+                    curExtraMileageVec = _mm256_sub_ps(altEdgeCostVec, curEdgeCostVec);
+                }
+
+                // Compare curExtraMileageCostVec with bestExtraMileageVec
+                __m256 cmpMask = _mm256_cmp_ps(curExtraMileageVec, bestExtraMileageVec, _CMP_LT_OQ);
+
+                // Set new best according to comparison result
+                bestExtraMileageVec = _mm256_blendv_ps(bestExtraMileageVec, curExtraMileageVec, cmpMask);
+                bestExtraMileageAnchorIDVec = _mm256_blendv_epi8(bestExtraMileageAnchorIDVec, curEdgeID, _mm256_castps_si256(cmpMask));
+                bestExtraMileageNodeIDVec = _mm256_blendv_epi8(bestExtraMileageNodeIDVec, idsVec, _mm256_castps_si256(cmpMask));
+            }
+        }
+        // at this point we must select the best canditate(the one with minimum cost) in bestExtraMileageVec
+        // we do this by comparing the vector with its permutation multiple times, until all the elements in the vec are equal to the best one
+
+        { // FIRST PERMUTATION
+            __m256i permuteMask = _mm256_set_epi32( 0, 1, 2, 3, 7, 6, 5, 4 );
+            __m256 permutedBestExtraMilageVec = _mm256_permutevar8x32_ps(bestExtraMileageVec, permuteMask);
+            __m256 mask = _mm256_cmp_ps(permutedBestExtraMilageVec, bestExtraMileageVec, _CMP_LT_OQ);
+            bestExtraMileageVec = _mm256_blendv_ps(bestExtraMileageVec, permutedBestExtraMilageVec, mask);
+            bestExtraMileageNodeIDVec = _mm256_blendv_epi8(bestExtraMileageNodeIDVec, _mm256_permutevar8x32_epi32(bestExtraMileageNodeIDVec, permuteMask), _mm256_castps_si256(mask));
+            bestExtraMileageAnchorIDVec = _mm256_blendv_epi8(bestExtraMileageAnchorIDVec, _mm256_permutevar8x32_epi32(bestExtraMileageAnchorIDVec, permuteMask), _mm256_castps_si256(mask));
+        }
+        { // SECOND PERMUTATION
+            __m256 permutedBestExtraMilageVec = _mm256_permute_ps(bestExtraMileageVec, 30); // 30 in binary 8 bits is 00011110
+            __m256 mask = _mm256_cmp_ps(permutedBestExtraMilageVec, bestExtraMileageVec, _CMP_LT_OQ);
+            bestExtraMileageVec = _mm256_blendv_ps(bestExtraMileageVec, permutedBestExtraMilageVec, mask);
+            bestExtraMileageNodeIDVec = _mm256_blendv_epi8(bestExtraMileageNodeIDVec, _mm256_castps_si256(_mm256_permute_ps(_mm256_castsi256_ps(bestExtraMileageNodeIDVec), 30)), _mm256_castps_si256(mask));
+            bestExtraMileageAnchorIDVec = _mm256_blendv_epi8(bestExtraMileageAnchorIDVec, _mm256_castps_si256(_mm256_permute_ps(_mm256_castsi256_ps(bestExtraMileageAnchorIDVec), 30)), _mm256_castps_si256(mask));
+        }
+        { // THIRD PERMUTATION
+            __m256 permutedBestExtraMilageVec = _mm256_permute_ps(bestExtraMileageVec, 177); // 177 in binary 8 bits is 10110001
+            __m256 mask = _mm256_cmp_ps(permutedBestExtraMilageVec, bestExtraMileageVec, _CMP_LT_OQ);
+            bestExtraMileageVec = _mm256_blendv_ps(bestExtraMileageVec, permutedBestExtraMilageVec, mask);
+            bestExtraMileageNodeIDVec = _mm256_blendv_epi8(bestExtraMileageNodeIDVec, _mm256_castps_si256(_mm256_permute_ps(_mm256_castsi256_ps(bestExtraMileageNodeIDVec), 177)), _mm256_castps_si256(mask));
+            bestExtraMileageAnchorIDVec = _mm256_blendv_epi8(bestExtraMileageAnchorIDVec, _mm256_castps_si256(_mm256_permute_ps(_mm256_castsi256_ps(bestExtraMileageAnchorIDVec), 177)), _mm256_castps_si256(mask));
+        }
+
+        size_t bestExtraMileageNodeID = (size_t)_mm_extract_epi32(_mm256_castsi256_si128(bestExtraMileageNodeIDVec), 0);
+        size_t bestExtraMileageAnchorID = (size_t)_mm_extract_epi32(_mm256_castsi256_si128(bestExtraMileageAnchorIDVec), 0);
+
+        // reached this point we found the absolute best combination of anchors and u possible for this iteration
+        // we must update the solution now
+        updateSolutionEM(sol, posCovered, bestExtraMileageNodeID, bestExtraMileageAnchorID);
+    }
+}
 

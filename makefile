@@ -4,7 +4,7 @@ CC = gcc
 # compiler/liker flags
 CFLAGS_DEBUG = -Wall -g -c -mavx2 -Isrc/headers
 LDFLAGS_DEBUG = -lm
-CFLAGS_EXEC = -O3 -c -mavx2 -Isrc/headers
+CFLAGS_EXEC = -O3 -c -mavx2 -march=native -Isrc/headers
 LDFLAGS_EXEC = -lm
 
 # directories names
