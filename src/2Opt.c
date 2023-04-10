@@ -183,8 +183,10 @@ static inline void checkInput(Solution *sol, enum _2OptOptions *option)
 
 static inline void updateSolutionNN(Solution *sol, size_t bestOffsetEdges[2], float bestOffset)
 {
+    // update cost
+    sol->bestCost += (double)bestOffset;
+
     /*
-     * UPDATE BEST SOLUTION ########################################################################################
      *      bestSolIDs = { 0 1 2 3 4 5 6 7 8 9 }
      * if bestSolution = { 2 5 8 7 6 9 4 1 0 3 } and bestOffsetEdges = { 3 8 }
      *          -> means edges to swapped are (7,6) and (0,3) with (7,0) and (0,6)
@@ -193,7 +195,7 @@ static inline void updateSolutionNN(Solution *sol, size_t bestOffsetEdges[2], fl
      *     new bestSolution = { 2 5 8 7 0 1 4 9 6 3 }   with original indexes = { 0 1 2 3 8 7 6 5 4 9 }
      *
      * Which means that we must invert the elements of bestSolution from index 3(not inlcuded) to index 8(included)
-     */
+    */
 
     size_t smallID = bestOffsetEdges[0] + 1, bigID = bestOffsetEdges[1];
 

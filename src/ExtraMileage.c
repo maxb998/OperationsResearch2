@@ -21,17 +21,19 @@ static void farthestPointsInit(Solution *sol);
 
 static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos2);
 
-static inline void updateSolutionEM(Solution *sol, size_t posCovered, size_t bestMileageIndex, size_t anchorIndex);
-
-static void extraMileageST(Solution *sol, size_t nCovered);
+static inline void updateSolutionEM(Solution *sol, size_t posCovered, size_t bestMileageIndex, size_t anchorInde, float extraCost);
 
 static void extraMileageVectorizedST(Solution *sol, size_t nCovered);
 
+static void extraMileageST(Solution *sol, size_t nCovered);
+
+static void extraMileageCostMatrixST(Solution *sol, size_t nCovered);
 
 
-Solution ExtraMileage(Instance *inst, enum EMInitType emType)
+Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emInitType)
 {
     Solution sol = newSolution(inst);
+    sol.bestCost = 0;
 
     // Set data for solution (copy coords from distance and create index path as 0,1,2,...,n-1)
     for (size_t i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
@@ -39,20 +41,66 @@ Solution ExtraMileage(Instance *inst, enum EMInitType emType)
     for (int i = 0; i < inst->nNodes; i++)
         sol.indexPath[i] = i;
 
-    size_t coveredNodes = initialization(&sol, emType);
+    // initialize solution as specified by options
+    size_t coveredNodes = initialization(&sol, emInitType);
 
-    //extraMileageST(&sol, coveredNodes);
-    extraMileageVectorizedST(&sol, coveredNodes);
+    // apply extra mileage
+    sol.execTime = applyExtraMileage(&sol, coveredNodes, emOpt);
 
     return sol;
 }
 
-static size_t initialization(Solution *sol, enum EMInitType emType)
+double applyExtraMileage(Solution *sol, size_t nCovered, enum EMOptions emOpt)
+{
+    struct timespec start, finish;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &start);
+
+    Instance *inst = sol->instance;
+    size_t n = inst->nNodes;
+
+    // first check that the solution element at index nCovered is the same as the one at index 0
+    if (sol->indexPath[0] != sol->indexPath[nCovered])
+    {
+        // check solution integrity when debugging
+        if (LOG_LEVEL >= LOG_LVL_DEBUG || !(sol->X[n] == INFINITY && sol->Y[n] == INFINITY) || !(sol->X[n] == sol->X[0] && sol->Y[n] == sol->Y[0]))
+            if (checkSolutionIntegrity(sol) != 0)
+                throwError(inst, sol, "applyExtraMileage: Error when checking input solution");
+
+        // save element to last position
+        sol->X[n] = sol->X[nCovered];
+        sol->Y[n] = sol->Y[nCovered];
+        sol->indexPath[n] = sol->indexPath[nCovered];
+
+        // close the tour at index nCovered
+        sol->X[nCovered] = sol->X[0];
+        sol->Y[nCovered] = sol->Y[0];
+        sol->indexPath[nCovered] = sol->indexPath[0];
+    }
+    
+    switch (emOpt)
+    {
+    case EM_OPTION_AVX:
+        extraMileageVectorizedST(sol, nCovered);
+        break;
+    case EM_OPTION_BASE:
+        extraMileageST(sol, nCovered);
+        break;
+    case EM_OPTION_USE_COST_MATRIX:
+        extraMileageCostMatrixST(sol, nCovered);
+        break;
+    }
+    
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &finish);
+    double elapsed = ((finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0);
+    return elapsed;
+}
+
+static size_t initialization(Solution *sol, enum EMInitType emInitType)
 {
     Instance *inst = sol->instance;
     size_t coveredElems = 0;
 
-    switch (emType)
+    switch (emInitType)
     {
     case EM_INIT_RANDOM:
         // select two random nodes
@@ -64,14 +112,25 @@ static size_t initialization(Solution *sol, enum EMInitType emType)
         swapElementsInSolution(sol, 0, rndIndex0);
         swapElementsInSolution(sol, 1, rndIndex1);
 
+        // update cost
+        sol->bestCost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType, inst->params.roundWeights) * 2.;
+
         coveredElems = 2;
         break;
     case EM_INIT_EXTREMES:
         extremeCoordsPointsInit(sol);
+
+        // update cost
+        sol->bestCost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType, inst->params.roundWeights) * 2.;
+
         coveredElems = 2;
         break;
     case EM_INIT_FARTHEST_POINTS:
         farthestPointsInit(sol);
+
+        // update cost
+        sol->bestCost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType, inst->params.roundWeights) * 2.;
+
         coveredElems = 2;
         break;
     case EM_INIT_HULL:
@@ -255,8 +314,11 @@ static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos
     swapElems(sol->indexPath[pos1], sol->indexPath[pos2], tempi);
 }
 
-static inline void updateSolutionEM(Solution *sol, size_t posCovered, size_t bestMileageIndex, size_t anchorIndex)
+static inline void updateSolutionEM(Solution *sol, size_t posCovered, size_t bestMileageIndex, size_t anchorIndex, float extraCost)
 {
+    // update cost
+    sol->bestCost = (float)((double)sol->bestCost + (double)extraCost);
+
     // save best value
     float bestX = sol->X[bestMileageIndex], bestY = sol->Y[bestMileageIndex];
     int bestIndex = sol->indexPath[bestMileageIndex];
@@ -297,55 +359,8 @@ static inline void updateSolutionEM(Solution *sol, size_t posCovered, size_t bes
     sol->Y[i] = bestY;
     sol->indexPath[i] = bestIndex;
 
-    LOG(LOG_LVL_EVERYTHING, "Extra Mileage Solution Update: Node %d added to solution between nodes %d and %d",
-                                                    sol->indexPath[i], sol->indexPath[i-1], sol->indexPath[i+1]);
+    LOG(LOG_LVL_EVERYTHING, "Extra Mileage Solution Update: Node %d added to solution between nodes %d and %d", sol->indexPath[i], sol->indexPath[i-1], sol->indexPath[i+1]);
 }
-
-static void extraMileageST(Solution *sol, size_t nCovered)
-{
-    // shortcuts/decluttering
-    Instance *inst = sol->instance;
-    size_t n = inst->nNodes;
-    enum edgeWeightType ewt = inst->params.edgeWeightType;
-    int roundW = inst->params.roundWeights;
-
-    for (size_t posCovered = nCovered + 1; posCovered <= n; posCovered++) // until there are uncored nodes (each iteration adds one to posCovered)
-    {
-        float bestMileage = INFINITY; // saves best mileage value
-        size_t bestMileageNodeID = 0xFFFFFFFFFFFFFFFF; // saves the index of the node that will be added at the end of the iteration
-
-        // index of the covered nodes that represent the edge that will be splitted to integrate u at solution update
-        size_t bestMileageAnchor = 0xFFFFFFFFFFFFFFFF;
-
-        for (size_t u = posCovered; u < n+1; u++) // u stands for uncovered
-        {
-            for (size_t i = 0; i < posCovered-1; i++) // covered node i from 0 to posCovered
-            {
-                // cost of edge already in solution [i,j]
-                float currEdgeCost = computeEdgeCost(sol->X[i], sol->Y[i], sol->X[i+1], sol->Y[i+1], ewt, roundW);
-                // cost of edge [i,u]
-                float cost1 = computeEdgeCost(sol->X[u], sol->Y[u], sol->X[i], sol->Y[i], ewt, roundW);
-                // sum of cost of edge [i,u] and edge [u,j]
-                float altEdgeCost = cost1 + computeEdgeCost(sol->X[u], sol->Y[u], sol->X[i+1], sol->Y[i+1], ewt, roundW);
-
-                float extraCost = altEdgeCost - currEdgeCost;
-
-                if (bestMileage > extraCost)
-                {
-                    bestMileage = extraCost;
-                    bestMileageNodeID = u;
-                    bestMileageAnchor = i;
-                }
-            }
-            // reached this point we found the best anchors combination for the uncovered node at index u in sol.X-Y
-        }
-        // reached this point we found the absolute best combination of anchors and u possible for this iteration
-        // we must update the solution now
-        updateSolutionEM(sol, posCovered, bestMileageNodeID, bestMileageAnchor);
-    }
-}
-
-
 
 static void extraMileageVectorizedST(Solution *sol, size_t nCovered)
 {
@@ -379,7 +394,6 @@ static void extraMileageVectorizedST(Solution *sol, size_t nCovered)
             __m256i curEdgeID = _mm256_set1_epi32((int)i);
 
             // Vector that keeps track of the IDs of the best candidates for the current edge
-            __m256i bestCostUncIDsVec = _mm256_set1_epi32(-1);
             __m256i idsVec = _mm256_add_epi32(_mm256_set_epi32( 7, 6, 5, 4, 3, 2, 1, 0 ), _mm256_set1_epi32( posCovered ) );
             __m256i incrementVec = _mm256_set1_epi32( AVX_VEC_SIZE );
 
@@ -430,12 +444,104 @@ static void extraMileageVectorizedST(Solution *sol, size_t nCovered)
             bestExtraMileageAnchorIDVec = _mm256_blendv_epi8(bestExtraMileageAnchorIDVec, _mm256_castps_si256(_mm256_permute_ps(_mm256_castsi256_ps(bestExtraMileageAnchorIDVec), 177)), _mm256_castps_si256(mask));
         }
 
+        int bestCostInt = _mm_extract_epi32(_mm256_castps256_ps128(bestExtraMileageVec), 0);
+        float bestCost = *(float*)&bestCostInt;
         size_t bestExtraMileageNodeID = (size_t)_mm_extract_epi32(_mm256_castsi256_si128(bestExtraMileageNodeIDVec), 0);
         size_t bestExtraMileageAnchorID = (size_t)_mm_extract_epi32(_mm256_castsi256_si128(bestExtraMileageAnchorIDVec), 0);
 
         // reached this point we found the absolute best combination of anchors and u possible for this iteration
         // we must update the solution now
-        updateSolutionEM(sol, posCovered, bestExtraMileageNodeID, bestExtraMileageAnchorID);
+        updateSolutionEM(sol, posCovered, bestExtraMileageNodeID, bestExtraMileageAnchorID, bestCost);
+    }
+}
+
+static void extraMileageST(Solution *sol, size_t nCovered)
+{
+    // shortcuts/decluttering
+    Instance *inst = sol->instance;
+    size_t n = inst->nNodes;
+    enum edgeWeightType ewt = inst->params.edgeWeightType;
+    int roundW = inst->params.roundWeights;
+
+    for (size_t posCovered = nCovered + 1; posCovered <= n; posCovered++) // until there are uncored nodes (each iteration adds one to posCovered)
+    {
+        float bestMileage = INFINITY; // saves best mileage value
+        size_t bestMileageNodeID = 0xFFFFFFFFFFFFFFFF; // saves the index of the node that will be added at the end of the iteration
+
+        // index of the covered nodes that represent the edge that will be splitted to integrate u at solution update
+        size_t bestMileageAnchor = 0xFFFFFFFFFFFFFFFF;
+
+        for (size_t i = 0; i < posCovered-1; i++) // u stands for uncovered
+        {
+            // cost of edge already in solution [i,j]
+            float currEdgeCost = computeEdgeCost(sol->X[i], sol->Y[i], sol->X[i+1], sol->Y[i+1], ewt, roundW);
+
+            for (size_t u = posCovered; u < n+1; u++) // covered node i from 0 to posCovered
+            {
+                // cost of edge [i,u]
+                float cost1 = computeEdgeCost(sol->X[u], sol->Y[u], sol->X[i], sol->Y[i], ewt, roundW);
+                // sum of cost of edge [i,u] and edge [u,j]
+                float altEdgeCost = cost1 + computeEdgeCost(sol->X[u], sol->Y[u], sol->X[i+1], sol->Y[i+1], ewt, roundW);
+
+                float extraCost = altEdgeCost - currEdgeCost;
+
+                if (bestMileage > extraCost)
+                {
+                    bestMileage = extraCost;
+                    bestMileageNodeID = u;
+                    bestMileageAnchor = i;
+                }
+            }
+            // reached this point we found the best anchors combination for the uncovered node at index u in sol.X-Y
+        }
+        // reached this point we found the absolute best combination of anchors and u possible for this iteration
+        // we must update the solution now
+        updateSolutionEM(sol, posCovered, bestMileageNodeID, bestMileageAnchor, bestMileage);
+    }
+}
+
+
+static void extraMileageCostMatrixST(Solution *sol, size_t nCovered)
+{
+    // shortcuts/decluttering
+    Instance *inst = sol->instance;
+    size_t n = inst->nNodes;
+    float *edgeCostMat = inst->edgeCostMat;
+
+    for (size_t posCovered = nCovered + 1; posCovered <= n; posCovered++) // until there are uncored nodes (each iteration adds one to posCovered)
+    {
+        float bestMileage = INFINITY; // saves best mileage value
+        size_t bestMileageNodeID = 0xFFFFFFFFFFFFFFFF; // saves the index of the node that will be added at the end of the iteration
+
+        // index of the covered nodes that represent the edge that will be splitted to integrate u at solution update
+        size_t bestMileageAnchor = 0xFFFFFFFFFFFFFFFF;
+
+        for (size_t i = 0; i < posCovered-1; i++) // u stands for uncovered
+        {
+            // cost of edge already in solution [i,j]
+            float currEdgeCost = edgeCostMat[sol->indexPath[i] * n + sol->indexPath[i + 1]];
+
+            for (size_t u = posCovered; u <= n; u++) // covered node i from 0 to posCovered
+            {
+                // cost of edge [i,u]
+                float cost1 = edgeCostMat[sol->indexPath[u] * n + sol->indexPath[i]];
+                // sum of cost of edge [i,u] and edge [u,j]
+                float altEdgeCost = cost1 + edgeCostMat[sol->indexPath[u] * n + sol->indexPath[i+1]];
+
+                float extraCost = altEdgeCost - currEdgeCost;
+
+                if (bestMileage > extraCost)
+                {
+                    bestMileage = extraCost;
+                    bestMileageNodeID = u;
+                    bestMileageAnchor = i;
+                }
+            }
+            // reached this point we found the best anchors combination for the uncovered node at index u in sol.X-Y
+        }
+        // reached this point we found the absolute best combination of anchors and u possible for this iteration
+        // we must update the solution now
+        updateSolutionEM(sol, posCovered, bestMileageNodeID, bestMileageAnchor, bestMileage);
     }
 }
 

@@ -24,15 +24,17 @@ int main (int argc, char *argv[])
     
     
     Solution nn = NearestNeighbor(&inst);
-    LOG(LOG_LVL_LOG, "Nearest Neighbour finished in %lf seconds", nn.execTime);
+    LOG(LOG_LVL_LOG, "Nearest Neighbor finished in %lf seconds. Solution cost is %lf", nn.execTime, nn.bestCost);
 
     double _2optTime = apply2OptBestFix(&nn, _2OPT_AVX_ST);
-    LOG(LOG_LVL_LOG, "2-Opt finished in %lf seconds", _2optTime);
+    LOG(LOG_LVL_LOG, "2-Opt finished optimizing Nearest Neighbor in %lf seconds. Solution cost is %lf", _2optTime, nn.bestCost);
 
-    Solution em = ExtraMileage(&inst, EM_INIT_EXTREMES);
+    Solution em = ExtraMileage(&inst, EM_OPTION_USE_COST_MATRIX, EM_INIT_RANDOM);
+    LOG(LOG_LVL_LOG, "Extra Mileage finished in %lf seconds. Solution cost is %lf", em.execTime, em.bestCost);
+    LOG(LOG_LVL_LOG, "Cost of Extra Mileage Solution is %lf", computeSolutionCostVectorizedFloat(&em));
     
-    plotSolution(&nn, "1366,768", "green", "black", 1);
-    plotSolution(&em, "1920,1080", "green", "black", 1);
+    plotSolution(&nn, "1366,768", "green", "black", 1, 0);
+    plotSolution(&em, "1920,1080", "green", "black", 1, 0);
 
     destroySolution(&em);
     destroyInstance(&inst);

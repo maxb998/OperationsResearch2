@@ -52,17 +52,22 @@ void basicSolutionCheck(Solution *sol);
 	Checks sol.X, sol.Y, sol.indexPath and also that the cost is correct*/
 void fullSolutionCheck(Solution *sol);
 
-// Check the correctness of the cost of the solution stored in Instance inst.
+// Check the correctness of the cost of the solution stored in Solution sol.
 void costCheck(Solution *sol);
 
+// Check that every node in sol is mapped correctly and only one time with respect to the original instance
+// returns 1 if no mismatches, 0 otherwise
+int checkSolutionIntegrity(Solution *sol);
+
 /*Plot solution using gnuplot. Does NOT check for errors on input
-* d	-> Instance to plot
-* plotPixelSize	-> string: Plot window size in pixel specified with format: "<WIDTH>,<HEIGHT>"
-* pointColor -> string: Color of the circle representing the point, eg "black" or "red"
-* tourPointColor -> string: Color of the 'X' on top of the point circle of color pointColor. Format and types is the same as for pointColor
-* pointSize -> int: Size of the points
+ * d	-> Instance to plot
+ * plotPixelSize	-> string: Plot window size in pixel specified with format: "<WIDTH>,<HEIGHT>"
+ * pointColor -> string: Color of the circle representing the point, eg "black" or "red"
+ * tourPointColor -> string: Color of the 'X' on top of the point circle of color pointColor. Format and types is the same as for pointColor
+ * pointSize -> int: Size of the points
+ * printIndex -> int: set to 1 to print index of each point as label on plot
 */
-void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize);
+void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize, const int printIndex);
 
 float computeSolutionCostVectorizedFloat(Solution *sol);
 

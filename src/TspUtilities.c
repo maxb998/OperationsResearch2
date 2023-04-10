@@ -26,9 +26,6 @@ const char * logLevelString [] = {
 // Returns the number of processors of the machine
 static inline int nProcessors();
 
-
-size_t * getSolutionIDArray(Solution *sol);
-
 Instance newInstance ()
 {
     Instance d = { .nNodes = 0, .X = NULL, .Y = NULL, .edgeCostMat = NULL, .params = { .edgeWeightType = 0, .randomSeed = -1, .roundWeights = 0, .nThreads = nProcessors() } };
@@ -267,7 +264,31 @@ void costCheck(Solution *sol)
     LOG(LOG_LVL_DEBUG, "costCheck: Cost of solution is correct");
 }
 
-void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize)
+int checkSolutionIntegrity(Solution *sol)
+{
+    Instance *inst = sol->instance;
+    size_t n = inst->nNodes;
+
+    for (size_t i = 0; i < n; i++)
+    {
+        int index = sol->indexPath[i];
+        if (index < 0 || index > n)
+        {
+            LOG(LOG_LVL_CRITICAL, "checkSolutionIntegrity: sol.indexPath[%lu] = %d which is not within the limits", i, index);
+            return 1;
+        }
+        if (sol->X[i] != inst->X[index] || sol->Y[i] != inst->Y[index])
+        {
+            LOG(LOG_LVL_CRITICAL, "checkSolutionIntegrity: Mismatch at index %lu in solution", i);
+            return 1;
+        }
+    }
+
+    // everything checks out
+    return 0;
+}
+
+void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize, const int printIndex)
 {
     // creating the pipeline for gnuplot
     FILE *gnuplotPipe = popen("gnuplot -persistent", "w");
@@ -282,7 +303,7 @@ void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointC
 
 
     // assign number to points
-    if (1)
+    if (printIndex)
         for (size_t i = 0; i < sol->instance->nNodes; i++)
             fprintf(gnuplotPipe, "set label \"%ld\" at %f,%f\n", i, sol->instance->X[i], sol->instance->Y[i]);
 
@@ -309,18 +330,6 @@ void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointC
     pclose(gnuplotPipe);
 }
 
-size_t * getSolutionIDArray(Solution *sol)
-{
-    size_t n = sol->instance->nNodes;
-    size_t *solID = malloc(n * sizeof(size_t));
-
-    for (size_t i = 0; i < n; i++)
-        for (size_t j = 0; j < n; j++)
-            if ((sol->X[i] == sol->instance->X[j]) && (sol->Y[i] == sol->instance->Y[j]))
-                solID[i] = j;
-
-    return solID;
-}
 
 
 float computeSolutionCostVectorizedFloat(Solution *sol)
