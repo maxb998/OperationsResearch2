@@ -156,7 +156,7 @@ static void * threadNN(void *thInst)
                 swapElems(sol->indexPath, tempSol.indexPath, temp);
             }
 
-            LOG(LOG_LVL_LOG, "Found better solution starting from node %ld, cost: %f", iterNode, pathCost);
+            LOG(LOG_LVL_EVERYTHING, "Found better solution starting from node %ld, cost: %f", iterNode, pathCost);
         }
         pthread_mutex_unlock(&th->saveLock);
     }

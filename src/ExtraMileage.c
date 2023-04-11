@@ -42,6 +42,11 @@ Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emIn
         sol.indexPath[i] = i;
 
     // initialize solution as specified by options
+    // Set random seed for initialization
+    if (inst->params.randomSeed != -1)
+        srand(inst->params.randomSeed);
+    else
+        srand(time(NULL));
     size_t coveredNodes = initialization(&sol, emInitType);
 
     // apply extra mileage
@@ -57,6 +62,12 @@ double applyExtraMileage(Solution *sol, size_t nCovered, enum EMOptions emOpt)
 
     Instance *inst = sol->instance;
     size_t n = inst->nNodes;
+
+    // Set random seed
+    if (inst->params.randomSeed != -1)
+        srand(inst->params.randomSeed);
+    else
+        srand(time(NULL));
 
     // first check that the solution element at index nCovered is the same as the one at index 0
     if (sol->indexPath[0] != sol->indexPath[nCovered])
@@ -86,7 +97,13 @@ double applyExtraMileage(Solution *sol, size_t nCovered, enum EMOptions emOpt)
         extraMileageST(sol, nCovered);
         break;
     case EM_OPTION_USE_COST_MATRIX:
-        extraMileageCostMatrixST(sol, nCovered);
+        if (inst->edgeCostMat)
+            extraMileageCostMatrixST(sol, nCovered);
+        else
+        {
+            LOG(LOG_LVL_WARNING, "applyExtraMileage: edgeCostMat has not been detected/initialized. Switching to option: EM_OPTION_AVX");
+            extraMileageVectorizedST(sol, nCovered);
+        }
         break;
     }
     
@@ -114,6 +131,9 @@ static size_t initialization(Solution *sol, enum EMInitType emInitType)
 
         // update cost
         sol->bestCost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType, inst->params.roundWeights) * 2.;
+
+        if (LOG_LEVEL >= LOG_LVL_DEBUG)
+            LOG(LOG_LVL_DEBUG, "ExtraMileage-InitializationRandom: Randomly chosen edge is edge e = (%d, %d)", rndIndex0, rndIndex1);
 
         coveredElems = 2;
         break;
@@ -317,7 +337,7 @@ static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos
 static inline void updateSolutionEM(Solution *sol, size_t posCovered, size_t bestMileageIndex, size_t anchorIndex, float extraCost)
 {
     // update cost
-    sol->bestCost = (float)((double)sol->bestCost + (double)extraCost);
+    sol->bestCost += extraCost;
 
     // save best value
     float bestX = sol->X[bestMileageIndex], bestY = sol->Y[bestMileageIndex];
@@ -370,6 +390,9 @@ static void extraMileageVectorizedST(Solution *sol, size_t nCovered)
     enum edgeWeightType ewt = inst->params.edgeWeightType;
     int roundW = inst->params.roundWeights;
 
+    float bestCostVecStore[8] = { 0 };
+    size_t bestCostSortedIndexes[8] = { 0 };
+
     for (size_t posCovered = nCovered + 1; posCovered <= n; posCovered++) // until there are uncored nodes (each iteration adds one to posCovered)
     {
         // Contains best mileage values
@@ -401,13 +424,13 @@ static void extraMileageVectorizedST(Solution *sol, size_t nCovered)
             for (size_t u = posCovered; u <= n; u += AVX_VEC_SIZE, idsVec = _mm256_add_epi32(idsVec, incrementVec))
             {
                 __m256 curExtraMileageVec;
-                {
+                //{
                     __m256 xuVec = _mm256_loadu_ps(&sol->X[u]), yuVec = _mm256_loadu_ps(&sol->Y[u]);
                     __m256 altEdge1CostVec = computeEdgeCost_VEC(xuVec, yuVec, x1Vec, y1Vec, ewt, roundW);
                     __m256 altEdge2CostVec = computeEdgeCost_VEC(xuVec, yuVec, x2Vec, y2Vec, ewt, roundW);
                     __m256 altEdgeCostVec = _mm256_add_ps(altEdge1CostVec, altEdge2CostVec);
                     curExtraMileageVec = _mm256_sub_ps(altEdgeCostVec, curEdgeCostVec);
-                }
+                //}
 
                 // Compare curExtraMileageCostVec with bestExtraMileageVec
                 __m256 cmpMask = _mm256_cmp_ps(curExtraMileageVec, bestExtraMileageVec, _CMP_LT_OQ);
@@ -419,6 +442,28 @@ static void extraMileageVectorizedST(Solution *sol, size_t nCovered)
             }
         }
         // at this point we must select the best canditate(the one with minimum cost) in bestExtraMileageVec
+
+        _mm256_storeu_ps(bestCostVecStore, bestExtraMileageVec);
+        for (size_t sortedElemsCount = 0; sortedElemsCount < AVX_VEC_SIZE; sortedElemsCount++)
+        {
+            float min = INFINITY;
+            for (size_t i = 0; i < AVX_VEC_SIZE; i++)
+            {
+                int flag = 1;
+                for (size_t j = 0; j < sortedElemsCount; j++)
+                    if (bestCostSortedIndexes[j] == i)
+                        flag = 0;
+
+                if (flag && min > bestCostVecStore[i])
+                {
+                    min = bestCostVecStore[i];
+                    bestCostSortedIndexes[sortedElemsCount] = i;
+                }
+            }
+        }
+        
+
+
         // we do this by comparing the vector with its permutation multiple times, until all the elements in the vec are equal to the best one
 
         { // FIRST PERMUTATION
@@ -444,7 +489,7 @@ static void extraMileageVectorizedST(Solution *sol, size_t nCovered)
             bestExtraMileageAnchorIDVec = _mm256_blendv_epi8(bestExtraMileageAnchorIDVec, _mm256_castps_si256(_mm256_permute_ps(_mm256_castsi256_ps(bestExtraMileageAnchorIDVec), 177)), _mm256_castps_si256(mask));
         }
 
-        int bestCostInt = _mm_extract_epi32(_mm256_castps256_ps128(bestExtraMileageVec), 0);
+        int bestCostInt = _mm_extract_epi32(_mm256_castsi256_si128(_mm256_castps_si256(bestExtraMileageVec)), 0);
         float bestCost = *(float*)&bestCostInt;
         size_t bestExtraMileageNodeID = (size_t)_mm_extract_epi32(_mm256_castsi256_si128(bestExtraMileageNodeIDVec), 0);
         size_t bestExtraMileageAnchorID = (size_t)_mm_extract_epi32(_mm256_castsi256_si128(bestExtraMileageAnchorIDVec), 0);
