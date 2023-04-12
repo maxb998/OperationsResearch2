@@ -575,6 +575,9 @@ static void *_2optBestFixCostMatrixThread(void *arg)
             else
                 th->finishedFlag = 1;
 
+            // reset offset
+            th->bestOffset = 0;
+
             // reset all the threadFinishFlag to 0
             for (size_t i = 0; i < inst->params.nThreads; i++)
                 th->threadFinishFlag[i] = 0;
