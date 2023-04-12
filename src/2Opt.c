@@ -285,7 +285,7 @@ static void *_2optBestFixBaseThread(void *arg)
     // setup "shortcuts" variables to declutter the code
     size_t n = inst->nNodes;
     enum edgeWeightType edgeWgtType = inst->params.edgeWeightType;
-    int roundFlag = inst->params.roundWeights;
+    int roundFlag = inst->params.roundWeightsFlag;
 
     while (th->finishedFlag == 0) // runs 2opt until no more moves are made in one iteration of 2opt
     {
@@ -383,7 +383,7 @@ static void *_2OptBestFixAVXThread(void *arg)
     // setup "shortcuts" variables to declutter the code
     size_t n = inst->nNodes;
     enum edgeWeightType edgeWgtType = inst->params.edgeWeightType;
-    int roundFlag = inst->params.roundWeights;
+    int roundFlag = inst->params.roundWeightsFlag;
 
     float vecStore[AVX_VEC_SIZE];
     int idsVecStore[AVX_VEC_SIZE];
@@ -605,7 +605,7 @@ static void _2OptBestFixAVXSingleThread(Solution *sol)
     // setup "shortcuts" variables to declutter the code
     size_t n = inst->nNodes;
     enum edgeWeightType edgeWgtType = inst->params.edgeWeightType;
-    int roundFlag = inst->params.roundWeights;
+    int roundFlag = inst->params.roundWeightsFlag;
 
     float vecStore[AVX_VEC_SIZE];
     int idsVecStore[AVX_VEC_SIZE];

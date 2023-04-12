@@ -159,15 +159,15 @@ void readFile (Instance *inst)
         size_t lineNumber = strtoul(line, &endPtr, 10);
         if (lineNumber == 0)
             throwError(inst, NULL, "Conversion at line %lu of the line number has gone wrong(must not be 0)", keywordsLinesCount + i + 1);
+        else if (lineNumber != i+1)
+            LOG(LOG_LVL_WARNING, "readFile: File has inconsistent enumeration, node %ld at line %ld should be identified with %ld", lineNumber, keywordsLinesCount + i + 1, i+1);
+        
         
         char * separatorPtr = strchr(line, ' ');
         if (!separatorPtr)
             throwError(inst, NULL, "Space separator at line %lu of file has not been found");
         if (endPtr != separatorPtr)
             throwError(inst, NULL, "Conversion at line %lu of the line number has gone wrong(must be an integer separated from other value by a space at the end)", keywordsLinesCount + i + 1);
-        
-        if (lineNumber != i+1)
-            throwError(inst, NULL, "Line number at line %lu of the file is not what is supposed to be (%lu instead of %lu)", keywordsLinesCount + i + 1, lineNumber, i+1);
 
         // now we can convert the actual coordinates
         char * xCoordStrPtr = separatorPtr + 1;
@@ -199,6 +199,26 @@ void readFile (Instance *inst)
             throwError(inst, NULL, "Coordinate Y at line %lu has caused overflow", keywordsLinesCount + i + 1);
 
         i++;
+    }
+
+    if (i < inst->nNodes)
+    {
+        LOG(LOG_LVL_WARNING, "readFile: number of nodes in file are less than the number specified in the file. Setting total number of nodes to %ld", i);
+        inst->nNodes = i;
+
+        // reallocataing memory to better fit the smaller instance
+        float *reallocX = malloc((inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float));
+        float *reallocY = &reallocX[inst->nNodes + AVX_VEC_SIZE];
+        for (size_t j = 0; j < inst->nNodes; j++)
+        {
+            reallocX[j] = inst->X[j];
+            reallocY[j] = inst->Y[j];
+        }
+
+        // free memory and swap pointers
+        free(inst->X);
+        inst->X = reallocX;
+        inst->Y = reallocY;
     }
 
     // set to infinite the empty <AVX_VEC_SIZE> elements at the end of X and Y

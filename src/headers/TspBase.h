@@ -35,10 +35,11 @@ typedef struct
 {
     int edgeWeightType;
     int randomSeed;			// if no value has been specified as argument GRASP won't be enabled
-	int roundWeights;
+	int roundWeightsFlag;
     char inputFile[1000];
 	char name[200];
     int nThreads;	// if no value has been specified as argument its default value is the number of processors in the machine
+	int showPlotFlag;
 } Parameters;
 
 typedef struct

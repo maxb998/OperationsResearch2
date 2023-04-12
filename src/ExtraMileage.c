@@ -130,7 +130,7 @@ static size_t initialization(Solution *sol, enum EMInitType emInitType)
         swapElementsInSolution(sol, 1, rndIndex1);
 
         // update cost
-        sol->bestCost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType, inst->params.roundWeights) * 2.;
+        sol->bestCost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType, inst->params.roundWeightsFlag) * 2.;
 
         if (LOG_LEVEL >= LOG_LVL_DEBUG)
             LOG(LOG_LVL_DEBUG, "ExtraMileage-InitializationRandom: Randomly chosen edge is edge e = (%d, %d)", rndIndex0, rndIndex1);
@@ -141,7 +141,7 @@ static size_t initialization(Solution *sol, enum EMInitType emInitType)
         extremeCoordsPointsInit(sol);
 
         // update cost
-        sol->bestCost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType, inst->params.roundWeights) * 2.;
+        sol->bestCost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType, inst->params.roundWeightsFlag) * 2.;
 
         coveredElems = 2;
         break;
@@ -149,7 +149,7 @@ static size_t initialization(Solution *sol, enum EMInitType emInitType)
         farthestPointsInit(sol);
 
         // update cost
-        sol->bestCost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType, inst->params.roundWeights) * 2.;
+        sol->bestCost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType, inst->params.roundWeightsFlag) * 2.;
 
         coveredElems = 2;
         break;
@@ -267,7 +267,7 @@ static void farthestPointsInit(Solution *sol)
             }
 
             __m256 x2 = _mm256_loadu_ps(&inst->X[j]), y2 = _mm256_loadu_ps(&inst->Y[j]);
-            __m256 costVec = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType, inst->params.roundWeights);
+            __m256 costVec = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType, inst->params.roundWeightsFlag);
 
             // check if there are costier connections in this iteration and save results
             __m256 mask = _mm256_cmp_ps(costVec, rowMaxCostVec, _CMP_GT_OQ);
@@ -388,7 +388,7 @@ static void extraMileageVectorizedST(Solution *sol, size_t nCovered)
     Instance *inst = sol->instance;
     size_t n = inst->nNodes;
     enum edgeWeightType ewt = inst->params.edgeWeightType;
-    int roundW = inst->params.roundWeights;
+    int roundW = inst->params.roundWeightsFlag;
 
     float bestCostVecStore[8] = { 0 };
     size_t bestCostSortedIndexes[8] = { 0 };
@@ -506,7 +506,7 @@ static void extraMileageST(Solution *sol, size_t nCovered)
     Instance *inst = sol->instance;
     size_t n = inst->nNodes;
     enum edgeWeightType ewt = inst->params.edgeWeightType;
-    int roundW = inst->params.roundWeights;
+    int roundW = inst->params.roundWeightsFlag;
 
     for (size_t posCovered = nCovered + 1; posCovered <= n; posCovered++) // until there are uncored nodes (each iteration adds one to posCovered)
     {

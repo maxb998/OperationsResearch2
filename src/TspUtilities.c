@@ -28,7 +28,7 @@ static inline int nProcessors();
 
 Instance newInstance ()
 {
-    Instance d = { .nNodes = 0, .X = NULL, .Y = NULL, .edgeCostMat = NULL, .params = { .edgeWeightType = 0, .randomSeed = -1, .roundWeights = 0, .nThreads = nProcessors() } };
+    Instance d = { .nNodes = 0, .X = NULL, .Y = NULL, .edgeCostMat = NULL, .params = { .edgeWeightType = 0, .randomSeed = -1, .roundWeightsFlag = 0, .nThreads = nProcessors() } };
     memset(d.params.inputFile, 0, sizeof(d.params.inputFile));
     memset(d.params.name, 0, sizeof(d.params.name));
 
@@ -129,7 +129,7 @@ void throwError (Instance *inst, Solution *sol, char * line, ...)
 
 void parseArgs (Instance *inst, int argc, char *argv[])
 {
-    static int roundWeightsFlag = 0;
+    static int roundWeightsFlagFlag = 0;
     static struct option options[] = 
         {
             {"seed", required_argument, 0, 's'},
@@ -138,11 +138,11 @@ void parseArgs (Instance *inst, int argc, char *argv[])
             {"f", required_argument, 0, 'f'},
             {"threads", required_argument, 0, 't'},
             {"t", required_argument, 0, 't'},
-            {"roundWeigths", no_argument, &roundWeightsFlag, 1},
+            {"roundWeigths", no_argument, &roundWeightsFlagFlag, 1},
             {0, 0, 0, 0}
         };
     // set flags in d
-    inst->params.roundWeights = roundWeightsFlag;
+    inst->params.roundWeightsFlag = roundWeightsFlagFlag;
 
 
     int option_index = 0;
