@@ -129,7 +129,7 @@ void throwError (Instance *inst, Solution *sol, char * line, ...)
 
 void parseArgs (Instance *inst, int argc, char *argv[])
 {
-    static int roundWeightsFlagFlag = 0;
+    static int roundWeightsFlag = 0, gnuplotFlag = 1;
     static struct option options[] = 
         {
             {"seed", required_argument, 0, 's'},
@@ -138,17 +138,21 @@ void parseArgs (Instance *inst, int argc, char *argv[])
             {"f", required_argument, 0, 'f'},
             {"threads", required_argument, 0, 't'},
             {"t", required_argument, 0, 't'},
-            {"roundWeigths", no_argument, &roundWeightsFlagFlag, 1},
+            {"roundweigths", no_argument, &roundWeightsFlag, 1},
+            {"noplot", no_argument, &gnuplotFlag, 0},
+            {"output", required_argument, NULL, 'o'},
+            {"o", required_argument, NULL, 'o'},
+            {"", required_argument, NULL, 'o'},
             {0, 0, 0, 0}
         };
     // set flags in d
-    inst->params.roundWeightsFlag = roundWeightsFlagFlag;
+    inst->params.roundWeightsFlag = roundWeightsFlag;
 
 
     int option_index = 0;
     int opt;
 
-    while ((opt = getopt_long(argc, argv, "s:f:t:", options, &option_index)) != -1)
+    while ((opt = getopt_long(argc, argv, "s:f:t:o:", options, &option_index)) != -1)
     {
         switch (opt)
         {

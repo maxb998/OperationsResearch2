@@ -14,12 +14,12 @@ BIN_DEBUG_DIR = bin/debug
 BIN_EXEC_DIR = bin/x64
 
 # files list
-OBJ_DEBUG_FILES = $(OBJ_DEBUG_DIR)/main.o $(OBJ_DEBUG_DIR)/TspFileUtils.o $(OBJ_DEBUG_DIR)/TspUtilities.o $(OBJ_DEBUG_DIR)/CostMatrix.o $(OBJ_DEBUG_DIR)/NearestNeighbor.o $(OBJ_DEBUG_DIR)/ExtraMileage.o $(OBJ_DEBUG_DIR)/2Opt.o $(OBJ_DEBUG_DIR)/VariableNeighborhood.o
-OBJ_EXEC_FILES = $(OBJ_EXEC_DIR)/main.o $(OBJ_EXEC_DIR)/TspFileUtils.o $(OBJ_EXEC_DIR)/TspUtilities.o $(OBJ_EXEC_DIR)/CostMatrix.o $(OBJ_EXEC_DIR)/NearestNeighbor.o $(OBJ_EXEC_DIR)/ExtraMileage.o $(OBJ_EXEC_DIR)/2Opt.o $(OBJ_EXEC_DIR)/VariableNeighborhood.o
+OBJ_DEBUG_FILES = $(OBJ_DEBUG_DIR)/main.o $(OBJ_DEBUG_DIR)/TspFileUtils.o $(OBJ_DEBUG_DIR)/TspUtilities.o $(OBJ_DEBUG_DIR)/CostMatrix.o $(OBJ_DEBUG_DIR)/NearestNeighbor.o $(OBJ_DEBUG_DIR)/ExtraMileage.o $(OBJ_DEBUG_DIR)/2Opt.o $(OBJ_DEBUG_DIR)/VariableNeighborhood.o $(OBJ_DEBUG_DIR)/ArgParser.o
+OBJ_EXEC_FILES = $(OBJ_EXEC_DIR)/main.o $(OBJ_EXEC_DIR)/TspFileUtils.o $(OBJ_EXEC_DIR)/TspUtilities.o $(OBJ_EXEC_DIR)/CostMatrix.o $(OBJ_EXEC_DIR)/NearestNeighbor.o $(OBJ_EXEC_DIR)/ExtraMileage.o $(OBJ_EXEC_DIR)/2Opt.o $(OBJ_EXEC_DIR)/VariableNeighborhood.o $(OBJ_EXEC_DIR)/ArgParser.o
 
 # list of header files
 GLOBAL_HEADERS = src/headers/TspBase.h src/headers/EdgeCostFunctions.h src/headers/TspUtilities.h
-SPECIFIC_HEADERS = src/headers/CostMatrix.h src/headers/NearestNeighbor.h src/headers/ExtraMileage.h src/headers/2Opt.h src/headers/VariableNeighborhood.h
+SPECIFIC_HEADERS = src/headers/CostMatrix.h src/headers/NearestNeighbor.h src/headers/ExtraMileage.h src/headers/2Opt.h src/headers/VariableNeighborhood.h src/headers/ArgParser.h
 
 # build options when debugging
 buildDebug: $(OBJ_DEBUG_FILES)
@@ -49,6 +49,9 @@ $(OBJ_DEBUG_DIR)/2Opt.o: src/2Opt.c src/headers/2Opt.h $(GLOBAL_HEADERS)
 $(OBJ_DEBUG_DIR)/VariableNeighborhood.o: src/VariableNeighborhood.c src/headers/VariableNeighborhood.h $(GLOBAL_HEADERS)
 	$(CC) $(CFLAGS_DEBUG) src/VariableNeighborhood.c -o $(OBJ_DEBUG_DIR)/VariableNeighborhood.o
 
+$(OBJ_DEBUG_DIR)/ArgParser.o: src/ArgParser.c src/headers/ArgParser.h $(GLOBAL_HEADERS)
+	$(CC) $(CFLAGS_DEBUG) src/ArgParser.c -o $(OBJ_DEBUG_DIR)/ArgParser.o
+
 # build options when testing performance
 buildExec: $(OBJ_EXEC_FILES)
 	$(CC) $(OBJ_EXEC_FILES) -o $(BIN_EXEC_DIR)/main $(LDFLAGS_EXEC)
@@ -76,6 +79,9 @@ $(OBJ_EXEC_DIR)/2Opt.o: src/2Opt.c src/headers/2Opt.h $(GLOBAL_HEADERS)
 
 $(OBJ_EXEC_DIR)/VariableNeighborhood.o: src/VariableNeighborhood.c src/headers/VariableNeighborhood.h $(GLOBAL_HEADERS)
 	$(CC) $(CFLAGS_EXEC) src/VariableNeighborhood.c -o $(OBJ_EXEC_DIR)/VariableNeighborhood.o
+
+$(OBJ_EXEC_DIR)/ArgParser.o: src/ArgParser.c src/headers/ArgParser.h $(GLOBAL_HEADERS)
+	$(CC) $(CFLAGS_EXEC) src/ArgParser.c -o $(OBJ_EXEC_DIR)/ArgParser.o
 
 
 build: buildDebug buildExec
