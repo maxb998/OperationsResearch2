@@ -6,7 +6,6 @@
 #include <limits.h>
 #include <string.h>
 #include <stdarg.h> // used for logger va_list
-#include <getopt.h> // args parsing by POSIX
 #include <math.h>
 
 #include <immintrin.h>
@@ -28,9 +27,28 @@ static inline int nProcessors();
 
 Instance newInstance ()
 {
-    Instance d = { .nNodes = 0, .X = NULL, .Y = NULL, .edgeCostMat = NULL, .params = { .edgeWeightType = 0, .randomSeed = -1, .roundWeightsFlag = 0, .nThreads = nProcessors() } };
-    memset(d.params.inputFile, 0, sizeof(d.params.inputFile));
-    memset(d.params.name, 0, sizeof(d.params.name));
+    Instance d = {
+        .nNodes = 0,
+        .X = NULL, .Y = NULL,
+        .edgeCostMat = NULL,
+        .params = {
+            .inputFile = { 0 },
+            .mode=MODE_NONE,
+            
+            .graspType=GRASP_NONE,
+            .use2OptFlag=0,
+            .tlim=-1,
+
+            .randomSeed = -1,
+            .nThreads = nProcessors(),
+            .roundWeightsFlag = 0,
+            .showPlotFlag=0,
+            .saveFlag=0,
+
+            .edgeWeightType = -1,
+            .name = { 0 }
+        }
+    };
 
     return d;
 }
@@ -126,62 +144,6 @@ void throwError (Instance *inst, Solution *sol, char * line, ...)
 
     exit(EXIT_FAILURE);
 }
-
-void parseArgs (Instance *inst, int argc, char *argv[])
-{
-    static int roundWeightsFlag = 0, gnuplotFlag = 1;
-    static struct option options[] = 
-        {
-            {"seed", required_argument, 0, 's'},
-            {"s", required_argument, 0, 's'},
-            {"file", required_argument, 0, 'f'},
-            {"f", required_argument, 0, 'f'},
-            {"threads", required_argument, 0, 't'},
-            {"t", required_argument, 0, 't'},
-            {"roundweigths", no_argument, &roundWeightsFlag, 1},
-            {"noplot", no_argument, &gnuplotFlag, 0},
-            {"output", required_argument, NULL, 'o'},
-            {"o", required_argument, NULL, 'o'},
-            {"", required_argument, NULL, 'o'},
-            {0, 0, 0, 0}
-        };
-    // set flags in d
-    inst->params.roundWeightsFlag = roundWeightsFlag;
-
-
-    int option_index = 0;
-    int opt;
-
-    while ((opt = getopt_long(argc, argv, "s:f:t:o:", options, &option_index)) != -1)
-    {
-        switch (opt)
-        {
-        case 's':
-            inst->params.randomSeed = (int)strtol(optarg, NULL, 10);
-            break;
-
-        case 'f':
-            if (access(optarg, R_OK) != 0)
-                throwError(inst, NULL, "ERROR: File \"%s\" not found\n", optarg);
-
-            strncpy(inst->params.inputFile, optarg, strlen(optarg)+1);
-            break;
-        
-        case 't':
-            inst->params.nThreads = strtoul(optarg, NULL, 10);
-            break;
-        
-        default:
-            abort();
-        }
-    }
-
-    LOG(LOG_LVL_NOTICE, "Received arguments:");
-    LOG(LOG_LVL_NOTICE,"    Random Seed  = %d", inst->params.randomSeed);
-    LOG(LOG_LVL_NOTICE,"    Filename     = %s", inst->params.inputFile);
-    LOG(LOG_LVL_NOTICE,"    Thread Count = %d", inst->params.nThreads);
-}
-
 
 static inline int nProcessors()
 {

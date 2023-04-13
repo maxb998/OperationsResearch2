@@ -40,7 +40,7 @@ int LOG (enum logLevel lvl, char * line, ...);
 void throwError (Instance *inst, Solution *sol, char * line, ...);
 
 // Parse commandline arguments stored in argv and save relevant information to d->params
-void parseArgs (Instance *inst, int argc, char *argv[]);
+//void parseArgs (Instance *inst, int argc, char *argv[]);
 
 /* Checks on sol.indexPath that:
 	1. First and last node in the path are the same (closed circuit)

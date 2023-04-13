@@ -30,16 +30,39 @@ enum edgeWeightType{
 	SPECIAL // special type of distance documented elsewhere
 };
 
+enum execMode{
+	MODE_NONE=-1,
+	MODE_NN,
+	MODE_EM,
+	MODE_VNS
+};
+
+enum graspOption{
+	GRASP_NONE=-1,
+	GRASP_ALMOSTBEST,
+	GRASP_RANDOM
+};
+
 // data structures
 typedef struct
 {
-    int edgeWeightType;
-    int randomSeed;			// if no value has been specified as argument GRASP won't be enabled
+	char inputFile[1000];
+	enum execMode mode;
+
+	enum graspOption graspType;
+	int use2OptFlag;
+	int tlim;
+
+    
+    int randomSeed;
+	int nThreads; // if no value has been specified as argument its default value is the number of processors in the machine
 	int roundWeightsFlag;
-    char inputFile[1000];
-	char name[200];
-    int nThreads;	// if no value has been specified as argument its default value is the number of processors in the machine
 	int showPlotFlag;
+	int saveFlag;
+
+	int edgeWeightType;
+	char name[200];
+	double graspChance;
 } Parameters;
 
 typedef struct

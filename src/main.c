@@ -3,6 +3,7 @@
 
 #include "CostMatrix.h"
 
+#include "ArgParser.h"
 #include "NearestNeighbor.h"
 #include "ExtraMileage.h"
 #include "2Opt.h"
@@ -10,7 +11,7 @@
 int main (int argc, char *argv[])
 {
     Instance inst = newInstance();
-    parseArgs(&inst, argc, argv);
+    argParse(&inst, argc, argv);
     readFile(&inst);
 
     LOG (LOG_LVL_LOG, "file %s has been loaded succesfully", inst.params.inputFile);
