@@ -12,7 +12,7 @@ enum costComputationType
 	SLOW_EXACT			// use standard square root function (basically accurate)
 };
 
-#define COMPUTATION_TYPE FAST_SQUARED
+#define COMPUTATION_TYPE SLOW_EXACT
 
 
 
@@ -24,7 +24,7 @@ static inline float euclideanCostSquared2D(float x1, float y1, float x2, float y
 
 static inline float euclideanCost2D(float x1, float y1, float x2, float y2)
 {
-    return sqrtf(euclideanCost2D(x1, y1, x2, y2));
+    return sqrtf(euclideanCostSquared2D(x1, y1, x2, y2));
 }
 
 static inline float manhattanCost2D(float x1, float y1, float x2, float y2)

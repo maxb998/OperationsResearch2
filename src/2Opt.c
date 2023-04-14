@@ -166,7 +166,7 @@ static inline void checkInput(Solution *sol, enum _2OptOptions *option)
     if (LOG_LEVEL >= LOG_LVL_DEBUG)
     {
         // always check solution
-        fullSolutionCheck(sol);
+        checkSolution(sol);
 
         if (*option == _2OPT_PRECOMPUTED_COSTS_MT)
         {

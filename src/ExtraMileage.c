@@ -1,6 +1,6 @@
 #include "ExtraMileage.h"
 #include "EdgeCostFunctions.h"
-#include "TspUtilities.h"
+//#include "TspUtilities.h"
 
 #include "pthread.h"
 #include <time.h>
@@ -18,6 +18,8 @@ static size_t initialization(Solution *sol, enum EMInitType emType);
 static void extremeCoordsPointsInit(Solution *sol);
 
 static void farthestPointsInit(Solution *sol);
+
+static int checkSolutionIntegrity(Solution *sol);
 
 static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos2);
 
@@ -323,6 +325,30 @@ static void farthestPointsInit(Solution *sol)
     // initialize solution
     swapElementsInSolution(sol, 0, maxIndex0);
     swapElementsInSolution(sol, 1, maxIndex1);
+}
+
+static int checkSolutionIntegrity(Solution *sol)
+{
+    Instance *inst = sol->instance;
+    size_t n = inst->nNodes;
+
+    for (size_t i = 0; i < n; i++)
+    {
+        int index = sol->indexPath[i];
+        if (index < 0 || index > n)
+        {
+            LOG(LOG_LVL_CRITICAL, "checkSolutionIntegrity: sol.indexPath[%lu] = %d which is not within the limits", i, index);
+            return 1;
+        }
+        if (sol->X[i] != inst->X[index] || sol->Y[i] != inst->Y[index])
+        {
+            LOG(LOG_LVL_CRITICAL, "checkSolutionIntegrity: Mismatch at index %lu in solution", i);
+            return 1;
+        }
+    }
+
+    // everything checks out
+    return 0;
 }
 
 static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos2)

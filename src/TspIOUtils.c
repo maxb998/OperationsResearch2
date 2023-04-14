@@ -1,5 +1,5 @@
-#include "TspFileUtils.h"
-#include "TspUtilities.h"
+//#include "TspBase.h"
+#include "TspIOUtils.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -352,4 +352,46 @@ void saveSolution(Solution *sol)
     // closing the tour file
     fclose(solutionFile);
     free(solID);
+}
+
+void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize, const int printIndex)
+{
+    // creating the pipeline for gnuplot
+    FILE *gnuplotPipe = popen("gnuplot -persistent", "w");
+
+    // gnuplot settings
+    fprintf(gnuplotPipe, "set title \"%s\"\n", sol->instance->params.name);
+    fprintf(gnuplotPipe, "set terminal qt size %s\n", plotPixelSize);
+
+    // set plot linestyles
+    fprintf(gnuplotPipe, "set style line 1 linecolor rgb '%s' pt 7 pointsize %d\n", pointColor, pointSize);
+    fprintf(gnuplotPipe, "set style line 2 linecolor rgb '%s' pointsize 0\n", tourPointColor);//, pointSize);
+
+
+    // assign number to points
+    if (printIndex)
+        for (size_t i = 0; i < sol->instance->nNodes; i++)
+            fprintf(gnuplotPipe, "set label \"%ld\" at %f,%f\n", i, sol->instance->X[i], sol->instance->Y[i]);
+
+    // populating the plot
+    
+    fprintf(gnuplotPipe, "plot '-' with point linestyle 1, '-' with linespoint linestyle 2\n");
+
+    // first plot only the points
+    for (size_t i = 0; i < sol->instance->nNodes; i++)
+        fprintf(gnuplotPipe, "%f %f\n", sol->instance->X[i], sol->instance->Y[i]);
+    fprintf(gnuplotPipe, "e\n");
+
+    // second print the tour
+    for (int i = 0; i <= sol->instance->nNodes; i++)
+    {
+        fprintf(gnuplotPipe, "%f %f\n", sol->X[i], sol->Y[i]);
+    }
+    fprintf(gnuplotPipe, "e\n");
+
+    // force write on stream
+    fflush(gnuplotPipe);
+
+    // close stream
+    pclose(gnuplotPipe);
 }
