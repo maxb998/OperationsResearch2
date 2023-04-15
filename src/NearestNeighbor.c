@@ -18,8 +18,9 @@ typedef struct
 static void * threadNN(void *thInst);
 
 // finds the closest unvisited node (pathCost is also updated in this method)
-static inline size_t findSuccessorID(float *X, float *Y, size_t iterNode, Instance *inst, double *pathCost, float minVecStore[8], int IDVecStore[8]);
+static inline size_t findSuccessorID(float *X, float *Y, size_t iterNode, Instance *inst, double *pathCost);
 
+static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos2);
 
 Solution NearestNeighbor(Instance *inst)
 {
@@ -68,10 +69,6 @@ static void * threadNN(void *thInst)
     // Allocate memory to contain the work-in-progress solution
     Solution tempSol = newSolution(inst);
 
-    // Allocate memory to store Vector register element (aligned for not apparent reason than it feels better)
-    float minVecStore[8];
-    int IDVecStore[8];
-
     // We want the threads to repeat the computation for every node
     // For this we use a mutex on startingNode until it reaches nNodes
     while((pthread_mutex_lock(&th->nodeLock) == 0) && (th->startingNode < inst->nNodes))
@@ -87,31 +84,20 @@ static void * threadNN(void *thInst)
         // copy all the nodes in the original order from instance into tempSol.X/Y (Take advantage of the way the memory is allocated for the best and current sol)
         for (size_t i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
             tempSol.X[i] = inst->X[i];
-        //memcpy(tempSol.X, inst->X, (inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float)); // this also copies Y
 
         // reset tempSol.indexPath to match the original
         for (int i = 0; i < (int)inst->nNodes + 1; i++)
             tempSol.indexPath[i] = i;
 
         // set first element of tempSol.X/Y to the element at index startingNode -> swap pos 0 with starting node
-        // swap coordinates
-        {
-            register float temp;
-            swapElems(tempSol.X[0], tempSol.X[iterNode], temp);
-            swapElems(tempSol.Y[0], tempSol.Y[iterNode], temp);
-        }
-        {
-            // swap index
-            register int temp;
-            swapElems(tempSol.indexPath[0], tempSol.indexPath[iterNode], temp);
-        }
+        swapElementsInSolution(&tempSol, 0, iterNode);
 
         // initialize the cost of the path to zero
         double pathCost = 0.;
 
         for(size_t i = 1; i < inst->nNodes - 1; i++)    // for n nodes we want to run this loop n-1 times, at the end we set as successor of the last node the starting node
         {
-            size_t successorID = findSuccessorID(tempSol.X, tempSol.Y, i, inst, &pathCost, minVecStore, IDVecStore);
+            size_t successorID = findSuccessorID(tempSol.X, tempSol.Y, i, inst, &pathCost);
 
             // Control on validity of successor: must be in [0,nNodes)
             if (successorID < 0 || successorID >= inst->nNodes)
@@ -168,8 +154,11 @@ static void * threadNN(void *thInst)
     pthread_exit(NULL);
 }
 
-static inline size_t findSuccessorID(float *X, float *Y, size_t iterNum, Instance *inst, double *pathCost, float minVecStore[8], int IDVecStore[8])
+static inline size_t findSuccessorID(float *X, float *Y, size_t iterNum, Instance *inst, double *pathCost)
 {
+    float minVecStore[AVX_VEC_SIZE];
+    int IDVecStore[AVX_VEC_SIZE];
+
     // to keep track of the first best distance
     __m256 min1Vec = _mm256_set1_ps(INFINITY);
     __m256i min1IDsVec = _mm256_set1_epi32(-1);
@@ -248,4 +237,14 @@ static inline size_t findSuccessorID(float *X, float *Y, size_t iterNum, Instanc
         *pathCost += minVecStore[minIDID];
         return (size_t)IDVecStore[minIDID];
     }
+}
+
+
+static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos2)
+{
+    register float tempf;
+    swapElems(sol->X[pos1], sol->X[pos2], tempf);
+    swapElems(sol->Y[pos1], sol->Y[pos2], tempf);
+    register int tempi;
+    swapElems(sol->indexPath[pos1], sol->indexPath[pos2], tempi);
 }

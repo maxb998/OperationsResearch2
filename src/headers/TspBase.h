@@ -6,7 +6,7 @@
 #define MAX_THREADS 32
 #define USE_APPROXIMATED_DISTANCES 1
 
-#define LOG_LEVEL LOG_LVL_EVERYTHING
+#define LOG_LEVEL LOG_LVL_LOG
 
 // size of avx vector. 4 is vector of doubles 64bits, 8 is vector of floats 32bits
 #define AVX_VEC_SIZE 8
@@ -97,13 +97,13 @@ typedef struct
 
 
 enum logLevel{
-	LOG_LVL_ERROR, // 0
-	LOG_LVL_CRITICAL, // 1
-	LOG_LVL_WARNING, // 2
-	LOG_LVL_NOTICE, // 3
-	LOG_LVL_LOG, // 4
-	LOG_LVL_DEBUG, // 5
-	LOG_LVL_EVERYTHING // 6
+	LOG_LVL_ERROR,
+	LOG_LVL_CRITICAL,
+	LOG_LVL_WARNING,
+	LOG_LVL_NOTICE,
+	LOG_LVL_LOG,
+	LOG_LVL_DEBUG,
+	LOG_LVL_EVERYTHING
 };
 
 // Swap elem1 and elem2. Can be done with any type of variable, however a temporary variable "tmp" of the same type of elem1 and elem2 MUST be provided.
