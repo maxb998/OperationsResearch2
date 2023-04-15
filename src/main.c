@@ -30,15 +30,15 @@ int main (int argc, char *argv[])
     double _2optTime = apply2OptBestFix(&nn, _2OPT_AVX_ST);
     LOG(LOG_LVL_LOG, "2-Opt finished optimizing Nearest Neighbor in %lf seconds. Solution cost is %lf", _2optTime, nn.bestCost);
 
-    Solution em = ExtraMileage(&inst, EM_OPTION_AVX, EM_INIT_RANDOM);
+    /*Solution em = ExtraMileage(&inst, EM_OPTION_AVX, EM_INIT_RANDOM);
     LOG(LOG_LVL_LOG, "Extra Mileage finished in %lf seconds. Solution cost is %lf", em.execTime, em.bestCost);
-    LOG(LOG_LVL_LOG, "Cost of Extra Mileage Solution is %lf", computeSolutionCostVectorizedFloat(&em));
+    LOG(LOG_LVL_LOG, "Cost of Extra Mileage Solution is %lf", computeSolutionCostVectorizedFloat(&em));*/
     
-    plotSolution(&nn, "1366,768", "green", "black", 1, 0);
-    plotSolution(&em, "1920,1080", "green", "black", 1, 0);
+    plotSolution(&nn, "3600,2000", "green", "black", 1, 0);
+    //plotSolution(&em, "1920,1080", "green", "black", 1, 0);
 
     destroySolution(&nn);
-    destroySolution(&em);
+    //destroySolution(&em);
     destroyInstance(&inst);
 
 
