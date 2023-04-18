@@ -19,17 +19,17 @@ static inline void invertVectorSizeElemsF(float *firstPtr, float *secondPtr);
 static inline void invertVectorSizeElemsD(int *firstPtr, int *secondPtr);
 
 
-// Basic approach that computes the costs every time, one at a time. Use this with _2OPT_BASE
+// Basic approach that computes the costs every time, one at a time
 static void _2optBestFixBase(Solution *sol);
 
-// Faster type of approach that computes costs every time using avx vectorization. Use this with _2OPT_AVX
-static void _2OptBestFixAVXMultiThread(Solution *sol);
-
-// Approach that requires to have the precomputed costs. Use this with _2OPT_PRECOMPUTED_COSTS
+// Approach that requires to have the precomputed costs
 static void _2optBestFixCostMatrix(Solution *sol);
 
 // Fastest approach since the mutli-threaded variant spends too much time in waiting other threads(probably wakeup from sleep costs more than one full iteration on one thread)
 static void _2OptBestFixAVX(Solution *sol);
+
+// Faster type of approach that computes costs every time using avx vectorization
+static void _2OptBestFixAVXMultiThread(Solution *sol);
 
 
 Solution _2OptBestFix(Solution *sol, enum _2OptOptions option)

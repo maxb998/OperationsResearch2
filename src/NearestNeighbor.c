@@ -15,12 +15,16 @@ typedef struct
     size_t startingNode;
 }ThreadsData;
 
-static void * threadNN(void *thInst);
+
+
+
+static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos2);
 
 // finds the closest unvisited node (pathCost is also updated in this method)
 static inline size_t findSuccessorID(float *X, float *Y, size_t iterNode, Instance *inst, double *pathCost);
 
-static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos2);
+static void * threadNN(void *thInst);
+
 
 Solution NearestNeighbor(Instance *inst)
 {
@@ -60,102 +64,25 @@ Solution NearestNeighbor(Instance *inst)
     return sol;
 }
 
-static void * threadNN(void *thInst)
+Solution NearestNeighborGrasp(Instance *inst, double timeLimit, enum NNThreadsOption option)
 {
-    ThreadsData *th = (ThreadsData *)thInst;
-    Solution *sol = th->sol;
-    Instance *inst = sol->instance;
 
-    // Allocate memory to contain the work-in-progress solution
-    Solution tempSol = newSolution(inst);
+}
 
-    // We want the threads to repeat the computation for every node
-    // For this we use a mutex on startingNode until it reaches nNodes
-    while((pthread_mutex_lock(&th->nodeLock) == 0) && (th->startingNode < inst->nNodes))
-    {
-        // name of the starting node for this iteration of NearestNeighbour
-        size_t iterNode = th->startingNode;
-
-        th->startingNode++;
-
-        // after incrementing the value of startingNode we can unlock the mutex
-        pthread_mutex_unlock(&th->nodeLock);
-
-        // copy all the nodes in the original order from instance into tempSol.X/Y (Take advantage of the way the memory is allocated for the best and current sol)
-        for (size_t i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
-            tempSol.X[i] = inst->X[i];
-
-        // reset tempSol.indexPath to match the original
-        for (int i = 0; i < (int)inst->nNodes + 1; i++)
-            tempSol.indexPath[i] = i;
-
-        // set first element of tempSol.X/Y to the element at index startingNode -> swap pos 0 with starting node
-        swapElementsInSolution(&tempSol, 0, iterNode);
-
-        // initialize the cost of the path to zero
-        double pathCost = 0.;
-
-        for(size_t i = 1; i < inst->nNodes - 1; i++)    // for n nodes we want to run this loop n-1 times, at the end we set as successor of the last node the starting node
-        {
-            size_t successorID = findSuccessorID(tempSol.X, tempSol.Y, i, inst, &pathCost);
-
-            // Control on validity of successor: must be in [0,nNodes)
-            if (successorID < 0 || successorID >= inst->nNodes)
-                throwError(NULL, sol, "threadNN: error computing successor %d, value returned: %d", i, successorID);
-
-            // set successor by swapping the element corresponding to succesorID with element i
-            if (successorID != i)
-            {
-                {   // swap coordinates
-                    register float temp;
-                    swapElems(tempSol.X[i], tempSol.X[successorID], temp);
-                    swapElems(tempSol.Y[i], tempSol.Y[successorID], temp);
-                }
-
-                { // swap index
-                    register int temp;
-                    swapElems(tempSol.indexPath[i], tempSol.indexPath[successorID], temp);
-                }
-            }
-        }
-        // at the end we set the starting node as successor of the last one to close the circuit
-        tempSol.X[inst->nNodes] = tempSol.X[0];
-        tempSol.Y[inst->nNodes] = tempSol.Y[0];
-        tempSol.indexPath[inst->nNodes] = tempSol.indexPath[0];
-
-        // add last and previous to last edge weights
-        pathCost += squaredEdgeCost(tempSol.X[inst->nNodes-2], tempSol.Y[inst->nNodes-2], tempSol.X[inst->nNodes-1], tempSol.Y[inst->nNodes-1], inst->params.edgeWeightType);
-        pathCost += squaredEdgeCost(tempSol.X[inst->nNodes-1], tempSol.Y[inst->nNodes-1], tempSol.X[inst->nNodes], tempSol.Y[inst->nNodes], inst->params.edgeWeightType);
-
-        // to check if we have to update the best solution we use another mutex
-        if((pthread_mutex_lock(&th->saveLock) == 0) && (sol->bestCost > pathCost))
-        {
-            sol->bestCost = pathCost;
-
-            { // swap pointers with a macro(swapPtr) to declutter code (macro is defined at the top)
-                register float *temp;
-                swapElems(sol->X, tempSol.X, temp);
-                swapElems(sol->Y, tempSol.Y, temp);
-            }
-            {
-                register int *temp;
-                swapElems(sol->indexPath, tempSol.indexPath, temp);
-            }
-
-            LOG(LOG_LVL_EVERYTHING, "Found better solution starting from node %ld, cost: %f", iterNode, pathCost);
-        }
-        pthread_mutex_unlock(&th->saveLock);
-    }
-
-    pthread_mutex_unlock(&th->nodeLock);
-
-    destroySolution(&tempSol);
-
-    pthread_exit(NULL);
+static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos2)
+{
+    register float tempf;
+    swapElems(sol->X[pos1], sol->X[pos2], tempf);
+    swapElems(sol->Y[pos1], sol->Y[pos2], tempf);
+    register int tempi;
+    swapElems(sol->indexPath[pos1], sol->indexPath[pos2], tempi);
 }
 
 static inline size_t findSuccessorID(float *X, float *Y, size_t iterNum, Instance *inst, double *pathCost)
 {
+    enum edgeWeightType ewt = inst->params.edgeWeightType;
+    int roundFlag = inst->params.roundWeightsFlag;
+
     float minVecStore[AVX_VEC_SIZE];
     int IDVecStore[AVX_VEC_SIZE];
 
@@ -182,7 +109,7 @@ static inline size_t findSuccessorID(float *X, float *Y, size_t iterNum, Instanc
     {
         // get distance first
         __m256 x2 = _mm256_loadu_ps(&X[i]), y2 = _mm256_loadu_ps(&Y[i]);
-        __m256 dist = squaredEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType);
+        __m256 dist = computeEdgeCost_VEC(x1, y1, x2, y2, ewt, roundFlag);
 
         // get first minimum
         __m256i mask = _mm256_castps_si256(_mm256_cmp_ps(dist, min1Vec, _CMP_LT_OQ)); // set for "non-signaling" -> if one element is NaN than set as false
@@ -239,12 +166,104 @@ static inline size_t findSuccessorID(float *X, float *Y, size_t iterNum, Instanc
     }
 }
 
-
-static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos2)
+static void * threadNN(void *thInst)
 {
-    register float tempf;
-    swapElems(sol->X[pos1], sol->X[pos2], tempf);
-    swapElems(sol->Y[pos1], sol->Y[pos2], tempf);
-    register int tempi;
-    swapElems(sol->indexPath[pos1], sol->indexPath[pos2], tempi);
+    ThreadsData *th = (ThreadsData *)thInst;
+    Solution *sol = th->sol;
+    Instance *inst = sol->instance;
+    enum edgeWeightType ewt = inst->params.edgeWeightType;
+    int roundFlag = inst->params.roundWeightsFlag;
+
+    // Allocate memory to contain the work-in-progress solution
+    Solution tempSol = newSolution(inst);
+
+    // We want the threads to repeat the computation for every node
+    // For this we use a mutex on startingNode until it reaches nNodes
+    while((pthread_mutex_lock(&th->nodeLock) == 0) && (th->startingNode < inst->nNodes))
+    {
+        // name of the starting node for this iteration of NearestNeighbour
+        size_t iterNode = th->startingNode;
+
+        th->startingNode++;
+
+        // after incrementing the value of startingNode we can unlock the mutex
+        pthread_mutex_unlock(&th->nodeLock);
+
+        // copy all the nodes in the original order from instance into tempSol.X/Y (Take advantage of the way the memory is allocated for the best and current sol)
+        for (size_t i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
+            tempSol.X[i] = inst->X[i];
+
+        // reset tempSol.indexPath to match the original
+        for (int i = 0; i < (int)inst->nNodes + 1; i++)
+            tempSol.indexPath[i] = i;
+
+        // set first element of tempSol.X/Y to the element at index startingNode -> swap pos 0 with starting node
+        swapElementsInSolution(&tempSol, 0, iterNode);
+
+        // initialize the cost of the path to zero
+        double pathCost = 0.;
+
+        for(size_t i = 1; i < inst->nNodes - 1; i++)    // for n nodes we want to run this loop n-1 times, at the end we set as successor of the last node the starting node
+        {
+            size_t successorID = findSuccessorID(tempSol.X, tempSol.Y, i, inst, &pathCost);
+
+            // Control on validity of successor: must be in [0,nNodes)
+            if (successorID < 0 || successorID >= inst->nNodes)
+                throwError(NULL, sol, "threadNN: error computing successor %d, value returned: %d", i, successorID);
+
+            // set successor by swapping the element corresponding to succesorID with element i
+            if (successorID != i)
+                swapElementsInSolution(&tempSol, i, successorID);
+        }
+        // at the end we set the starting node as successor of the last one to close the circuit
+        tempSol.X[inst->nNodes] = tempSol.X[0];
+        tempSol.Y[inst->nNodes] = tempSol.Y[0];
+        tempSol.indexPath[inst->nNodes] = tempSol.indexPath[0];
+
+        // add last and previous to last edge weights
+        pathCost += computeEdgeCost(tempSol.X[inst->nNodes-2], tempSol.Y[inst->nNodes-2], tempSol.X[inst->nNodes-1], tempSol.Y[inst->nNodes-1], ewt, roundFlag);
+        pathCost += computeEdgeCost(tempSol.X[inst->nNodes-1], tempSol.Y[inst->nNodes-1], tempSol.X[inst->nNodes], tempSol.Y[inst->nNodes], ewt, roundFlag);
+
+        // check bestCost first to avoid excessive amount of mutex calls
+        if (sol->bestCost > pathCost)
+        {
+            // to check if we have to update the best solution we use another mutex
+            pthread_mutex_lock(&th->saveLock);
+
+            // recheck for syncronization purposes
+            if (sol->bestCost > pathCost)
+            {
+                // check solution when debugging
+                if (LOG_LEVEL >= LOG_LVL_EVERYTHING)
+                {
+                    tempSol.bestCost = pathCost;
+                    checkSolution(&tempSol);
+                }
+
+                sol->bestCost = pathCost;
+
+                { // swap pointers with a macro(swapPtr) to declutter code (macro is defined at the top)
+                    register float *temp;
+                    swapElems(sol->X, tempSol.X, temp);
+                    swapElems(sol->Y, tempSol.Y, temp);
+                }
+                {
+                    register int *temp;
+                    swapElems(sol->indexPath, tempSol.indexPath, temp);
+                }
+
+                LOG(LOG_LVL_EVERYTHING, "Found better solution starting from node %ld, cost: %f", iterNode, pathCost);
+            }
+            pthread_mutex_unlock(&th->saveLock);
+        }
+    }
+
+    pthread_mutex_unlock(&th->nodeLock);
+
+    destroySolution(&tempSol);
+
+    pthread_exit(NULL);
 }
+
+
+

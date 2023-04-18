@@ -34,8 +34,18 @@
             "program": "${workspaceFolder}/bin/x64/main",
             "args": [
                 "--file", "data/rl5915.tsp",
+                "--mode", "nn",
+
+                "--grasp", "random(0.01)",
+                "--2opt",
+                "--tlim", "600",
+
                 "--seed", "2023",
-                "--threads", "4"],
+                "--threads", "4",
+                //"--round",
+                "--plot", 
+                "--save"
+            ],
             "cwd": "${workspaceFolder}"
         }
     ]

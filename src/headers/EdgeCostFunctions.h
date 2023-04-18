@@ -12,7 +12,7 @@ enum costComputationType
 	SLOW_EXACT			// use standard square root function (basically accurate)
 };
 
-#define COMPUTATION_TYPE MODERATE_APPROX
+#define COMPUTATION_TYPE SLOW_EXACT
 
 
 
