@@ -127,7 +127,7 @@ double computeSolutionCostVectorizedDouble(Solution *sol)
         x2 = _mm256_loadu_ps(&sol->X[i+1]);
         y2 = _mm256_loadu_ps(&sol->Y[i+1]);
 
-        if ((i < n - AVX_VEC_SIZE) && (n % AVX_VEC_SIZE != 0))
+        if ((i > n - AVX_VEC_SIZE) && (n % AVX_VEC_SIZE != 0))
         {
             int loadMask[AVX_VEC_SIZE] = { 0 };
             for (size_t j = 0; j < n % AVX_VEC_SIZE; j++)
