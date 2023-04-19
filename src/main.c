@@ -23,14 +23,14 @@ int main (int argc, char *argv[])
     
     LOG(LOG_LVL_LOG, "Distance Matrix done in %lf seconds", computeMatrixTime);
     
-    
+    inst.params.graspType = GRASP_ALMOSTBEST;
     Solution nn = NearestNeighbor(&inst);
     LOG(LOG_LVL_LOG, "Nearest Neighbor finished in %lf seconds. Solution cost is %lf", nn.execTime, nn.bestCost);
 
-    double _2optTime = apply2OptBestFix(&nn, _2OPT_AVX_ST);
+    /*double _2optTime = apply2OptBestFix(&nn, _2OPT_AVX_ST);
     LOG(LOG_LVL_LOG, "2-Opt finished optimizing Nearest Neighbor in %lf seconds. Solution cost is %lf", _2optTime, nn.bestCost);
 
-    /*Solution em = ExtraMileage(&inst, EM_OPTION_AVX, EM_INIT_RANDOM);
+    Solution em = ExtraMileage(&inst, EM_OPTION_AVX, EM_INIT_RANDOM);
     LOG(LOG_LVL_LOG, "Extra Mileage finished in %lf seconds. Solution cost is %lf", em.execTime, em.bestCost);
     LOG(LOG_LVL_LOG, "Cost of Extra Mileage Solution is %lf", computeSolutionCostVectorizedFloat(&em));*/
     

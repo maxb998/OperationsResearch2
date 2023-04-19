@@ -42,7 +42,7 @@
 
                 "--seed", "2023",
                 "--threads", "4",
-                //"--round",
+                "--round",
                 "--plot", 
                 "--save"
             ],
