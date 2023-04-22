@@ -20,7 +20,7 @@ static inline void _5Kick(Solution *sol);
 
 static inline void sort5int(int * array);
 
-Solution VariableNeighborhood(Instance *inst, enum vnsConfiguration config)
+Solution VariableNeighborhood(Instance *inst, enum VNSInitType config)
 {
     // time limit management
     double placeholderTime = 10000.0;
@@ -33,13 +33,13 @@ Solution VariableNeighborhood(Instance *inst, enum vnsConfiguration config)
     if(inst->params.randomSeed != -1) srand(inst->params.randomSeed);
     else throwError(inst, &sol, "VariableNeighborhood: random seed has not been passed as argument");
     
-    if((config != VNS_NN) && (config != VNS_EM)) throwError(inst, &sol, "VariableNeighborhood: incorrect argument for config");
+    if((config != VNS_INIT_NN) && (config != VNS_INIT_EM)) throwError(inst, &sol, "VariableNeighborhood: incorrect argument for config");
     else 
     {
-        if(config == VNS_NN) // Find local minimum with Nearest Neighbour
+        if(config == VNS_INIT_NN) // Find local minimum with Nearest Neighbour
         {
             // Compute a solution with Nearest Neighbour and optimize it with 2-opt
-            sol = NearestNeighbor(inst);
+            sol = NearestNeighbor(inst, inst->params.nnFirstNodeOption, inst->params.tlim/20, 1);
             apply2OptBestFix(&sol, _2OPT_AVX_ST);
             while(checkTime(start, placeholderTime) == 0)
             {
@@ -47,7 +47,7 @@ Solution VariableNeighborhood(Instance *inst, enum vnsConfiguration config)
                 apply2OptBestFix(&sol, _2OPT_AVX_ST);
             }
 
-        }else // (config == VNS_EM)
+        }else // (config == VNS_INIT_EM)
         {   /*
             // Compute a solution with Extra Mileage and optimize it with 2-opt
             sol = solveExtraMileage(inst);

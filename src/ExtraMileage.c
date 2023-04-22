@@ -34,7 +34,7 @@ static void extraMileageCostMatrixST(Solution *sol, size_t nCovered);
 Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emInitType)
 {
     Solution sol = newSolution(inst);
-    sol.bestCost = 0;
+    sol.cost = 0;
 
     // Set data for solution (copy coords from distance and create index path as 0,1,2,...,n-1)
     for (size_t i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
@@ -131,10 +131,9 @@ static size_t initialization(Solution *sol, enum EMInitType emInitType)
         swapElementsInSolution(sol, 1, rndIndex1);
 
         // update cost
-        sol->bestCost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType, inst->params.roundWeightsFlag) * 2.;
+        sol->cost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType, inst->params.roundWeightsFlag) * 2.;
 
-        if (LOG_LEVEL >= LOG_LVL_DEBUG)
-            LOG(LOG_LVL_DEBUG, "ExtraMileage-InitializationRandom: Randomly chosen edge is edge e = (%d, %d)", rndIndex0, rndIndex1);
+        LOG(LOG_LVL_DEBUG, "ExtraMileage-InitializationRandom: Randomly chosen edge is edge e = (%d, %d)", rndIndex0, rndIndex1);
 
         coveredElems = 2;
         break;
@@ -142,7 +141,7 @@ static size_t initialization(Solution *sol, enum EMInitType emInitType)
         extremeCoordsPointsInit(sol);
 
         // update cost
-        sol->bestCost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType, inst->params.roundWeightsFlag) * 2.;
+        sol->cost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType, inst->params.roundWeightsFlag) * 2.;
 
         coveredElems = 2;
         break;
@@ -150,7 +149,7 @@ static size_t initialization(Solution *sol, enum EMInitType emInitType)
         farthestPointsInit(sol);
 
         // update cost
-        sol->bestCost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType, inst->params.roundWeightsFlag) * 2.;
+        sol->cost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType, inst->params.roundWeightsFlag) * 2.;
 
         coveredElems = 2;
         break;
@@ -362,7 +361,7 @@ static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos
 static inline void updateSolutionEM(Solution *sol, size_t posCovered, size_t bestMileageIndex, size_t anchorIndex, float extraCost)
 {
     // update cost
-    sol->bestCost += extraCost;
+    sol->cost += extraCost;
 
     // save best value
     float bestX = sol->X[bestMileageIndex], bestY = sol->Y[bestMileageIndex];

@@ -6,6 +6,8 @@
 #include <limits.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
+#include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
 // keywords that we need to find inside .tsp file
 const char * keywords[] = {
@@ -56,8 +58,11 @@ static size_t getDimensionFromLine(char * line, int lineSize, Instance *inst);
 static size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *inst);
 
 
-void readFile (Instance *inst)
+double readFile (Instance *inst)
 {
+    struct timespec start, finish;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &start);
+
     FILE *f = fopen(inst->params.inputFile, "r");
 
     // check if was able to open file
@@ -235,6 +240,9 @@ void readFile (Instance *inst)
     // print the coordinates data with enough log level
     for (size_t i = 0; i < inst->nNodes; i++)
         LOG(LOG_LVL_EVERYTHING, "Node %4lu: [%.2e, %.2e]", i+1, inst->X[i], inst->Y[i]);
+
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &finish);
+    return ((finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0);
 }
 
 

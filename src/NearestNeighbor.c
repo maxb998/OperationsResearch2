@@ -10,12 +10,16 @@
 typedef struct
 {
     Solution *sol;
-    pthread_mutex_t nodeLock;
-    pthread_mutex_t saveLock;
+    
+    enum NNFirstNodeOptions startOption;
+
+    pthread_mutex_t getStartNodeMutex;
+    pthread_mutex_t saveSolutionMutex;
     size_t startingNode;
-}ThreadsData;
 
+    double tlim;
 
+}NNThreadsData;
 
 
 static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos2);
@@ -27,50 +31,46 @@ static void applyNearestNeighbor(Solution *sol, size_t startingNodeIndex);
 
 static void updateBestSolutionNN(Solution *bestSol, Solution *newBest);
 
-static void * nnTryAllThread(void *arg);
+
+static void *nnThread(void *arg);
 
 
-Solution NearestNeighbor(Instance *inst)
+Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, double timeLimit, int useThreads)
 {
+    Solution sol = newSolution(inst);
+
     struct timespec start, finish;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &start);
 
-    Solution sol = newSolution(inst);
+    size_t nThreads = inst->params.nThreads;
+    if (!useThreads)
+        nThreads = 1;
 
-    // we initialize the seed if it has been passed as argument
-    if(inst->params.randomSeed != -1) srand(inst->params.randomSeed);
+    NNThreadsData th = {.sol = &sol, .startingNode = 0, .tlim = timeLimit + (double)start.tv_sec + (double)start.tv_nsec / 1000000000.0};
 
-    // we create and initialize the threaded instance
-    ThreadsData th = {.sol = &sol, .startingNode = 0};
+    pthread_mutex_init(&th.getStartNodeMutex, NULL);
+    pthread_mutex_init(&th.saveSolutionMutex, NULL);
 
-    pthread_mutex_init(&th.nodeLock, NULL);
-    pthread_mutex_init(&th.saveLock, NULL);
-    
-    pthread_t threads[inst->params.nThreads];
-    for(int i = 0; i < inst->params.nThreads; i++)
+    pthread_t threads[nThreads];
+    for (int i = 0; i < nThreads; i++)
     {
-        pthread_create(&threads[i], NULL, nnTryAllThread, &th);
+        pthread_create(&threads[i], NULL, nnThread, (void*)&th);
         LOG(LOG_LVL_DEBUG, "Nearest Neighbour : Thread %d CREATED", i);
     }
 
-    for(int i = 0; i < inst->params.nThreads; i++)
+    for (int i = 0; i < inst->params.nThreads; i++)
     {
         pthread_join(threads[i], NULL);
         LOG(LOG_LVL_DEBUG, "Nearest Neighbour : Thread %d finished", i);
     }
 
-    pthread_mutex_destroy(&th.nodeLock);
-    pthread_mutex_destroy(&th.saveLock);
+    pthread_mutex_destroy(&th.getStartNodeMutex);
+    pthread_mutex_destroy(&th.saveSolutionMutex);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &finish);
     sol.execTime = ((finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0);
 
     return sol;
-}
-
-Solution NearestNeighborGrasp(Instance *inst, double timeLimit, enum NNThreadsOption option)
-{
-
 }
 
 static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos2)
@@ -186,11 +186,11 @@ static void applyNearestNeighbor(Solution *sol, size_t startingNodeIndex)
     swapElementsInSolution(sol, 0, startingNodeIndex);
 
     // reset cost
-    sol->bestCost = 0.F;
+    sol->cost = 0.F;
 
     for (size_t i = 1; i < n-1; i++)
     {
-        size_t successorIndex = findSuccessorID(sol, i, &sol->bestCost);
+        size_t successorIndex = findSuccessorID(sol, i, &sol->cost);
 
         if (successorIndex >= n)
             throwError(inst, sol, "applyNearestNeighbor: Value of successor isn't applicable: %lu (startNode=%lu)", successorIndex, startingNodeIndex);
@@ -200,13 +200,13 @@ static void applyNearestNeighbor(Solution *sol, size_t startingNodeIndex)
     }
 
     // add cost of the second to last edge
-    sol->bestCost += computeEdgeCost(sol->X[n-2], sol->Y[n-2], sol->X[n-1], sol->Y[n-1], ewt, roundFlag);
+    sol->cost += computeEdgeCost(sol->X[n-2], sol->Y[n-2], sol->X[n-1], sol->Y[n-1], ewt, roundFlag);
 
     // add last edge (close the tour)
     sol->X[n] = sol->X[0];
     sol->Y[n] = sol->Y[0];
     sol->indexPath[n] = sol->indexPath[0];
-    sol->bestCost += computeEdgeCost(sol->X[n-1], sol->Y[n-1], sol->X[n], sol->Y[n], ewt, roundFlag);
+    sol->cost += computeEdgeCost(sol->X[n-1], sol->Y[n-1], sol->X[n], sol->Y[n], ewt, roundFlag);
 }
 
 static void updateBestSolutionNN(Solution *bestSol, Solution *newBest)
@@ -215,7 +215,7 @@ static void updateBestSolutionNN(Solution *bestSol, Solution *newBest)
     if (LOG_LEVEL >= LOG_LVL_EVERYTHING)
         checkSolution(newBest);
 
-    bestSol->bestCost = newBest->bestCost;
+    bestSol->cost = newBest->cost;
 
     { // swap pointers with macro
         register float *temp;
@@ -227,26 +227,47 @@ static void updateBestSolutionNN(Solution *bestSol, Solution *newBest)
         swapElems(bestSol->indexPath, newBest->indexPath, temp);
     }
 
-    LOG(LOG_LVL_EVERYTHING, "Found better solution starting from node %d, cost: %f", bestSol->indexPath[0], bestSol->bestCost);
+    LOG(LOG_LVL_EVERYTHING, "Found better solution starting from node %d, cost: %f", bestSol->indexPath[0], bestSol->cost);
 }
 
-static void * nnTryAllThread(void *arg)
+
+
+
+static void *nnThread(void *arg)
 {
-    ThreadsData *th = (ThreadsData *)arg;
+    NNThreadsData *th = (NNThreadsData *)arg;
     Solution *sol = th->sol;
     Instance *inst = sol->instance;
 
     // Allocate memory to contain the work-in-progress solution
     Solution tempSol = newSolution(inst);
 
-    // We want the threads to repeat the computation for every node
-    // For this we use a mutex on startingNode until it reaches nNodes
-    while((pthread_mutex_lock(&th->nodeLock) == 0) && (th->startingNode < inst->nNodes))
-    {
-        size_t iterNode = th->startingNode;
-        th->startingNode++;
+    double t;
+    struct timespec currT;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
+    t = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
 
-        pthread_mutex_unlock(&th->nodeLock);
+    // check startingNode even before locking the mutex to avoid useless mutex calls
+    while((th->startingNode < inst->nNodes) && (t < th->tlim))
+    {
+        size_t iterNode;
+        if (th->startOption == NN_FIRST_TRYALL)
+        {
+            pthread_mutex_lock(&th->getStartNodeMutex);
+
+            if (th->startingNode >= inst->nNodes)
+            {
+                pthread_mutex_unlock(&th->getStartNodeMutex);
+                break;
+            }
+
+            iterNode = th->startingNode;
+            th->startingNode++;
+
+            pthread_mutex_unlock(&th->getStartNodeMutex);
+        }
+        else
+            iterNode = (size_t)rand() % inst->nNodes;
 
         // copy all the nodes in the original order from instance into tempSol.X/Y (Take advantage of the way the memory is allocated for the best and current sol)
         for (size_t i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
@@ -257,26 +278,26 @@ static void * nnTryAllThread(void *arg)
         
         applyNearestNeighbor(&tempSol, iterNode);
 
-        // check bestCost first to avoid excessive amount of mutex calls
-        if (sol->bestCost > tempSol.bestCost)
+        // check cost first to avoid excessive amount of mutex calls
+        if (sol->cost > tempSol.cost)
         {
-            pthread_mutex_lock(&th->saveLock);
+            pthread_mutex_lock(&th->saveSolutionMutex);
 
             // recheck while having lock on mutex (for syncronization purposes)
-            if (sol->bestCost > tempSol.bestCost)
+            if (sol->cost > tempSol.cost)
                 updateBestSolutionNN(th->sol, &tempSol);
             
-            pthread_mutex_unlock(&th->saveLock);
+            pthread_mutex_unlock(&th->saveSolutionMutex);
         }
+
+        struct timespec currT;
+        clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
+        t = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
     }
-    
-    // mutex is locked in while condition
-    pthread_mutex_unlock(&th->nodeLock);
 
     destroySolution(&tempSol);
 
     pthread_exit(NULL);
 }
-
 
 

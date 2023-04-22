@@ -3,6 +3,6 @@
 
 #include "TspBase.h"
 
-double VariableNeighborhood(Instance *inst, int configuration);
+Solution VariableNeighborhood(Instance *inst, enum VNSInitType config);
 
 #endif // VARIABLE_NEIGHBORHOOD

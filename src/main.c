@@ -8,39 +8,113 @@
 #include "ExtraMileage.h"
 #include "2Opt.h"
 
+#include <stdio.h>
+
+
+static Solution runNearestNeighbor(Instance *inst);
+static Solution runExtraMileage(Instance *inst);
+static Solution runVariableNeighborhoodSearch(Instance *inst);
+
+static void run2Opt(Solution *sol);
+
 int main (int argc, char *argv[])
 {
     Instance inst = newInstance();
     argParse(&inst, argc, argv);
-    readFile(&inst);
 
-    LOG (LOG_LVL_LOG, "file %s has been loaded succesfully", inst.params.inputFile);
+    printInfo(&inst);
 
-    double computeMatrixTime = computeCostMatrix(&inst);
-
-
+    double fileReadTime = readFile(&inst);
+    LOG (LOG_LVL_NOTICE, "file %s has been loaded succesfully in %lf milliseconds", inst.params.inputFile, fileReadTime * 1000.);
     
+    //double computeMatrixTime = computeCostMatrix(&inst);
+    //LOG(LOG_LVL_NOTICE, "Distance Matrix done in %lf seconds", computeMatrixTime);
     
-    LOG(LOG_LVL_LOG, "Distance Matrix done in %lf seconds", computeMatrixTime);
+    // initializing pointers to null to avoid possible errors on destruction of sol at the end of main
+    Solution sol = { .indexPath = NULL, .X = NULL, .Y = NULL };
+
+    switch (inst.params.mode)
+    {
+    case MODE_NONE:
+        // should never enter here
+        throwError(&inst, NULL, "mode is not set even after checking in argParse");
+        break;
+
+    case MODE_NN:
+        sol = runNearestNeighbor(&inst);
+        if (inst.params.use2OptFlag)
+            run2Opt(&sol);
+        break;
+
+    case MODE_EM:
+        sol = runExtraMileage(&inst);
+        if (inst.params.use2OptFlag)
+            run2Opt(&sol);
+        break;
+
+    case MODE_VNS:
+        sol = runVariableNeighborhoodSearch(&inst);
+        break;
+
+    case MODE_BLENDERS:
+        break;
+    }
+
+
+    if (inst.params.showPlotFlag)
+        plotSolution(&sol, "1600,900", "green", "black", 1, 0);
     
-    inst.params.graspType = GRASP_ALMOSTBEST;
-    Solution nn = NearestNeighbor(&inst);
-    LOG(LOG_LVL_LOG, "Nearest Neighbor finished in %lf seconds. Solution cost is %lf", nn.execTime, nn.bestCost);
+    /*
+    if (inst.params.saveFlag)
+        saveSolution();
+    */
 
-    /*double _2optTime = apply2OptBestFix(&nn, _2OPT_AVX_ST);
-    LOG(LOG_LVL_LOG, "2-Opt finished optimizing Nearest Neighbor in %lf seconds. Solution cost is %lf", _2optTime, nn.bestCost);
-
-    Solution em = ExtraMileage(&inst, EM_OPTION_AVX, EM_INIT_RANDOM);
-    LOG(LOG_LVL_LOG, "Extra Mileage finished in %lf seconds. Solution cost is %lf", em.execTime, em.bestCost);
-    LOG(LOG_LVL_LOG, "Cost of Extra Mileage Solution is %lf", computeSolutionCostVectorizedFloat(&em));*/
-    
-    plotSolution(&nn, "3600,2000", "green", "black", 1, 0);
-    //plotSolution(&em, "1920,1080", "green", "black", 1, 0);
-
-    destroySolution(&nn);
-    //destroySolution(&em);
+    destroySolution(&sol);
     destroyInstance(&inst);
 
+    printf("\n");
 
     return EXIT_SUCCESS;
+}
+
+
+static Solution runNearestNeighbor(Instance *inst)
+{
+    printf("\nNearest Neighbor starting...\n");
+
+    Solution nn = NearestNeighbor(inst, inst->params.nnFirstNodeOption, inst->params.tlim, 1);
+
+    printf("Nearest Neighbot finished in %lf second\n", nn.execTime);
+    printf("Cost = %lf\n", nn.cost);
+
+    return nn;
+}
+
+static Solution runExtraMileage(Instance *inst)
+{
+    printf("\nExtra Mileage starting...\n");
+
+    Solution em = ExtraMileage(inst, 0, inst->params.emInitOption);
+
+    printf("Extra Mileage finished in %lf seconds\n", em.execTime);
+    printf("Cost = %lf\n", em.cost);
+
+    return em;
+}
+
+static Solution runVariableNeighborhoodSearch(Instance *inst)
+{
+    Solution sol = { 0 };
+    return sol;
+}
+
+static void run2Opt(Solution *sol)
+{
+    printf("\n2Opt starting...\n");
+
+    double optTime = apply2OptBestFix(sol, _2OPT_AVX_ST);
+    sol->execTime += optTime;
+
+    printf("2Opt finished in %lf seconds\n", optTime);
+    printf("Cost = %lf\n", sol->cost);
 }

@@ -33,6 +33,9 @@ Instance newInstance ()
             .use2OptFlag=0,
             .tlim=-1,
 
+            .nnFirstNodeOption = NN_FIRST_RANDOM,
+            .emInitOption = EM_INIT_RANDOM,
+
             .randomSeed = -1,
             .nThreads = nProcessors(),
             .roundWeightsFlag = 0,
@@ -40,7 +43,8 @@ Instance newInstance ()
             .saveFlag=0,
 
             .edgeWeightType = -1,
-            .name = { 0 }
+            .name = { 0 },
+            .graspChance = 0.1
         }
     };
 
@@ -61,7 +65,7 @@ static inline int nProcessors()
 
 Solution newSolution (Instance *inst)
 {
-    Solution s = { .bestCost = INFINITY, .execTime = 0., .instance = inst };
+    Solution s = { .cost = INFINITY, .execTime = 0., .instance = inst };
 
     // allocate memory (consider locality). Alse leave place at the end to repeat the first element of the solution(some algoritms benefits from it)
     s.X = malloc((inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float) + (inst->nNodes + 1) * sizeof(int));
@@ -95,7 +99,7 @@ void destroySolution (Solution *sol)
 Solution cloneSolution(Solution *sol)
 {
     Solution s = newSolution(sol->instance);
-    s.bestCost = sol->bestCost;
+    s.cost = sol->cost;
 
     for (size_t i = 0; i < (s.instance->nNodes + AVX_VEC_SIZE * 2); i++)
         s.X[i] = sol->X[i];

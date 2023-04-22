@@ -60,8 +60,8 @@ static void checkCost(Solution *sol)
 {
     double recomputedCost = computeSolutionCostVectorizedDouble(sol);
 
-    if (recomputedCost != sol->bestCost)
-        throwError(sol->instance, sol, "CheckCost: Error in the computation of the pathCost. Recomputed Cost: %lf Cost in Solution: %lf", recomputedCost, sol->bestCost);
+    if (recomputedCost != sol->cost)
+        throwError(sol->instance, sol, "CheckCost: Error in the computation of the pathCost. Recomputed Cost: %lf Cost in Solution: %lf", recomputedCost, sol->cost);
     
     LOG(LOG_LVL_EVERYTHING, "CheckCost: Cost of solution is correct");
 }

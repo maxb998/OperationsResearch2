@@ -111,7 +111,7 @@ static inline void checkInput(Solution *sol, enum _2OptOptions *option)
 static inline void updateSolutionNN(Solution *sol, size_t bestOffsetEdges[2], float bestOffset)
 {
     // update cost
-    sol->bestCost += (double)bestOffset;
+    sol->cost += (double)bestOffset;
 
     /*
      *      bestSolIDs = { 0 1 2 3 4 5 6 7 8 9 }

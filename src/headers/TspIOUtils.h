@@ -3,8 +3,9 @@
 
 #include "TspBase.h"
 
-// Read file with .tsp extension according to tsplib specifications, complete with file sintax error checking
-void readFile (Instance *inst);
+// Read file with .tsp extension according to tsplib specifications, complete with file sintax error checking.
+// Returns time elapsed while reading file
+double readFile (Instance *inst);
 
 void saveSolution(Solution *sol);
 

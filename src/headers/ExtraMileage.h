@@ -9,13 +9,6 @@ enum EMOptions {
     EM_OPTION_USE_COST_MATRIX
 };
 
-enum EMInitType {
-    EM_INIT_RANDOM,
-    EM_INIT_EXTREMES,
-    EM_INIT_FARTHEST_POINTS,
-    EM_INIT_HULL // won't be working for now
-};
-
 Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emInitType);
 
 /* 
