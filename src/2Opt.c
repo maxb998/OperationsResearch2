@@ -90,7 +90,7 @@ static inline void checkInput(Solution *sol, enum _2OptOptions *option)
     }
 
     // check integrity if debugging
-    if (LOG_LEVEL >= LOG_LVL_DEBUG)
+    if (inst->params.logLevel >= LOG_LVL_DEBUG)
     {
         // always check solution
         checkSolution(sol);

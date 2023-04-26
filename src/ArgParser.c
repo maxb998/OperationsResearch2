@@ -14,7 +14,7 @@ Specify the type of solver to use: \n\
 "
 
 # define MODES_COUNT 3
-const char *modeStrings[] = {
+static const char *modeStrings[] = {
     "nn",
     "em",
     "vns",
@@ -29,7 +29,7 @@ Specify to Grasp mode (DEFAULT=random(0.1))\
     random(<GRASP_CHANCE>)     : Same as \"random\" but the probability of the random choice is specified with <GRASP_CHANCE>\n\
 "
 
-const char *graspStrings[] = {
+static const char *graspStrings[] = {
     "almostbest",
     "random"
 };
@@ -40,7 +40,7 @@ Specify the way the first node is selected when using Nearest Neighbor anywhere 
     tryall              : Try starting from each node(if time limit allows)\n\
 "
 
-const char *nnOptionsStrings[] = {
+static const char *nnOptionsStrings[] = {
     "random",
     "tryall"
 };
@@ -53,7 +53,7 @@ Specify the way Extra Mileage heuristic is initialized every time it's called (D
 "
 //hull                : Compute the hull of the set using quickhull algorthim and use it as initialization.
 
-const char *emOptionsStrings[] = {
+static const char *emOptionsStrings[] = {
     "random",
     "extremes",
     "farthest"
@@ -66,9 +66,30 @@ Specify the heuristic that vns shall use at the start when finding the base solu
     em                  : Use Extra Mileage\n\
 "
 
-const char *vnsOptionsStrings[] = {
+static const char *vnsOptionsStrings[] = {
     "nn",
     "em"
+};
+
+#define LOG_LEVEL_DOC "\
+Specify the log level (or verbosity level) of for the run. (DEFAULT=log\n\
+    error   : Show only error messages\n\
+    critical: Show critical messages and all above\n\
+    warning : Show warning and all above\n\
+    notice  : Show notice messages and all above\n\
+    log     : Show log messages and all above\n\
+    debug   : Show debug messages and all above\n\
+    all     : Show all messages\n\
+"
+
+static const char *logLevelStrings[] = {
+    "error",
+    "critical",
+    "warning",
+    "notice",
+    "log",
+    "debug",
+    "all"
 };
 
 
@@ -88,7 +109,8 @@ enum argpKeys{
     ARGP_NTHREADS='j',
     ARGP_ROUND='r',
     ARGP_PLOT='p',
-    ARGP_SAVE='s'
+    ARGP_SAVE='s',
+    ARGP_LOG_LEVEL='l'
 };
 
 error_t argpParser(int key, char *arg, struct argp_state *state);
@@ -109,6 +131,8 @@ static int parseSeed(char *arg, Instance *inst);
 
 static int parseNThreads(char *arg, Instance *inst);
 
+static int parseLogLevel(char *arg, Instance *inst);
+
 static int checkEssentials(Instance *inst);
 
 
@@ -127,10 +151,11 @@ void argParse(Instance * inst, int argc, char *argv[])
         { .name="vnsOption", .key=ARGP_VNS_MODE, .arg="STRING", .flags=0, .doc=ARGP_VNS_DOC, .group=3 },
 
         { .name="seed", .key=ARGP_SEED, .arg="UINT", .flags=0, .doc="Random Seed [0,MAX_INT32] to use as random seed for the current run. If -1 seed will be random\n", .group=4 },
-        { .name="threads", .key=ARGP_NTHREADS, .arg="INT<32", .flags=0, .doc="Maximum number of threads to use. If not specified gets maximum automatically\n", .group=4 },
+        { .name="threads", .key=ARGP_NTHREADS, .arg="INT32", .flags=0, .doc="Maximum number of threads to use. If not specified gets maximum automatically\n", .group=4 },
         { .name="roundcosts", .key=ARGP_ROUND, .arg=NULL, .flags=0, .doc="Specify this if yout want to use rounded version of edge cost\n", .group=4 },
         { .name="plot", .key=ARGP_PLOT, .arg=NULL, .flags=0, .doc="Specify this if yout want to plot final result\n", .group=4 },
         { .name="save", .key=ARGP_SAVE, .arg=NULL, .flags=0, .doc="Specify this if yout want to save final result in run/\n", .group=4 },
+        { .name="loglvl", .key=ARGP_LOG_LEVEL, .arg="STRING", .flags=0, .doc=LOG_LEVEL_DOC, .group=4 },
         { 0 }
     };
 
@@ -196,6 +221,9 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
     case ARGP_SAVE:
         inst->params.saveFlag = 1;
         break;
+    
+    case ARGP_LOG_LEVEL:
+        return parseLogLevel(arg, inst);
     
     case ARGP_KEY_END:
         // check if necessary flags have been provided
@@ -310,7 +338,10 @@ static int parseNNOption(char *arg, Instance *inst)
     else if (strcmp(arg, nnOptionsStrings[NN_FIRST_TRYALL]) == 0)
         inst->params.nnFirstNodeOption = NN_FIRST_TRYALL;
     else
+    {
+        LOG(LOG_LVL_ERROR, "nnOption: argument not recognized");
         return ARGP_ERR_UNKNOWN;
+    }
     
     return 0;
 }
@@ -324,7 +355,10 @@ static int parseEMOption(char *arg, Instance *inst)
     else if (strcmp(arg, emOptionsStrings[EM_INIT_FARTHEST_POINTS]) == 0)
         inst->params.emInitOption = EM_INIT_FARTHEST_POINTS;
     else
+    {
+        LOG(LOG_LVL_ERROR, "emOption: argument not recognized");
         return ARGP_ERR_UNKNOWN;
+    }
     
     return 0;
 }
@@ -336,8 +370,10 @@ static int parseVNSOption(char *arg, Instance *inst)
     else if (strcmp(arg, vnsOptionsStrings[VNS_INIT_EM]) == 0)
         inst->params.vnsInitOption = VNS_INIT_EM;
     else
+    {
+        LOG(LOG_LVL_ERROR, "vnsOption: argument not recognized");
         return ARGP_ERR_UNKNOWN;
-
+    }
     return 0;
 }
 
@@ -370,6 +406,33 @@ static int parseNThreads(char *arg, Instance *inst)
         LOG(LOG_LVL_WARNING, "There are extra character after the thread value");
 
     inst->params.nThreads = (int)cvt;
+    return 0;
+}
+
+static int parseLogLevel(char *arg, Instance *inst)
+{
+    if (strcmp(arg, logLevelStrings[LOG_LVL_ERROR]) == 0)
+        inst->params.logLevel = LOG_LVL_ERROR;
+    else if (strcmp(arg, logLevelStrings[LOG_LVL_CRITICAL]) == 0)
+        inst->params.logLevel = LOG_LVL_CRITICAL;
+    else if (strcmp(arg, logLevelStrings[LOG_LVL_WARNING]) == 0)
+        inst->params.logLevel = LOG_LVL_WARNING;
+    else if (strcmp(arg, logLevelStrings[LOG_LVL_NOTICE]) == 0)
+        inst->params.logLevel = LOG_LVL_NOTICE;
+    else if (strcmp(arg, logLevelStrings[LOG_LVL_LOG]) == 0)
+        inst->params.logLevel = LOG_LVL_LOG;
+    else if (strcmp(arg, logLevelStrings[LOG_LVL_DEBUG]) == 0)
+        inst->params.logLevel = LOG_LVL_DEBUG;
+    else if (strcmp(arg, logLevelStrings[LOG_LVL_EVERYTHING]) == 0)
+        inst->params.logLevel = LOG_LVL_EVERYTHING;
+    else
+    {
+        LOG(LOG_LVL_ERROR, "loglvl: argument not recognized");
+        return ARGP_ERR_UNKNOWN;
+    }
+
+    setLogLevel(inst->params.logLevel);
+
     return 0;
 }
 
@@ -448,6 +511,8 @@ void printInfo(Instance *inst)
     // save
     if (inst->params.saveFlag)
         printf("%sFinal solution of this run will be saved in a .tour file inside OperationsResearch2/runs\n", blank);
+    // log level
+    printf("%sLog level = %s", blank, logLevelStrings[inst->params.logLevel]);
 
     printf("\n");
 }

@@ -22,8 +22,6 @@ enum logLevel{
 	LOG_LVL_EVERYTHING
 };
 
-#define LOG_LEVEL LOG_LVL_DEBUG
-
 enum edgeWeightType{
 	EUC_2D, // euclidean distance 2d
 	MAN_2D, // manhattan distance 2d
@@ -90,6 +88,7 @@ typedef struct
 	int roundWeightsFlag;
 	int showPlotFlag;
 	int saveFlag;
+	enum logLevel logLevel;
 
 	int edgeWeightType;
 	char name[200];
@@ -142,6 +141,9 @@ void destroySolution (Solution *sol);
 
 // Creates a copy of the solution passed. Coordinates and other parts that rely on malloc are completely copied element by element
 Solution cloneSolution(Solution *sol);
+
+// Set the log level for the LOG function. Must be called to set a log level that is different than LOG_LVL_LOG
+void setLogLevel(enum logLevel lvl);
 
 /*Function used to log informations with level.
 * lvl -> logLevel: Desired level of logging priority. If this value is greater than global value than LOG does not print anything

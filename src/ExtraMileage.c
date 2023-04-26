@@ -74,7 +74,7 @@ double applyExtraMileage(Solution *sol, size_t nCovered, enum EMOptions emOpt)
     if (sol->indexPath[0] != sol->indexPath[nCovered])
     {
         // check solution integrity when debugging
-        if (LOG_LEVEL >= LOG_LVL_DEBUG || !(sol->X[n] == INFINITY && sol->Y[n] == INFINITY) || !(sol->X[n] == sol->X[0] && sol->Y[n] == sol->Y[0]))
+        if (inst->params.logLevel >= LOG_LVL_DEBUG || !(sol->X[n] == INFINITY && sol->Y[n] == INFINITY) || !(sol->X[n] == sol->X[0] && sol->Y[n] == sol->Y[0]))
             if (checkSolutionIntegrity(sol) != 0)
                 throwError(inst, sol, "applyExtraMileage: Error when checking input solution");
 

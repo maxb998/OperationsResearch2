@@ -41,6 +41,7 @@ Instance newInstance ()
             .roundWeightsFlag = 0,
             .showPlotFlag=0,
             .saveFlag=0,
+            .logLevel=LOG_LVL_LOG,
 
             .edgeWeightType = -1,
             .name = { 0 },
@@ -110,6 +111,11 @@ Solution cloneSolution(Solution *sol)
     return s;
 }
 
+static enum logLevel LOG_LEVEL = LOG_LVL_LOG;
+void setLogLevel(enum logLevel lvl)
+{
+    LOG_LEVEL = lvl;
+}
 
 int LOG (enum logLevel lvl, char * line, ...)
 {

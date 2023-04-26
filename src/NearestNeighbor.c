@@ -212,7 +212,7 @@ static void applyNearestNeighbor(Solution *sol, size_t startingNodeIndex)
 static void updateBestSolutionNN(Solution *bestSol, Solution *newBest)
 {
     // check solution when debugging
-    if (LOG_LEVEL >= LOG_LVL_EVERYTHING)
+    if (bestSol->instance->params.logLevel >= LOG_LVL_EVERYTHING)
         checkSolution(newBest);
 
     bestSol->cost = newBest->cost;
