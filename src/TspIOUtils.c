@@ -334,32 +334,54 @@ static size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *ins
     return foundEdgeWeightTypeID;
 }
 
-void saveSolution(Solution *sol)
-{  
-    // create file for the solution
-    char fileName[50] = "run/";
+void saveSolution(Solution *sol, int argc, char *argv[])
+{
+    // define file name
+    time_t t = time(NULL);
+    struct tm tm = *localtime(&t);
+    char datetime[40] = { 0 }; // 21 should be enough but gives warning in compilation and I don't like warnings
+    sprintf(datetime, "_%d-%02d-%02d_%02d:%02d:%02d", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+    
+    char fileName[300] = { 0 };
+    strcat(fileName, "run/");
     strcat(fileName, sol->instance->params.name);
-    strcat(fileName, ".opt.tour");
+    strcat(fileName, datetime);
+    strcat(fileName, ".tour");
+
     FILE *solutionFile = fopen(fileName, "w");
 
     // inserting headers of the file
-    fprintf(solutionFile, "NAME : %s\n", fileName);
+    fprintf(solutionFile, "NAME : %s.tour\n", sol->instance->params.name);
+
+    // add description of the parameters used for this run
+    char comment[1000] = { 0 };
+    for (size_t i = 1; i < argc-1; i++)
+    {
+        if ((i + 1 < argc) && (argv[i + 1][0] != '-'))
+        {
+            strcat(comment, argv[i]);
+            strcat(comment, "=");
+            i++;
+            strcat(comment, argv[i]);
+        }
+        else
+            strcat(comment, argv[i]);
+        
+        strcat(comment, " ");
+    }
+    fprintf(solutionFile, "COMMENT : %s\n", comment);
+
     fprintf(solutionFile, "TYPE : TOUR\n");
     fprintf(solutionFile, "DIMENSION : %ld\n", sol->instance->nNodes);
     fprintf(solutionFile, "TOUR_SECTION\n");
 
-    int *solID = sol->indexPath;
-
     // populating the file with the solution
     for (int i = 0; i < sol->instance->nNodes; i++)
-        fprintf(solutionFile, "%d\n", solID[i] + 1);
+        fprintf(solutionFile, "%d\n", sol->indexPath[i] + 1);
     fprintf(solutionFile, "-1\n");
-
-    
 
     // closing the tour file
     fclose(solutionFile);
-    free(solID);
 }
 
 void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize, const int printIndex)

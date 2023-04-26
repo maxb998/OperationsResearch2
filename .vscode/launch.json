@@ -16,13 +16,13 @@
 
                 "--grasp", "random(0.01)",
                 "--2opt",
-                "--tlim", "5",
+                "--tlim", "1",
 
-                "--nnOption=random",
+                "--nnOption", "random",
                 "--emOption", "random",
                 "--vnsOption", "nn",
 
-                "--seed", "2023",
+                //"--seed", "2023",
                 "--threads", "1",
                 "--roundcosts",
                 "--plot", 
@@ -44,6 +44,10 @@
                 "--grasp", "random(0.01)",
                 "--2opt",
                 "--tlim", "600",
+
+                "--nnOption", "random",
+                "--emOption", "random",
+                "--vnsOption", "nn",
 
                 "--seed", "2023",
                 "--threads", "4",

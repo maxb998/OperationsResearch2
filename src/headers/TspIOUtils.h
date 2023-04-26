@@ -7,7 +7,7 @@
 // Returns time elapsed while reading file
 double readFile (Instance *inst);
 
-void saveSolution(Solution *sol);
+void saveSolution(Solution *sol, int argc, char *argv[]);
 
 /*Plot solution using gnuplot. Does NOT check for errors on input
  * d	-> Instance to plot

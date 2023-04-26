@@ -64,10 +64,8 @@ int main (int argc, char *argv[])
     if (inst.params.showPlotFlag)
         plotSolution(&sol, "1600,900", "green", "black", 1, 0);
     
-    /*
     if (inst.params.saveFlag)
-        saveSolution();
-    */
+        saveSolution(&sol, argc, argv);
 
     destroySolution(&sol);
     destroyInstance(&inst);
