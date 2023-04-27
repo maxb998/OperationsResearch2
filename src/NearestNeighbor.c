@@ -46,7 +46,7 @@ Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, do
     if (!useThreads)
         nThreads = 1;
 
-    NNThreadsData th = {.sol = &sol, .startingNode = 0, .tlim = timeLimit + (double)start.tv_sec + (double)start.tv_nsec / 1000000000.0};
+    NNThreadsData th = {.sol = &sol, .startOption=startOption, .startingNode = 0, .tlim = timeLimit + (double)start.tv_sec + (double)start.tv_nsec / 1000000000.0};
 
     pthread_mutex_init(&th.getStartNodeMutex, NULL);
     pthread_mutex_init(&th.saveSolutionMutex, NULL);

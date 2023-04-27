@@ -16,7 +16,7 @@
 
                 "--grasp", "random(0.01)",
                 "--2opt",
-                "--tlim", "1",
+                "--tlim", "10",
 
                 "--nnOption", "random",
                 "--emOption", "random",
@@ -26,7 +26,7 @@
                 "--threads", "1",
                 "--roundcosts",
                 "--plot", 
-                "--save",
+                //"--save",
                 "--loglvl", "debug"
             ],
             "cwd": "${workspaceFolder}"
@@ -38,14 +38,14 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/x64/main",
             "args": [
-                "--file", "data/rl5915.tsp",
+                "--file", "data/att48.tsp",
                 "--mode", "nn",
 
-                "--grasp", "random(0.01)",
+                //"--grasp", "random(0.01)",
                 "--2opt",
                 "--tlim", "600",
 
-                "--nnOption", "random",
+                "--nnOption", "tryall",
                 "--emOption", "random",
                 "--vnsOption", "nn",
 
