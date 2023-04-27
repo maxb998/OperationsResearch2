@@ -48,16 +48,17 @@ Solution VariableNeighborhood(Instance *inst, enum VNSInitType config)
             }
 
         }else // (config == VNS_INIT_EM)
-        {   /*
+        {   
             // Compute a solution with Extra Mileage and optimize it with 2-opt
-            sol = solveExtraMileage(inst);
-            _2optBestFix(inst);
+            sol = ExtraMileage(inst, EM_OPTION_AVX, EM_INIT_RANDOM);
+            apply2OptBestFix(&sol, _2OPT_AVX_ST);
             while(checkTime(start, placeholderTime) == 0)
             {
-                _2optBestFix(inst);
+                _5Kick(&sol);
+                apply2OptBestFix(&sol, _2OPT_AVX_ST);
                 
             }
-            */
+            
         }
     }
     return sol;
