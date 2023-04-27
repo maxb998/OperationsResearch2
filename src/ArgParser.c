@@ -327,7 +327,7 @@ static int parseTlim(char *arg, Instance *inst)
     if (endPtr != &arg[strlen(arg)])
         LOG(LOG_LVL_WARNING, "There are extra character after the time limit value");
 
-    inst->params.tlim = (int)cvt;
+    inst->params.tlim = (double)cvt;
     return 0;
 }
 
@@ -486,7 +486,7 @@ void printInfo(Instance *inst)
         printf("%sUsing 2Opt\n", blank);
     // time limit
     if (inst->params.tlim != -1)
-        printf("%sTime limit of %d seconds\n", blank, inst->params.tlim);
+        printf("%sTime limit of %lf seconds\n", blank, inst->params.tlim);
     else
         printf("%sTime limit is not set\n", blank);
     

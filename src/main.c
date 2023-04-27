@@ -9,6 +9,7 @@
 #include "2Opt.h"
 
 #include <stdio.h>
+#include <time.h>
 
 
 static Solution runNearestNeighbor(Instance *inst);
@@ -21,6 +22,11 @@ int main (int argc, char *argv[])
 {
     Instance inst = newInstance();
     argParse(&inst, argc, argv);
+
+    if (inst.params.randomSeed != -1)
+        srand(inst.params.randomSeed);
+    else
+        srand(time(NULL));
 
     printInfo(&inst);
 

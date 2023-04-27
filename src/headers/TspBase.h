@@ -77,7 +77,7 @@ typedef struct
 
 	enum graspOption graspType;
 	int use2OptFlag;
-	int tlim;
+	double tlim;
 
 	enum NNFirstNodeOptions nnFirstNodeOption;
 	enum EMInitType emInitOption;

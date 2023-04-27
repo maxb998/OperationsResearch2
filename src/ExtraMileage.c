@@ -43,11 +43,6 @@ Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emIn
         sol.indexPath[i] = i;
 
     // initialize solution as specified by options
-    // Set random seed for initialization
-    if (inst->params.randomSeed != -1)
-        srand(inst->params.randomSeed);
-    else
-        srand(time(NULL));
     size_t coveredNodes = initialization(&sol, emInitType);
 
     // apply extra mileage
@@ -63,12 +58,6 @@ double applyExtraMileage(Solution *sol, size_t nCovered, enum EMOptions emOpt)
 
     Instance *inst = sol->instance;
     size_t n = inst->nNodes;
-
-    // Set random seed
-    if (inst->params.randomSeed != -1)
-        srand(inst->params.randomSeed);
-    else
-        srand(time(NULL));
 
     // first check that the solution element at index nCovered is the same as the one at index 0
     if (sol->indexPath[0] != sol->indexPath[nCovered])

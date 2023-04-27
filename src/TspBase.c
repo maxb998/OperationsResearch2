@@ -31,7 +31,7 @@ Instance newInstance ()
             
             .graspType=GRASP_NONE,
             .use2OptFlag=0,
-            .tlim=-1,
+            .tlim=-1.,
 
             .nnFirstNodeOption = NN_FIRST_RANDOM,
             .emInitOption = EM_INIT_RANDOM,
