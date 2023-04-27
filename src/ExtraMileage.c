@@ -118,11 +118,13 @@ static size_t initialization(Solution *sol, enum EMInitType emInitType)
     Instance *inst = sol->instance;
     size_t coveredElems = 0;
 
+    int rndIndex0, rndIndex1;
+
     switch (emInitType)
     {
     case EM_INIT_RANDOM:
         // select two random nodes
-        int rndIndex0 = rand() % (int)inst->nNodes, rndIndex1 = rand() % (int)inst->nNodes;
+        rndIndex0 = rand() % (int)inst->nNodes; rndIndex1 = rand() % (int)inst->nNodes;
         while (abs(rndIndex1 - rndIndex0) <= 1)
             rndIndex1 = rand();
 

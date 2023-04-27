@@ -1,5 +1,5 @@
 # compiler name
-CC = gcc
+CC = clang
 
 # compiler/liker flags
 CFLAGS_DEBUG = -Wall -g -c -mavx2 -Isrc/headers -I/opt/ibm/ILOG/CPLEX_Studio2211/cplex/include/ilcplex

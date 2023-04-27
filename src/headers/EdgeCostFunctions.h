@@ -29,7 +29,7 @@ static inline float euclideanCost2D(float x1, float y1, float x2, float y2)
 
 static inline float manhattanCost2D(float x1, float y1, float x2, float y2)
 {
-    return (abs(x1-x2) + abs(y1-y2));
+    return (fabsf(x1-x2) + fabsf(y1-y2));
 }
 
 static inline float maximumCost2D(float x1, float y1, float x2, float y2)
@@ -161,15 +161,15 @@ static inline __m256 euclideanCost2DFastApprox_VEC(__m256 x1, __m256 y1, __m256 
     return _mm256_rcp_ps(_mm256_rsqrt_ps(euclideanCostSquared2D_VEC(x1,y1,x2,y2)));
 }
 
-// https://stackoverflow.com/questions/63599391/find-absolute-in-avx
+// https://stackoverflow.com/questions/63599391/find-fabsfolute-in-avx
 static inline __m256 manhattanCost2D_VEC(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
 {
-    register __m256 xDiff, yDiff, dist, absMask = _mm256_set1_ps(-0.0F);
+    register __m256 xDiff, yDiff, dist, fabsfMask = _mm256_set1_ps(-0.0F);
     
     xDiff = _mm256_sub_ps(x1, x2);
     yDiff = _mm256_sub_ps(y1, y2);
-    xDiff = _mm256_andnot_ps(absMask, xDiff);
-    yDiff = _mm256_andnot_ps(absMask, yDiff);
+    xDiff = _mm256_andnot_ps(fabsfMask, xDiff);
+    yDiff = _mm256_andnot_ps(fabsfMask, yDiff);
     dist = _mm256_add_ps(xDiff, yDiff);
 
     return dist;

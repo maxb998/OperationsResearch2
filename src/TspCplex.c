@@ -87,13 +87,13 @@ static CplexData initCplexData(Instance *inst)
 	int *index = (int *) calloc(n, sizeof(int));
 	double *value = (double *) calloc(n, sizeof(double));
 
-	for ( int h = 0; h < n; h++ )  		// add the degree constraint on node h
+	for ( size_t h = 0; h < n; h++ )  		// add the degree constraint on node h
 	{
 		double rhs = 2.0;
 		char sense = 'E';                            // 'E' for equality constraint 
-		sprintf(cname[0], "degree(%d)", h+1);   
+		sprintf(cname[0], "degree(%lu)", h+1);   
 		int nnz = 0;
-		for ( int i = 0; i < n; i++ )
+		for ( size_t i = 0; i < n; i++ )
 		{
 			if ( i == h ) continue;
 			index[nnz] = xpos(i,h,n);
