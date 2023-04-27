@@ -4,10 +4,12 @@
 #include "NearestNeighbor.h"
 #include "ExtraMileage.h"
 #include "2Opt.h"
+#include "TspIOUtils.h"
 
 #include <pthread.h>
 #include <time.h>
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
+#include <stdio.h>
 
 /* Checks wheter the time passed since the initialization of start has passed timeLimit.
     Returns 1 in that case, 0 otherwise.*/
@@ -23,16 +25,11 @@ static inline void sort5int(int * array);
 Solution VariableNeighborhood(Instance *inst, enum VNSInitType config)
 {
     // time limit management
-    double placeholderTime = 10000.0;
     struct timespec start;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &start);
 
     Solution sol = newSolution(inst);
 
-    // check if a seed for random has been passed as argument
-    if(inst->params.randomSeed != -1) srand(inst->params.randomSeed);
-    else throwError(inst, &sol, "VariableNeighborhood: random seed has not been passed as argument");
-    
     if((config != VNS_INIT_NN) && (config != VNS_INIT_EM)) throwError(inst, &sol, "VariableNeighborhood: incorrect argument for config");
     else 
     {
@@ -41,9 +38,11 @@ Solution VariableNeighborhood(Instance *inst, enum VNSInitType config)
             // Compute a solution with Nearest Neighbour and optimize it with 2-opt
             sol = NearestNeighbor(inst, inst->params.nnFirstNodeOption, inst->params.tlim/20, 1);
             apply2OptBestFix(&sol, _2OPT_AVX_ST);
-            while(checkTime(start, placeholderTime) == 0)
+            while(checkTime(start, inst->params.tlim) == 0)
             {
                 _5Kick(&sol);
+                //plotSolution(&sol, "1600,900", "green", "black", 1, 0);
+                //getchar();
                 apply2OptBestFix(&sol, _2OPT_AVX_ST);
             }
 
@@ -52,7 +51,7 @@ Solution VariableNeighborhood(Instance *inst, enum VNSInitType config)
             // Compute a solution with Extra Mileage and optimize it with 2-opt
             sol = ExtraMileage(inst, EM_OPTION_AVX, EM_INIT_RANDOM);
             apply2OptBestFix(&sol, _2OPT_AVX_ST);
-            while(checkTime(start, placeholderTime) == 0)
+            while(checkTime(start, inst->params.tlim) == 0)
             {
                 _5Kick(&sol);
                 apply2OptBestFix(&sol, _2OPT_AVX_ST);
@@ -105,14 +104,7 @@ static inline void _5Kick(Solution *sol)
     {
         newPath[index] = sol->indexPath[i];
         index++;
-    } 
-
-    /*
-    for (size_t i = 0; i <= sol->instance->nNodes; i++)
-    {
-        printf("%d: %d -> %d\n", i+1, sol->indexPath[i], newPath[i]);
     }
-    */
     
     LOG(LOG_LVL_DEBUG, "_5Kick -> Edges mixed: [%d-%d], [%d-%d], [%d-%d], [%d-%d], [%d-%d]", sol->indexPath[randomEdges[0]], sol->indexPath[randomEdges[0]+1], sol->indexPath[randomEdges[1]], sol->indexPath[randomEdges[1]+1], sol->indexPath[randomEdges[2]], sol->indexPath[randomEdges[2]+1], sol->indexPath[randomEdges[3]], sol->indexPath[randomEdges[3]+1], sol->indexPath[randomEdges[4]], sol->indexPath[randomEdges[4]+1]);
 
