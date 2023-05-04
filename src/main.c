@@ -8,6 +8,8 @@
 #include "ExtraMileage.h"
 #include "2Opt.h"
 
+#include "TspCplex.h"
+
 #include <stdio.h>
 #include <time.h>
 
@@ -16,7 +18,11 @@ static Solution runNearestNeighbor(Instance *inst);
 static Solution runExtraMileage(Instance *inst);
 static Solution runVariableNeighborhoodSearch(Instance *inst);
 
+static Solution runBlenders(Instance *inst);
+
+
 static void run2Opt(Solution *sol);
+
 
 int main (int argc, char *argv[])
 {
@@ -63,6 +69,7 @@ int main (int argc, char *argv[])
         break;
 
     case MODE_BLENDERS:
+        sol = runBlenders(&inst);
         break;
     }
 
@@ -110,6 +117,22 @@ static Solution runVariableNeighborhoodSearch(Instance *inst)
 {
     Solution sol = { 0 };
     return sol;
+}
+
+static Solution runBlenders(Instance *inst)
+{
+    printf("##############################################################################################################################\n");
+    printf("Blenders starting...\n");
+    printf("##############################################################################################################################\n");
+
+    Solution em = blenders(inst, inst->params.tlim);
+
+    printf("##############################################################################################################################\n");
+    printf("Blenders finished in %lf seconds\n", em.execTime);
+    printf("Cost = %lf\n", em.cost);
+    printf("##############################################################################################################################\n");
+
+    return em;
 }
 
 static void run2Opt(Solution *sol)

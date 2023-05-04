@@ -12,11 +12,11 @@
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
                 "--file", "data/att48.tsp",
-                "--mode", "nn",
+                "--mode", "blenders",
 
                 "--grasp", "random(0.01)",
                 "--2opt",
-                "--tlim", "10",
+                "--tlim", "100",
 
                 "--nnOption", "random",
                 "--emOption", "random",
@@ -27,7 +27,7 @@
                 "--roundcosts",
                 "--plot", 
                 //"--save",
-                "--loglvl", "debug"
+                "--loglvl", "all"
             ],
             "cwd": "${workspaceFolder}"
        },
@@ -41,7 +41,7 @@
                 "--file", "data/att48.tsp",
                 "--mode", "nn",
 
-                //"--grasp", "random(0.01)",
+                "--grasp", "random(0.01)",
                 "--2opt",
                 "--tlim", "600",
 
@@ -49,11 +49,11 @@
                 "--emOption", "random",
                 "--vnsOption", "nn",
 
-                "--seed", "2023",
+                //"--seed", "2023",
                 "--threads", "4",
                 "--roundcosts",
                 "--plot", 
-                "--save",
+                //"--save",
                 "--loglvl", "debug"
             ],
             "cwd": "${workspaceFolder}"
