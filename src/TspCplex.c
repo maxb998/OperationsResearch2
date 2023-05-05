@@ -80,7 +80,7 @@ Solution blenders(Instance *inst, double tlim)
 				{
 					successors[succ] = (int)j;
 					subtoursMap[succ] = subtourCount;
-					LOG(LOG_LVL_EVERYTHING, "x(%3d,%3d) = 1   subtour n° %d\n", succ, j, subtoursMap[succ]);
+					//LOG(LOG_LVL_EVERYTHING, "x(%3d,%3d) = 1   subtour n° %d\n", succ, j, subtoursMap[succ]);
 					succ = j;
 					j = 0;
 				}
@@ -89,7 +89,7 @@ Solution blenders(Instance *inst, double tlim)
 			{
 				successors[succ] = i;
 				subtoursMap[succ] = subtourCount;
-				LOG(LOG_LVL_EVERYTHING, "x(%3d,%3d) = 1   subtour n° %d\n", succ, i, subtoursMap[succ]);
+				//LOG(LOG_LVL_EVERYTHING, "x(%3d,%3d) = 1   subtour n° %d\n", succ, i, subtoursMap[succ]);
 				subtourCount++;
 			}
 		}
@@ -102,7 +102,7 @@ Solution blenders(Instance *inst, double tlim)
 			swapElems(best, repaired, temp);
 		}
 
-		LOG(LOG_LVL_DEBUG, "Number of subtours detected at iteration %d is %d", iterNum, subtourCount);
+		LOG(LOG_LVL_LOG, "Number of subtours detected at iteration %d is %d", iterNum, subtourCount);
 
 		if (subtourCount == 1) // means that there is only one subtour
 			break;
@@ -364,7 +364,8 @@ static CplexData initCplexData(Instance *inst)
 		throwError(inst, NULL, "buildCPXModel: error at CPXopenCPLEX with code %d", errno);
 
 	// screen output
-	CPXsetintparam(cpxData.env, CPX_PARAM_SCRIND, CPX_ON);
+	if (inst->params.logLevel >= LOG_LVL_EVERYTHING)
+		CPXsetintparam(cpxData.env, CPX_PARAM_SCRIND, CPX_ON);
 
 	// random seed for cplex
 	if (inst->params.randomSeed != -1)

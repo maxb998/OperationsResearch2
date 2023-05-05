@@ -3,12 +3,6 @@
 
 #include "TspBase.h"
 
-enum EMOptions {
-    EM_OPTION_AVX,
-    EM_OPTION_BASE,
-    EM_OPTION_USE_COST_MATRIX
-};
-
 Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emInitType);
 
 /* 

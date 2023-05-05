@@ -64,6 +64,12 @@ enum EMInitType {
     EM_INIT_HULL // won't be working for now
 };
 
+enum EMOptions {
+    EM_OPTION_AVX,
+    EM_OPTION_BASE,
+    EM_OPTION_USE_COST_MATRIX
+};
+
 enum VNSInitType {
 	VNS_INIT_NN,
 	VNS_INIT_EM
