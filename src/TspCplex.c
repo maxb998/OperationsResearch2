@@ -102,6 +102,8 @@ Solution blenders(Instance *inst, double tlim)
 			swapElems(best, repaired, temp);
 		}
 
+		LOG(LOG_LVL_DEBUG, "Number of subtours detected at iteration %d is %d", iterNum, subtourCount);
+
 		if (subtourCount == 1) // means that there is only one subtour
 			break;
 
@@ -165,13 +167,15 @@ static void RepairHeuristic(int *successors, Solution *out, int *subtourMap, int
 	{
 		// find first node of the subtour with id subtourID in successors
 
-		int firstSubtourNodeIndex = 0;
-		for (; firstSubtourNodeIndex < n; firstSubtourNodeIndex++)
-			if (subtourMap[firstSubtourNodeIndex] == subtourID)
+		subtourPosition[subtourID] = pos;
+
+		size_t subtourFirstPos = 0;
+		for (; subtourFirstPos < n; subtourFirstPos++)
+			if (subtourMap[subtourFirstPos] == subtourID)
 				break;
 		
 		// add elements to out.indexPath and .x and .y until we complete the subtour
-		size_t i = firstSubtourNodeIndex;
+		size_t i = subtourFirstPos;
 		do
 		{
 			out->indexPath[pos] = i;
@@ -179,7 +183,7 @@ static void RepairHeuristic(int *successors, Solution *out, int *subtourMap, int
 			out->Y[pos] = inst->Y[i];
 			pos++;
 			i = successors[i];
-		} while ((int)i != firstSubtourNodeIndex);
+		} while ((int)i != subtourFirstPos);
 	}
 
 	// ###############################################################################
@@ -195,7 +199,7 @@ static void RepairHeuristic(int *successors, Solution *out, int *subtourMap, int
 		findBestSubtourMerge(out, mergeIndexes, mergeIndexesSubtourIDs, &invertOrientation, subtourCount, subtourPosition);
 		
 		size_t lastPos = n; // last position +1  of the of the subtour that will be merged and disappear (only used in the for condition)
-		if (mergeIndexesSubtourIDs[1] < subtourCount)
+		if (mergeIndexesSubtourIDs[1] < subtourCount-1)
 			lastPos = subtourPosition[mergeIndexesSubtourIDs[1] + 1];
 
 		size_t subtourSize = lastPos - subtourPosition[mergeIndexesSubtourIDs[1]];
@@ -215,23 +219,23 @@ static void RepairHeuristic(int *successors, Solution *out, int *subtourMap, int
 				if (i < mergeIndexes[1] - startPos + 1)
 					posToCopy = mergeIndexes[1] - i;
 				else
-					posToCopy = lastPos + startPos - mergeIndexes[1] - 1 - i;
+					posToCopy = lastPos + (mergeIndexes[1] - startPos) - i;
 			}
 			else
 			{
 				if (i < lastPos - mergeIndexes[1] - 1)
 					posToCopy = mergeIndexes[1] + 1 + i;
 				else
-					posToCopy = i + startPos + mergeIndexes[1] + 1 - lastPos;
+					posToCopy = i - (lastPos - mergeIndexes[1] - 1) + startPos;
 			}
 
+			indexCopyBuff[i] = out->indexPath[posToCopy];
 			xCopyBuff[i] = out->X[posToCopy];
 			yCopyBuff[i] = out->Y[posToCopy];
-			indexCopyBuff[i] = out->indexPath[posToCopy];
 		}
 
 		// now to shift all data in order to make space inside subtour 0 to fit subtour 1 (0 and 1 are the subtour that will be merged)
-		for (size_t i = subtourPosition[mergeIndexesSubtourIDs[1]]-1; i > mergeIndexes[0] + 1; i--)
+		for (size_t i = subtourPosition[mergeIndexesSubtourIDs[1]]-1; i > mergeIndexes[0]; i--)
 		{
 			size_t shiftAmount = subtourSize;
 
@@ -279,24 +283,29 @@ static inline void findBestSubtourMerge(Solution *sol, int mergeIndexes[2], int 
 {
 	// THIS FUNCTION IS DEFINETIVELY VECTORIZABLE,
 	// however I'm not going to do it since the extra code complexity isn't probably worth it since here the bottleneck is almost surely cplex's mipopt
+	size_t n = sol->instance->nNodes;
 	enum edgeWeightType ewt = sol->instance->params.edgeWeightType;
 	int roundFlag = sol->instance->params.roundWeightsFlag;
 
 	double min = INFINITY;
 
-	for (int subtourID = 0; subtourID < subtourCount; subtourID++)
+	for (size_t subtourID = 0; subtourID < subtourCount-1; subtourID++)
 	{
-		for (int subtourToCompare = subtourID+1; subtourToCompare < subtourCount; subtourToCompare++)
+		for (size_t subtourToCompare = subtourID+1; subtourToCompare < subtourCount; subtourToCompare++)
 		{
+			size_t last = subtourPosition[subtourToCompare+1];
+			if (subtourToCompare == subtourCount - 1)
+				last = n;
+
 			for (size_t i = subtourPosition[subtourID]; i < subtourPosition[subtourID+1]; i++)
 			{
-				size_t secondI = i;
+				size_t secondI = i + 1;
 				if (secondI == subtourPosition[subtourID+1])
 					secondI = subtourPosition[subtourID];
 				
-				for (size_t j = subtourPosition[subtourToCompare]; j < subtourPosition[subtourToCompare+1]; j++ )
+				for (size_t j = subtourPosition[subtourToCompare]; j < last; j++ )
 				{
-					size_t secondJ = j;
+					size_t secondJ = j + 1;
 					if (secondJ == subtourPosition[subtourToCompare + 1])
 						secondJ = subtourPosition[subtourToCompare];
 
