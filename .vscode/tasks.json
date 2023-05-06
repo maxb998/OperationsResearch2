@@ -5,7 +5,7 @@
             "type": "shell",
             "command": "make",
             "args": [
-                "buildDebug"
+                "build"
             ],
             "group": {
                 "kind": "build",
@@ -19,7 +19,8 @@
             "type": "shell",
             "command": "make",
             "args": [
-                "buildExec"
+                "build",
+                "MODE=exec"
             ],
             "group": {
                 "kind": "build",

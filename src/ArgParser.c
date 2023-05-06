@@ -1,5 +1,4 @@
-#include "ArgParser.h"
-#include "TspUtilities.h"
+#include "TspFunctions.h"
 
 #include <argp.h>
 #include <unistd.h>

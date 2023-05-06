@@ -1,5 +1,5 @@
-#include "ExtraMileage.h"
-#include "EdgeCostFunctions.h"
+#include "TspFunctions.h"
+
 
 #include "pthread.h"
 #include <time.h>

@@ -1,13 +1,4 @@
-#include "TspUtilities.h"
-#include "TspIOUtils.h"
-
-#include "CostMatrix.h"
-
-#include "ArgParser.h"
-#include "NearestNeighbor.h"
-#include "ExtraMileage.h"
-#include "2Opt.h"
-
+#include "TspFunctions.h"
 #include "TspCplex.h"
 
 #include <stdio.h>

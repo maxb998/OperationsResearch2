@@ -1,10 +1,4 @@
-#include "VariableNeighborhood.h"
-#include "EdgeCostFunctions.h"
-#include "TspUtilities.h"
-#include "NearestNeighbor.h"
-#include "ExtraMileage.h"
-#include "2Opt.h"
-#include "TspIOUtils.h"
+#include "TspFunctions.h"
 
 #include <pthread.h>
 #include <time.h>

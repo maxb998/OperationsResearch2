@@ -70,6 +70,14 @@ enum EMOptions {
     EM_OPTION_USE_COST_MATRIX
 };
 
+enum _2OptOptions
+{
+    _2OPT_AVX_ST,
+    _2OPT_BASE,
+    _2OPT_PRECOMPUTED_COSTS,
+    _2OPT_AVX_MT
+};
+
 enum VNSInitType {
 	VNS_INIT_NN,
 	VNS_INIT_EM

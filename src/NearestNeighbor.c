@@ -1,6 +1,5 @@
-#include "NearestNeighbor.h"
-#include "EdgeCostFunctions.h"
-#include "TspUtilities.h"
+#include "TspFunctions.h"
+
 
 #include <pthread.h>
 #include <time.h>

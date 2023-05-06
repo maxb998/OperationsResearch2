@@ -1,6 +1,5 @@
-#include "2Opt.h"
-#include "TspUtilities.h"
-#include "EdgeCostFunctions.h"
+#include "TspFunctions.h"
+
 
 #include <pthread.h>
 #include <time.h>

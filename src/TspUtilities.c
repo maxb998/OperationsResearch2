@@ -1,9 +1,7 @@
-#include "TspUtilities.h"
-#include "EdgeCostFunctions.h"
+#include "TspFunctions.h"
 
 
-// Check the correctness of the cost of the solution stored in Solution sol.
-static void checkCost(Solution *sol);
+
 
 void checkSolution(Solution *sol)
 {
@@ -50,67 +48,17 @@ void checkSolution(Solution *sol)
             throwError(inst, sol, "SolutionCheck: sol.Y[sol.indexPath[%ld]] = %.3e and does not correspond with inst.Y[%ld] = %.3e", i, inst->Y[sol->indexPath[i]], i, sol->Y[i]);
     }
 
-    checkCost(sol);
+    double recomputedCost = computeSolutionCostVectorized(sol);
+
+    if (recomputedCost != sol->cost)
+        throwError(sol->instance, sol, "SolutionCheck: Error in the computation of the pathCost. Recomputed Cost: %lf Cost in Solution: %lf", recomputedCost, sol->cost);
+    
+    LOG(LOG_LVL_EVERYTHING, "SolutionCheck: Cost of solution is correct");
 
     LOG(LOG_LVL_DEBUG, "SolutionCheck: solution is coherent and feasible");
 }
 
-
-static void checkCost(Solution *sol)
-{
-    double recomputedCost = computeSolutionCostVectorizedDouble(sol);
-
-    if (recomputedCost != sol->cost)
-        throwError(sol->instance, sol, "CheckCost: Error in the computation of the pathCost. Recomputed Cost: %lf Cost in Solution: %lf", recomputedCost, sol->cost);
-    
-    LOG(LOG_LVL_EVERYTHING, "CheckCost: Cost of solution is correct");
-}
-
-
-
-
-float computeSolutionCostVectorizedFloat(Solution *sol)
-{
-    enum edgeWeightType ewt = sol->instance->params.edgeWeightType;
-    int roundFlag = sol->instance->params.roundWeightsFlag;
-
-    register __m256 costVec = _mm256_setzero_ps();
-    size_t i = 0;
-    while (i < sol->instance->nNodes - AVX_VEC_SIZE)
-    {
-        register __m256 x1, x2, y1, y2;
-        x1 = _mm256_loadu_ps(&sol->X[i]), y1 = _mm256_loadu_ps(&sol->Y[i]);
-        x2 = _mm256_loadu_ps(&sol->X[i+1]), y2 = _mm256_loadu_ps(&sol->Y[i+1]);
-
-        costVec = _mm256_add_ps(costVec, computeEdgeCost_VEC(x1, y1, x2, y2, ewt, roundFlag));
-
-        i += AVX_VEC_SIZE;
-    }
-
-    // here we do the last iteration. since all "extra" elements at the end of X and Y are NaNs they can cause issues on sum. so we use a maskload for the last vector
-    register __m256 x1, x2, y1, y2;
-    x1 = _mm256_loadu_ps(&sol->X[i]); y1 = _mm256_loadu_ps(&sol->Y[i]);
-    x2 = _mm256_loadu_ps(&sol->X[i+1]); y2 = _mm256_loadu_ps(&sol->Y[i+1]);
-
-    register __m256 lastDist = computeEdgeCost_VEC(x1, y1, x2, y2, ewt, roundFlag);
-
-    // now we sustitute the infinity and NaN in the vector with zeroes
-    register __m256 infinityVec = _mm256_set1_ps(INFINITY);
-    register __m256 mask = _mm256_cmp_ps(lastDist, infinityVec, _CMP_LT_OQ);
-    costVec = _mm256_add_ps(costVec, _mm256_blendv_ps(mask, computeEdgeCost_VEC(x1, y1, x2, y2, ewt, roundFlag), mask));
-
-
-    float costVecStore[8];
-    _mm256_storeu_ps(costVecStore, costVec);
-    
-    double totalCost = 0.0;
-    for (size_t i = 0; i < AVX_VEC_SIZE; i++)
-        totalCost += costVecStore[i];
-    
-    return totalCost;
-}
-
-double computeSolutionCostVectorizedDouble(Solution *sol)
+double computeSolutionCostVectorized(Solution *sol)
 {
     size_t n = sol->instance->nNodes;
     enum edgeWeightType ewt = sol->instance->params.edgeWeightType;
@@ -154,28 +102,6 @@ double computeSolutionCostVectorizedDouble(Solution *sol)
 
         i += AVX_VEC_SIZE;
     }
-    /*
-    // here we do the last iteration. since all "extra" elements at the end of X and Y are NaNs they can cause issues on sum. so we use a maskload for the last vector
-    register __m256 x1, x2, y1, y2;
-    x1 = _mm256_loadu_ps(&sol->X[i]); y1 = _mm256_loadu_ps(&sol->Y[i]);
-    x2 = _mm256_loadu_ps(&sol->X[i+1]); y2 = _mm256_loadu_ps(&sol->Y[i+1]);
-
-    register __m256 lastDist = computeEdgeCost_VEC(x1, y1, x2, y2, ewt, roundFlag);
-
-    // now we sustitute the infinities in the vector with zeroes
-    register __m256 infinityVec = _mm256_set1_ps(INFINITY);
-    register __m256 mask = _mm256_cmp_ps(lastDist, infinityVec, _CMP_LT_OQ);
-    register __m256 costVecFloat = _mm256_blendv_ps(mask, computeEdgeCost_VEC(x1, y1, x2, y2, ewt, roundFlag), mask);
-
-    // convert vector of floats into 2 vectors of doubles and add them to the total cost
-    // first half of the vector
-    register __m128 partOfCostVecFloat = _mm256_extractf128_ps(costVecFloat, 0);
-    register __m256d partOfCostVecDouble = _mm256_cvtps_pd(partOfCostVecFloat);
-    costVec = _mm256_add_pd(costVec, partOfCostVecDouble);
-    // second half of the vector
-    partOfCostVecFloat = _mm256_extractf128_ps(costVecFloat, 1);
-    partOfCostVecDouble = _mm256_cvtps_pd(partOfCostVecFloat);
-    costVec = _mm256_add_pd(costVec, partOfCostVecDouble);*/
 
     double vecStore[4];
     _mm256_storeu_pd(vecStore, costVec);

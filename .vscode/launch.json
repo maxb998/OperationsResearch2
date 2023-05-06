@@ -2,6 +2,7 @@
     // Use IntelliSense to learn about possible attributes.
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+
     "version": "0.2.0",
     "configurations": [
         {
@@ -14,20 +15,20 @@
                 "--file", "data/att48.tsp",
                 "--mode", "blenders",
 
-                "--grasp", "random(0.01)",
+                "--grasp", "random(0.05)",
                 "--2opt",
-                "--tlim", "100",
+                "--tlim", "600",
 
-                "--nnOption", "random",
-                "--emOption", "random",
-                "--vnsOption", "nn",
+                //"--nnOption", "tryall",
+                //"--emOption", "random",
+                //"--vnsOption", "nn",
 
                 //"--seed", "2023",
                 "--threads", "1",
-                "--roundcosts",
+                //"--roundcosts",
                 "--plot", 
                 //"--save",
-                "--loglvl", "all"
+                "--loglvl", "debug"
             ],
             "cwd": "${workspaceFolder}"
        },
@@ -41,20 +42,20 @@
                 "--file", "data/att48.tsp",
                 "--mode", "nn",
 
-                "--grasp", "random(0.01)",
+                "--grasp", "random(0.05)",
                 "--2opt",
-                "--tlim", "600",
+                "--tlim", "1",
 
-                "--nnOption", "tryall",
-                "--emOption", "random",
-                "--vnsOption", "nn",
+                //"--nnOption", "tryall",
+                //"--emOption", "random",
+                //"--vnsOption", "nn",
 
                 //"--seed", "2023",
-                "--threads", "4",
-                "--roundcosts",
+                //"--threads", "4",
+                //"--roundcosts",
                 "--plot", 
                 //"--save",
-                "--loglvl", "debug"
+                "--loglvl", "log"
             ],
             "cwd": "${workspaceFolder}"
         }

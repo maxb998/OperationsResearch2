@@ -1,105 +1,70 @@
 # compiler name
 CC = clang
 
-# compiler/liker flags
-CFLAGS_DEBUG = -Wall -g -c -mavx2 -Isrc/headers -I/opt/ibm/ILOG/CPLEX_Studio2211/cplex/include/ilcplex
-LDFLAGS1_DEBUG = -L/opt/ibm/ILOG/CPLEX_Studio2211/cplex/lib/x86-64_linux/static_pic/
-LDFLAGS2_DEBUG = -lcplex -lm
-CFLAGS_EXEC = -O3 -c -mavx2 -march=native -Isrc/headers -I/opt/ibm/ILOG/CPLEX_Studio2211/cplex/include/ilcplex
-LDFLAGS1_EXEC = -L/opt/ibm/ILOG/CPLEX_Studio2211/cplex/lib/x86-64_linux/static_pic/
-LDFLAGS2_EXEC = -lcplex -lm
+# Cplex Location
+CPLEX_HEADERS_COMPILER_FLAG = -I/opt/ibm/ILOG/CPLEX_Studio2211/cplex/include/ilcplex
 
-# directories names
-OBJ_DEBUG_DIR = obj/debug
-OBJ_EXEC_DIR = obj/x64
-BIN_DEBUG_DIR = bin/debug
-BIN_EXEC_DIR = bin/x64
+SRC_DIR := src/
+HEADERS_DIR := src/headers/
+
+# build debug as default
+OBJ_DIR = obj/debug/
+BIN_DIR = bin/debug/
+CFLAGS = -Wall -g -c -mavx2 -Isrc/headers
+LDFLAGS1 = -L/opt/ibm/ILOG/CPLEX_Studio2211/cplex/lib/x86-64_linux/static_pic/
+LDFLAGS2 = -lcplex -lm
+
+# condition to check value passed
+ifeq ($(MODE),exec)
+OBJ_DIR = obj/x64/
+BIN_DIR = bin/x64/
+CFLAGS = -O3 -c -mavx2 -march=native -Isrc/headers
+LDFLAGS1 = -L/opt/ibm/ILOG/CPLEX_Studio2211/cplex/lib/x86-64_linux/static_pic/
+LDFLAGS2 = -lcplex -lm
+endif
+
+# separate files into the ones that use cplex and will need the extra compiler flag to find cplex headers and the ones which don't use it
+SOURCE_NAMES := TspBase.c TspUtilities.c ArgParser.c TspIOUtils.c CostMatrix.c NearestNeighbor.c ExtraMileage.c 2Opt.c VariableNeighborhood.c TspCplex.c Blenders.c 
+#SOURCE_NAMES_CPLEX := TspCplex.c Blenders.c 
+
+HEADER_NAMES = TspBase.h TspFunctions.h EdgeCostFunctions.h TspCplex.h
+#HEADER_NAMES_CPLEX = TspCplex.h
 
 # files list
-OBJ_DEBUG_FILES = $(OBJ_DEBUG_DIR)/main.o $(OBJ_DEBUG_DIR)/TspBase.o $(OBJ_DEBUG_DIR)/TspUtilities.o $(OBJ_DEBUG_DIR)/TspIOUtils.o $(OBJ_DEBUG_DIR)/CostMatrix.o $(OBJ_DEBUG_DIR)/NearestNeighbor.o $(OBJ_DEBUG_DIR)/ExtraMileage.o $(OBJ_DEBUG_DIR)/2Opt.o $(OBJ_DEBUG_DIR)/VariableNeighborhood.o $(OBJ_DEBUG_DIR)/ArgParser.o $(OBJ_DEBUG_DIR)/TspCplex.o
-OBJ_EXEC_FILES = $(OBJ_EXEC_DIR)/main.o $(OBJ_EXEC_DIR)/TspBase.o $(OBJ_EXEC_DIR)/TspUtilities.o $(OBJ_EXEC_DIR)/TspIOUtils.o $(OBJ_EXEC_DIR)/CostMatrix.o $(OBJ_EXEC_DIR)/NearestNeighbor.o $(OBJ_EXEC_DIR)/ExtraMileage.o $(OBJ_EXEC_DIR)/2Opt.o $(OBJ_EXEC_DIR)/VariableNeighborhood.o $(OBJ_EXEC_DIR)/ArgParser.o $(OBJ_EXEC_DIR)/TspCplex.o
+HEADER_FILES := $(HEADER_NAMES:%=$(HEADERS_DIR)%)
+#HEADER_FILES_CPLEX := $(HEADER_NAMES_CPLEX:%=$(HEADERS_DIR)%)
 
-# list of header files
-GLOBAL_HEADERS = src/headers/TspBase.h src/headers/EdgeCostFunctions.h
-SPECIFIC_HEADERS = src/headers/CostMatrix.h src/headers/NearestNeighbor.h src/headers/ExtraMileage.h src/headers/2Opt.h src/headers/VariableNeighborhood.h src/headers/ArgParser.h src/headers/TspCplex.h
+SRC_FILES := $(SOURCE_NAMES:%=$(SRC_DIR)%)
+#SRC_FILES_CPLEX := $(SOURCE_NAMES_CPLEX:%=$(SRC_DIR)%)
+
+OBJ_FILES := $(SOURCE_NAMES:%.c=$(OBJ_DIR)%.o)
+#OBJ_FILES_CPLEX := $(SOURCE_NAMES_CPLEX:%.c=$(OBJ_DIR)%.o)
+
+# command used to check variables value and "debug" the makefile
+print:
+	echo $(HEADER_FILES)
+	echo $(HEADER_FILES_CPLEX)
+	echo $(SRC_FILES)
+	echo $(SRC_FILES_CPLEX)
+	echo $(OBJ_FILES)
+	echo $(OBJ_FILES_CPLEX)
 
 # build options when debugging
-buildDebug: $(OBJ_DEBUG_FILES)
-	$(CC) $(LDFLAGS1_DEBUG) $(OBJ_DEBUG_FILES) -o $(BIN_DEBUG_DIR)/main $(LDFLAGS2_DEBUG)
+build: $(BIN_DIR)main
 
-$(OBJ_DEBUG_DIR)/main.o: src/main.c $(GLOBAL_HEADERS) $(SPECIFIC_HEADERS)
-	$(CC) $(CFLAGS_DEBUG) src/main.c -o $(OBJ_DEBUG_DIR)/main.o
+$(BIN_DIR)main: $(OBJ_DIR)main.o $(OBJ_FILES) $(OBJ_FILES_CPLEX)
+	$(CC) $(LDFLAGS1) $(OBJ_DIR)main.o $(OBJ_FILES) $(OBJ_FILES_CPLEX) -o $(BIN_DIR)main $(LDFLAGS2)
 
-$(OBJ_DEBUG_DIR)/TspBase.o: src/TspBase.c src/headers/TspBase.h
-	$(CC) $(CFLAGS_DEBUG) src/TspBase.c -o $(OBJ_DEBUG_DIR)/TspBase.o
+$(OBJ_DIR)main.o: $(SRC_DIR)main.c $(HEADER_FILES) $(HEADER_FILES_CPLEX)
+	$(CC) $(CFLAGS) $(CPLEX_HEADERS_COMPILER_FLAG) $(SRC_DIR)main.c -o $(OBJ_DIR)main.o
 
-$(OBJ_DEBUG_DIR)/TspUtilities.o: src/TspUtilities.c src/headers/TspUtilities.h $(GLOBAL_HEADERS)
-	$(CC) $(CFLAGS_DEBUG) src/TspUtilities.c -o $(OBJ_DEBUG_DIR)/TspUtilities.o
+$(OBJ_DIR)%.o: $(SRC_DIR)%.c $(HEADER_FILES)
+	$(CC) $(CFLAGS) $(CPLEX_HEADERS_COMPILER_FLAG) $(SRC_DIR)$(*F).c -o $@
 
-$(OBJ_DEBUG_DIR)/TspIOUtils.o: src/TspIOUtils.c src/headers/TspIOUtils.h $(GLOBAL_HEADERS)
-	$(CC) $(CFLAGS_DEBUG) src/TspIOUtils.c -o $(OBJ_DEBUG_DIR)/TspIOUtils.o
-
-$(OBJ_DEBUG_DIR)/CostMatrix.o: src/CostMatrix.c src/headers/CostMatrix.h $(GLOBAL_HEADERS)
-	$(CC) $(CFLAGS_DEBUG) src/CostMatrix.c -o $(OBJ_DEBUG_DIR)/CostMatrix.o
-
-$(OBJ_DEBUG_DIR)/NearestNeighbor.o: src/NearestNeighbor.c src/headers/NearestNeighbor.h $(GLOBAL_HEADERS)
-	$(CC) $(CFLAGS_DEBUG) src/NearestNeighbor.c -o $(OBJ_DEBUG_DIR)/NearestNeighbor.o
-
-$(OBJ_DEBUG_DIR)/ExtraMileage.o: src/ExtraMileage.c src/headers/ExtraMileage.h $(GLOBAL_HEADERS)
-	$(CC) $(CFLAGS_DEBUG) src/ExtraMileage.c -o $(OBJ_DEBUG_DIR)/ExtraMileage.o
-
-$(OBJ_DEBUG_DIR)/2Opt.o: src/2Opt.c src/headers/2Opt.h $(GLOBAL_HEADERS)
-	$(CC) $(CFLAGS_DEBUG) src/2Opt.c -o $(OBJ_DEBUG_DIR)/2Opt.o
-
-$(OBJ_DEBUG_DIR)/VariableNeighborhood.o: src/VariableNeighborhood.c src/headers/VariableNeighborhood.h $(GLOBAL_HEADERS)
-	$(CC) $(CFLAGS_DEBUG) src/VariableNeighborhood.c -o $(OBJ_DEBUG_DIR)/VariableNeighborhood.o
-
-$(OBJ_DEBUG_DIR)/ArgParser.o: src/ArgParser.c src/headers/ArgParser.h $(GLOBAL_HEADERS)
-	$(CC) $(CFLAGS_DEBUG) src/ArgParser.c -o $(OBJ_DEBUG_DIR)/ArgParser.o
-
-$(OBJ_DEBUG_DIR)/TspCplex.o: src/TspCplex.c src/headers/TspCplex.h $(GLOBAL_HEADERS)
-	$(CC) $(CFLAGS_DEBUG) src/TspCplex.c -o $(OBJ_DEBUG_DIR)/TspCplex.o
-
-# build options when testing performance
-buildExec: $(OBJ_EXEC_FILES)
-	$(CC) $(LDFLAGS1_EXEC) $(OBJ_EXEC_FILES) -o $(BIN_EXEC_DIR)/main $(LDFLAGS2_EXEC)
-
-$(OBJ_EXEC_DIR)/main.o: src/main.c $(GLOBAL_HEADERS) $(SPECIFIC_HEADERS)
-	$(CC) $(CFLAGS_EXEC) src/main.c -o $(OBJ_EXEC_DIR)/main.o
-
-$(OBJ_EXEC_DIR)/TspBase.o: src/TspBase.c src/headers/TspBase.h
-	$(CC) $(CFLAGS_EXEC) src/TspBase.c -o $(OBJ_EXEC_DIR)/TspBase.o
-
-$(OBJ_EXEC_DIR)/TspUtilities.o: src/TspUtilities.c src/headers/TspUtilities.h $(GLOBAL_HEADERS)
-	$(CC) $(CFLAGS_EXEC) src/TspUtilities.c -o $(OBJ_EXEC_DIR)/TspUtilities.o
-
-$(OBJ_EXEC_DIR)/TspIOUtils.o: src/TspIOUtils.c src/headers/TspIOUtils.h $(GLOBAL_HEADERS)
-	$(CC) $(CFLAGS_EXEC) src/TspIOUtils.c -o $(OBJ_EXEC_DIR)/TspIOUtils.o
-
-$(OBJ_EXEC_DIR)/CostMatrix.o: src/CostMatrix.c src/headers/CostMatrix.h $(GLOBAL_HEADERS)
-	$(CC) $(CFLAGS_EXEC) src/CostMatrix.c -o $(OBJ_EXEC_DIR)/CostMatrix.o
-
-$(OBJ_EXEC_DIR)/NearestNeighbor.o: src/NearestNeighbor.c  src/headers/NearestNeighbor.h $(GLOBAL_HEADERS)
-	$(CC) $(CFLAGS_EXEC) src/NearestNeighbor.c -o $(OBJ_EXEC_DIR)/NearestNeighbor.o
-
-$(OBJ_EXEC_DIR)/ExtraMileage.o: src/ExtraMileage.c src/headers/ExtraMileage.h $(GLOBAL_HEADERS)
-	$(CC) $(CFLAGS_EXEC) src/ExtraMileage.c -o $(OBJ_EXEC_DIR)/ExtraMileage.o
-
-$(OBJ_EXEC_DIR)/2Opt.o: src/2Opt.c src/headers/2Opt.h $(GLOBAL_HEADERS)
-	$(CC) $(CFLAGS_EXEC) src/2Opt.c -o $(OBJ_EXEC_DIR)/2Opt.o
-
-$(OBJ_EXEC_DIR)/VariableNeighborhood.o: src/VariableNeighborhood.c src/headers/VariableNeighborhood.h $(GLOBAL_HEADERS)
-	$(CC) $(CFLAGS_EXEC) src/VariableNeighborhood.c -o $(OBJ_EXEC_DIR)/VariableNeighborhood.o
-
-$(OBJ_EXEC_DIR)/ArgParser.o: src/ArgParser.c src/headers/ArgParser.h $(GLOBAL_HEADERS)
-	$(CC) $(CFLAGS_EXEC) src/ArgParser.c -o $(OBJ_EXEC_DIR)/ArgParser.o
-
-$(OBJ_EXEC_DIR)/TspCplex.o: src/TspCplex.c src/headers/TspCplex.h $(GLOBAL_HEADERS)
-	$(CC) $(CFLAGS_EXEC) src/TspCplex.c -o $(OBJ_EXEC_DIR)/TspCplex.o
-
-build: buildDebug buildExec
+#$(OBJ_FILES_CPLEX): $(SRC_DIR)$(*F).c $(HEADER_FILES) $(HEADER_FILES_CPLEX)
+#	$(CC) $(CFLAGS) $(CPLEX_HEADERS_COMPILER_FLAG) $(SRC_DIR)$(*F).c -o $@
 
 # delete all gcc output files
 clean:
-	rm -f $(BIN_DEBUG_DIR)/main $(BIN_EXEC_DIR)/main
-	rm -f $(OBJ_DEBUG_DIR)/*.o $(OBJ_EXEC_DIR)/*.o
+	rm -f bin/debug/main bin/x64/main
+	rm -f obj/debug/*.o obj/x64/*.o
