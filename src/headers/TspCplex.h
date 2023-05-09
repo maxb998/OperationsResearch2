@@ -21,24 +21,13 @@ CplexData initCplexData(Instance *inst);
 
 void destroyCplexData(CplexData * cpxData);
 
-static size_t xpos(size_t i, size_t j, size_t n)
-{
-    if (i == j)
-        throwError(NULL, NULL, "xpos: i == j");
-    if (i > j)
-    {
-        register size_t temp;
-        swapElems(i, j, temp);
-    }
-
-    int pos = i * n + j - ((i + 1) * (i + 2)) / 2;
-    return pos;
-}
+size_t xpos(size_t i, size_t j, size_t n);
 
 //###################################################################################################################################
 // BLENDERS
 //###################################################################################################################################
 
 Solution blenders(Instance *inst, double tlim);
+
 
 #endif // TSP_CPLEX

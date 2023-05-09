@@ -1,4 +1,4 @@
-#include "TspFunctions.h"
+#include "Tsp.h"
 
 
 #include "pthread.h"

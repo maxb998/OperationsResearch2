@@ -1,3 +1,4 @@
+#include "Tsp.h"
 #include "TspCplex.h"
 
 #include <cplex.h>
@@ -87,4 +88,19 @@ void destroyCplexData(CplexData * cpxData)
 {
 	CPXfreeprob(cpxData->env, &cpxData->lp);
     CPXcloseCPLEX(&cpxData->env);
+}
+
+
+size_t xpos(size_t i, size_t j, size_t n)
+{
+    if (i == j)
+        throwError(NULL, NULL, "xpos: i == j");
+    if (i > j)
+    {
+        register size_t temp;
+        swapElems(i, j, temp);
+    }
+
+    int pos = i * n + j - ((i + 1) * (i + 2)) / 2;
+    return pos;
 }

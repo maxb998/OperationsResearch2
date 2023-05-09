@@ -1,4 +1,4 @@
-#include "TspFunctions.h"
+#include "Tsp.h"
 
 #include <stdlib.h>
 #include <stdio.h>

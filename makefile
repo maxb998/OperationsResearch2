@@ -2,7 +2,7 @@
 CC = clang
 
 # Cplex Location
-CPLEX_HEADERS_COMPILER_FLAG = -I/opt/ibm/ILOG/CPLEX_Studio2211/cplex/include/ilcplex
+CPLEX_HEADERS_COMPILER_FLAG := -I/opt/ibm/ILOG/CPLEX_Studio2211/cplex/include/ilcplex
 
 SRC_DIR := src/
 HEADERS_DIR := src/headers/
@@ -24,45 +24,38 @@ LDFLAGS2 = -lcplex -lm
 endif
 
 # separate files into the ones that use cplex and will need the extra compiler flag to find cplex headers and the ones which don't use it
-SOURCE_NAMES := TspBase.c TspUtilities.c ArgParser.c TspIOUtils.c CostMatrix.c NearestNeighbor.c ExtraMileage.c 2Opt.c VariableNeighborhood.c TspCplex.c Blenders.c 
-#SOURCE_NAMES_CPLEX := TspCplex.c Blenders.c 
+SOURCE_NAMES_NO_CPLEX = TspUtilities.c ArgParser.c TspIOUtils.c CostMatrix.c NearestNeighbor.c ExtraMileage.c 2Opt.c VariableNeighborhood.c 
+SOURCE_NAMES_CPLEX = TspCplex.c Blenders.c main.c 
 
-HEADER_NAMES = TspBase.h TspFunctions.h EdgeCostFunctions.h TspCplex.h
-#HEADER_NAMES_CPLEX = TspCplex.h
+HEADER_NAMES_NO_CPLEX = TspBase.h Tsp.h EdgeCostFunctions.h
+HEADER_NAMES_CPLEX = TspCplex.h
 
 # files list
-HEADER_FILES := $(HEADER_NAMES:%=$(HEADERS_DIR)%)
-#HEADER_FILES_CPLEX := $(HEADER_NAMES_CPLEX:%=$(HEADERS_DIR)%)
+HEADER_FILES_NO_CPLEX := $(HEADER_NAMES_NO_CPLEX:%=$(HEADERS_DIR)%)
+HEADER_FILES_CPLEX := $(HEADER_NAMES_CPLEX:%=$(HEADERS_DIR)%)
 
-SRC_FILES := $(SOURCE_NAMES:%=$(SRC_DIR)%)
-#SRC_FILES_CPLEX := $(SOURCE_NAMES_CPLEX:%=$(SRC_DIR)%)
-
-OBJ_FILES := $(SOURCE_NAMES:%.c=$(OBJ_DIR)%.o)
-#OBJ_FILES_CPLEX := $(SOURCE_NAMES_CPLEX:%.c=$(OBJ_DIR)%.o)
+OBJ_FILES_NO_CPLEX := $(SOURCE_NAMES_NO_CPLEX:%.c=$(OBJ_DIR)%.o)
+OBJ_FILES_CPLEX := $(SOURCE_NAMES_CPLEX:%.c=$(OBJ_DIR)%.o)
+OBJ_FILES := $(OBJ_FILES_NO_CPLEX) $(OBJ_FILES_CPLEX)
 
 # command used to check variables value and "debug" the makefile
 print:
-	echo $(HEADER_FILES)
-	echo $(HEADER_FILES_CPLEX)
-	echo $(SRC_FILES)
-	echo $(SRC_FILES_CPLEX)
-	echo $(OBJ_FILES)
-	echo $(OBJ_FILES_CPLEX)
+	@echo HEADER_FILES = $(HEADER_FILES_NO_CPLEX)$(HEADER_FILES_NO_CPLEX)
+	@echo SOURCE_NAMES_NO_CPLEX = $(SOURCE_NAMES_NO_CPLEX:%=$(SRC_DIR)%)
+	@echo SOURCE_NAMES_CPLEX = $(SOURCE_NAMES_CPLEX:%=$(SRC_DIR)%)
+	@echo OBJ_FILES = $(OBJ_FILES)
+
+# define dependencies for c files that use cplex(so TspCplex.h needs to be added as a dependecy)
+$(OBJ_FILES_CPLEX): $(HEADER_FILES_CPLEX)
 
 # build options when debugging
 build: $(BIN_DIR)main
 
-$(BIN_DIR)main: $(OBJ_DIR)main.o $(OBJ_FILES) $(OBJ_FILES_CPLEX)
-	$(CC) $(LDFLAGS1) $(OBJ_DIR)main.o $(OBJ_FILES) $(OBJ_FILES_CPLEX) -o $(BIN_DIR)main $(LDFLAGS2)
+$(BIN_DIR)main: $(OBJ_FILES)
+	$(CC) $(LDFLAGS1) $(OBJ_FILES) -o $(BIN_DIR)main $(LDFLAGS2)
 
-$(OBJ_DIR)main.o: $(SRC_DIR)main.c $(HEADER_FILES) $(HEADER_FILES_CPLEX)
-	$(CC) $(CFLAGS) $(CPLEX_HEADERS_COMPILER_FLAG) $(SRC_DIR)main.c -o $(OBJ_DIR)main.o
-
-$(OBJ_DIR)%.o: $(SRC_DIR)%.c $(HEADER_FILES)
+$(OBJ_DIR)%.o: $(SRC_DIR)%.c $(HEADER_FILES_NO_CPLEX)
 	$(CC) $(CFLAGS) $(CPLEX_HEADERS_COMPILER_FLAG) $(SRC_DIR)$(*F).c -o $@
-
-#$(OBJ_FILES_CPLEX): $(SRC_DIR)$(*F).c $(HEADER_FILES) $(HEADER_FILES_CPLEX)
-#	$(CC) $(CFLAGS) $(CPLEX_HEADERS_COMPILER_FLAG) $(SRC_DIR)$(*F).c -o $@
 
 # delete all gcc output files
 clean:
