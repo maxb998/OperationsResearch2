@@ -29,5 +29,11 @@ size_t xpos(size_t i, size_t j, size_t n);
 
 Solution blenders(Instance *inst, double tlim);
 
+//###################################################################################################################################
+// LAZY_CALLBACK
+//###################################################################################################################################
+
+// Method that computes the solution using SEC internally
+Solution lazyCallback(Instance *inst, double tLimSec);
 
 #endif // TSP_CPLEX
