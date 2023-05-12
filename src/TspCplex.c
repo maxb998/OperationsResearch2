@@ -156,6 +156,56 @@ void cvtSuccessorsToSolution(int *successors, Solution *sol)
 	}
 }
 
+void setSEC(double *coeffs, int *indexes, CplexData *cpx, int *successors, int *subtoursMap, int subtourCount, int iterNum, Instance *inst, int nCols, int isBenders)
+{
+	size_t n = inst->nNodes;
+
+	// set all coeffs to 1 at the beggining so we don't have to think about them again
+	for (size_t i = 0; i < nCols; i++)
+		coeffs[i] = 1.;
+
+	static char sense = 'L';
+	char *cname = malloc(20);
+	static int izero = 0;
+
+	for (int subtourID = 0; subtourID < subtourCount; subtourID++)
+	{
+		// get first node of next subtour
+		int subtourStart = 0;
+		for (;subtoursMap[subtourStart] < subtourID; subtourStart++);
+
+		int nnz = 0;
+		double rhs = -1;
+
+		// follow successor and add all edges that connect each element of the subtour into the constraint
+		int next = subtourStart;
+		do
+		{
+			for (int i = successors[next]; i != subtourStart; i = successors[i])
+			{
+				indexes[nnz] = (int)xpos(next, i, n);
+				nnz++;
+			}
+			rhs++;
+			next = successors[next];
+		} while (next != subtourStart);
+
+		sprintf(cname, "SEC(%03d,%03d)", iterNum, subtourID);
+		if(isBenders)
+		{
+			if (CPXaddrows(cpx->env, cpx->lp, 0, 1, nnz, &rhs, &sense, &izero, indexes, coeffs, NULL, &cname))
+			throwError(inst, NULL, "setSEC ->benders: CPXaddrows() error");
+		}else
+		{
+			if (CPXaddlazyconstraints(cpx->env, cpx->lp, 1, nnz, &rhs, &sense, &izero, indexes, coeffs, &cname))
+			throwError(inst, NULL, "setSEC ->lazyCallback: CPXaddlazyconstraints() error");
+		}
+	}
+
+	free(cname);
+}
+
+
 void RepairHeuristicSuccessors(int *successors, int *subtoursMap, int subtoursCount, Instance *inst)
 {
 	

@@ -134,9 +134,6 @@ typedef struct
 	// Stores in order of visit along the path, the original indexes (the ones contained in the Instance pointed by instance) of the points
 	int *indexPath;
 
-	// Stores the number of columns for the CPLEX problem
-	int ncols;
-
 	Instance *instance;
 } Solution;
 

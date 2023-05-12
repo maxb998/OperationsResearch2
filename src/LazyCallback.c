@@ -10,68 +10,65 @@ static int CPXPUBLIC subtourEliminationCallback(CPXCENVptr env, void *cbdata, in
 
 Solution lazyCallback(Instance *inst, double tLimSec)
 {
-	Solution sol = newSolution(inst);
+	// Stores the solution so that we can populate cbData and return a Solution type for the method
+	Solution tempSolution = newSolution(inst);
 	CplexData cpx = initCplexData(inst);
 
-	sol.ncols = CPXgetnumcols(cpx.env, cpx.lp);
+	CallbackData cbData = 
+	{
+		.sol = &tempSolution,
+		.cpx = &cpx,
+		.ncols = CPXgetnumcols(cpx.env, cpx.lp)
+	};
+	
 
 	CPXsetintparam(cpx.env, CPX_PARAM_MIPCBREDLP, CPX_OFF);	
-	CPXsetlazyconstraintcallbackfunc(cpx.env, subtourEliminationCallback, &sol);
+	CPXsetlazyconstraintcallbackfunc(cpx.env, subtourEliminationCallback, &cbData);
 	int ncores = 1;
 	CPXgetnumcores(cpx.env, &ncores);
 	CPXsetintparam(cpx.env, CPX_PARAM_THREADS, ncores); 
 
 
 	destroyCplexData(&cpx);
-	return sol;
+	return tempSolution;
 }
 
 static int CPXPUBLIC subtourEliminationCallback(CPXCENVptr env, void *cbdata, int wherefrom, void *cbhandle, int *useraction_p)
 {
 	*useraction_p = CPX_CALLBACK_DEFAULT;
-	Solution *sol = (Solution *) cbhandle;
+	CallbackData *cbData = (CallbackData *) cbhandle;
+
+	// Stores the number of nodes in the problem
+	int nNodes = cbData->sol->instance->nNodes;
 
 	// Stores current vector x from CPLEX
-	double *xstar = (double*) malloc(sol->ncols * sizeof(double));
-	if(xstar == NULL) throwError(sol->instance, sol, "subtourEliminationCallback: xstar allocation error.");
-	if(CPXgetcallbacknodex(env, cbdata, wherefrom, xstar, 0, sol->ncols-1) != 0) throwError(sol->instance, sol, "subtourEliminationCallback: CPXgetcallbacknodex error.");
+	double *xstar = (double*) malloc(cbData->ncols * sizeof(double));
+	if(xstar == NULL) throwError(cbData->sol->instance, &cbData->sol, "subtourEliminationCallback: xstar allocation error.");
+	if(CPXgetcallbacknodex(env, cbdata, wherefrom, xstar, 0, cbData->ncols-1) != 0) throwError(cbData->sol->instance, &cbData->sol, "subtourEliminationCallback: CPXgetcallbacknodex error.");
 
 	// Stores the solution with the "successor" convention
-	int *successors = calloc(sol->instance->nNodes, sizeof(int)); 
-	if(successors == NULL) throwError(sol->instance, sol, "subtourEliminationCallback: successor allocation error.");
+	int *successors = malloc(nNodes * sizeof(int)); 
+	if(successors == NULL) throwError(cbData->sol->instance, &cbData->sol, "subtourEliminationCallback: successor allocation error.");
 	
 	// Stores the subtour in which the nodes represented buy the indexes are in
-	int *subtoursMap = calloc(sol->instance->nNodes, sizeof(int));
-	if(subtoursMap == NULL) throwError(sol->instance, sol, "subtourEliminationCallback: subtoursMap allocation error.");
-
-	// Stores ???
-	int *indexes = calloc(sol->ncols, sizeof(int));
-	if(indexes == NULL) throwError(sol->instance, sol, "subtourEliminationCallback: indexes alloation error.");
+	int *subtoursMap = malloc(nNodes * sizeof(int));
+	if(subtoursMap == NULL) throwError(cbData->sol->instance, &cbData->sol, "subtourEliminationCallback: subtoursMap allocation error.");
 
 	// Stores the number of subtours foúnd by CPLEX
 	int subtourCount = 0;
-	for (size_t i = 0; i < sol->instance->nNodes; i++)
+	
+	// Stores the index of the coefficients that we pass to CPLEX 
+	int *indexes = calloc(cbData->ncols, sizeof(int));
+	if(indexes == NULL) throwError(cbData->sol->instance, &cbData->sol, "subtourEliminationCallback: indexes alloation error.");
+
+	cvtCPXtoSuccessors(xstar, cbData->ncols, nNodes, successors, subtoursMap, subtourCount);
+
+	if(subtourCount != 1)
 	{
-		size_t succ = i;
-		for (size_t j = 0; j < sol->instance->nNodes; j++)
-		{
-			if ((succ != j) && (xstar[xpos(succ, j, sol->instance->nNodes)] > 0.5))
-			{
-				successors[succ] = (int)j;
-				subtoursMap[succ] = subtourCount;
-				LOG(LOG_LVL_EVERYTHING, "x(%3d,%3d) = 1   subtour n° %d\n", succ, j, subtoursMap[succ]);
-				succ = j;
-				j = 0;
-			}
-		}
-		if (succ != i)
-		{
-			successors[succ] = i;
-			subtoursMap[succ] = subtourCount;
-			LOG(LOG_LVL_EVERYTHING, "x(%3d,%3d) = 1   subtour n° %d\n", succ, i, subtoursMap[succ]);
-			subtourCount++;
-		}
+		double * coeffs = xstar;
+		setSEC(coeffs, indexes, cbData->cpx, successors, subtoursMap, subtourCount, 0, cbData->sol->instance, cbData->ncols, 0);
 	}
+	
 
 	free(xstar);
 	free(successors);

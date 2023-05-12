@@ -6,8 +6,6 @@
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
 
-static void setSEC(double *coeffs, int *indexes, CplexData *cpx, int *successors, int *subtoursMap, int subtourCount, int iterNum, Instance *inst, int nCols);
-
 static void RepairHeuristic(int *successors, Solution *out, int *subtourMap, int subtourCount, double startTimeSec);
 
 static inline void findBestSubtourMerge(Solution *sol, int mergeIndexes[2], int mergeIndexesSubtourIDs[2], int *invertOrientation, int subtourCount, size_t *subtourPosition);
@@ -71,7 +69,7 @@ Solution benders(Instance *inst, double tlim)
 		// add subtour elimination constraints
 		double * coeffs = xstar; // reuse xStar instead of allocating new memory
 
-		setSEC(coeffs, indexes, &cpx, successors, subtoursMap, subtourCount, iterNum, inst, ncols);
+		setSEC(coeffs, indexes, &cpx, successors, subtoursMap, subtourCount, iterNum, inst, ncols, 1);
 		
 		iterNum++;
 	}
@@ -84,49 +82,6 @@ Solution benders(Instance *inst, double tlim)
 	free(successors);
 
     return *best;
-}
-
-static void setSEC(double *coeffs, int *indexes, CplexData *cpx, int *successors, int *subtoursMap, int subtourCount, int iterNum, Instance *inst, int nCols)
-{
-	size_t n = inst->nNodes;
-
-	// set all coeffs to 1 at the beggining so we don't have to think about them again
-	for (size_t i = 0; i < nCols; i++)
-		coeffs[i] = 1.;
-
-	static char sense = 'L';
-	char *cname = malloc(20);
-	static int izero = 0;
-
-	for (int subtourID = 0; subtourID < subtourCount; subtourID++)
-	{
-		// get first node of next subtour
-		int subtourStart = 0;
-		for (;subtoursMap[subtourStart] < subtourID; subtourStart++);
-
-		int nnz = 0;
-		double rhs = -1;
-
-		// follow successor and add all edges that connect each element of the subtour into the constraint
-		int next = subtourStart;
-		do
-		{
-			for (int i = successors[next]; i != subtourStart; i = successors[i])
-			{
-				indexes[nnz] = (int)xpos(next, i, n);
-				nnz++;
-			}
-			rhs++;
-			next = successors[next];
-		} while (next != subtourStart);
-
-		sprintf(cname, "SEC(%03d,%03d)", iterNum, subtourID);
-
-		if (CPXaddrows(cpx->env, cpx->lp, 0, 1, nnz, &rhs, &sense, &izero, indexes, coeffs, NULL, &cname))
-			throwError(inst, NULL, "benders: add SEC -> CPXaddrows(): error");
-	}
-
-	free(cname);
 }
 
 static void RepairHeuristic(int *successors, Solution *out, int *subtourMap, int subtourCount, double startTimeSec)
