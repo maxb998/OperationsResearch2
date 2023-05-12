@@ -12,12 +12,12 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
-                "--file", "data/att48.tsp",
+                "--file", "data/ts225.tsp",
                 "--mode", "blenders",
 
                 "--grasp", "random(0.05)",
                 "--2opt",
-                "--tlim", "600",
+                "--tlim", "1000",
 
                 //"--nnOption", "tryall",
                 //"--emOption", "random",
@@ -25,10 +25,10 @@
 
                 //"--seed", "2023",
                 "--threads", "1",
-                //"--roundcosts",
+                "--roundcosts",
                 "--plot", 
                 //"--save",
-                "--loglvl", "debug"
+                "--loglvl", "log"
             ],
             "cwd": "${workspaceFolder}"
        },

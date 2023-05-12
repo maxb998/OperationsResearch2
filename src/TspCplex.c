@@ -104,3 +104,62 @@ size_t xpos(size_t i, size_t j, size_t n)
     int pos = i * n + j - ((i + 1) * (i + 2)) / 2;
     return pos;
 }
+
+void cvtCPXtoSuccessors(double *xstar, int ncols, size_t nNodes, int *successors, int *subtoursMap, int *subtourCount)
+{
+	// reset arrays
+	for (size_t i = 0; i < nNodes; i++)
+		successors[i] = -1;
+	for (size_t i = 0; i < nNodes; i++)
+		subtoursMap[i] = -1;
+
+	for (size_t i = 0; i < nNodes; i++)
+	{
+		size_t succ = i;
+		for (size_t j = 0; j < nNodes; j++)
+		{
+			if ((succ != j) && (xstar[xpos(succ, j, nNodes)] > 0.5) && (subtoursMap[j] == -1))
+			{
+				successors[succ] = (int)j;
+				subtoursMap[succ] = *subtourCount;
+				LOG(LOG_LVL_EVERYTHING, "x(%3d,%3d) = 1   subtour n° %d\n", succ, j, subtoursMap[succ] + 1);
+				succ = j;
+				j = 0;
+			}
+		}
+		if (succ != i)
+		{
+			successors[succ] = i;
+			subtoursMap[succ] = *subtourCount;
+			LOG(LOG_LVL_EVERYTHING, "x(%3d,%3d) = 1   subtour n° %d\n", succ, i, subtoursMap[succ] + 1);
+			(*subtourCount)++;
+		}
+	}
+}
+
+void cvtSuccessorsToSolution(int *successors, Solution *sol)
+{
+	Instance *inst = sol->instance;
+	
+	// start from 0
+	sol->indexPath[0] = 0;
+	sol->X[0] = inst->X[0];
+	sol->Y[0] = inst->Y[0];
+
+	for (size_t i = successors[0], pos = 1; i != 0; i = successors[i])
+	{
+		sol->indexPath[pos] = i;
+		sol->X[pos] = inst->X[i];
+		sol->Y[pos] = inst->Y[i];
+
+		pos++;
+	}
+}
+
+void RepairHeuristicSuccessors(int *successors, int *subtoursMap, int subtoursCount, Instance *inst)
+{
+	
+
+}
+
+
