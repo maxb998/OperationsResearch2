@@ -62,11 +62,14 @@ int main (int argc, char *argv[])
     case MODE_BENDERS:
         sol = runBenders(&inst);
         break;
+    case MODE_LAZYCB:
+        sol = lazyCallback(&inst);
+        break;
     }
 
 
     if (inst.params.showPlotFlag)
-        plotSolution(&sol, "1600,900", "green", "black", 1, 0);
+        plotSolution(&sol, "720,576", "green", "black", 1, 0);
     
     if (inst.params.saveFlag)
         saveSolution(&sol, argc, argv);

@@ -17,7 +17,8 @@ static const char *modeStrings[] = {
     "nn",
     "em",
     "vns",
-    "benders"
+    "benders",
+    "lazycb"
 };
 
 #define ARGP_GRASP_DOC "\
@@ -247,6 +248,8 @@ static int parseMode(char *arg, Instance *inst)
         inst->params.mode = MODE_VNS;
     else if (strcmp(arg, modeStrings[MODE_BENDERS]) == 0)
         inst->params.mode = MODE_BENDERS;
+    else if (strcmp(arg, modeStrings[MODE_LAZYCB]) == 0)
+        inst->params.mode = MODE_LAZYCB;
 
     // error check
     if (inst->params.mode == MODE_NONE)

@@ -8,7 +8,7 @@
 // Callback for adding the lazy subtour elimination cuts
 static int CPXPUBLIC subtourEliminationCallback(CPXCENVptr env, void *cbdata, int wherefrom, void *cbhandle, int *useraction_p);
 
-Solution lazyCallback(Instance *inst, double tLimSec)
+Solution lazyCallback(Instance *inst)
 {
 	// Stores the solution so that we can populate cbData and return a Solution type for the method
 	Solution tempSolution = newSolution(inst);
@@ -43,25 +43,25 @@ static int CPXPUBLIC subtourEliminationCallback(CPXCENVptr env, void *cbdata, in
 
 	// Stores current vector x from CPLEX
 	double *xstar = (double*) malloc(cbData->ncols * sizeof(double));
-	if(xstar == NULL) throwError(cbData->sol->instance, &cbData->sol, "subtourEliminationCallback: xstar allocation error.");
-	if(CPXgetcallbacknodex(env, cbdata, wherefrom, xstar, 0, cbData->ncols-1) != 0) throwError(cbData->sol->instance, &cbData->sol, "subtourEliminationCallback: CPXgetcallbacknodex error.");
+	if(xstar == NULL) throwError(cbData->sol->instance, cbData->sol, "subtourEliminationCallback: xstar allocation error.");
+	if(CPXgetcallbacknodex(env, cbdata, wherefrom, xstar, 0, cbData->ncols-1) != 0) throwError(cbData->sol->instance, cbData->sol, "subtourEliminationCallback: CPXgetcallbacknodex error.");
 
 	// Stores the solution with the "successor" convention
 	int *successors = malloc(nNodes * sizeof(int)); 
-	if(successors == NULL) throwError(cbData->sol->instance, &cbData->sol, "subtourEliminationCallback: successor allocation error.");
+	if(successors == NULL) throwError(cbData->sol->instance, cbData->sol, "subtourEliminationCallback: successor allocation error.");
 	
 	// Stores the subtour in which the nodes represented buy the indexes are in
 	int *subtoursMap = malloc(nNodes * sizeof(int));
-	if(subtoursMap == NULL) throwError(cbData->sol->instance, &cbData->sol, "subtourEliminationCallback: subtoursMap allocation error.");
+	if(subtoursMap == NULL) throwError(cbData->sol->instance, cbData->sol, "subtourEliminationCallback: subtoursMap allocation error.");
 
 	// Stores the number of subtours foúnd by CPLEX
 	int subtourCount = 0;
 	
 	// Stores the index of the coefficients that we pass to CPLEX 
 	int *indexes = calloc(cbData->ncols, sizeof(int));
-	if(indexes == NULL) throwError(cbData->sol->instance, &cbData->sol, "subtourEliminationCallback: indexes alloation error.");
+	if(indexes == NULL) throwError(cbData->sol->instance, cbData->sol, "subtourEliminationCallback: indexes alloation error.");
 
-	cvtCPXtoSuccessors(xstar, cbData->ncols, nNodes, successors, subtoursMap, subtourCount);
+	cvtCPXtoSuccessors(xstar, cbData->ncols, nNodes, successors, subtoursMap, &subtourCount);
 
 	if(subtourCount != 1)
 	{
@@ -74,4 +74,5 @@ static int CPXPUBLIC subtourEliminationCallback(CPXCENVptr env, void *cbdata, in
 	free(successors);
 	free(subtoursMap);
 	free(indexes);
+	return 0;
 }

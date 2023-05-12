@@ -51,6 +51,6 @@ Solution benders(Instance *inst, double tlim);
 //###################################################################################################################################
 
 // Method that computes the solution using SEC internally
-Solution lazyCallback(Instance *inst, double tLimSec);
+Solution lazyCallback(Instance *inst);
 
 #endif // TSP_CPLEX
