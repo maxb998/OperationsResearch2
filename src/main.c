@@ -9,7 +9,7 @@ static Solution runNearestNeighbor(Instance *inst);
 static Solution runExtraMileage(Instance *inst);
 static Solution runVariableNeighborhoodSearch(Instance *inst);
 
-static Solution runBlenders(Instance *inst);
+static Solution runBenders(Instance *inst);
 
 
 static void run2Opt(Solution *sol);
@@ -59,8 +59,8 @@ int main (int argc, char *argv[])
         sol = runVariableNeighborhoodSearch(&inst);
         break;
 
-    case MODE_BLENDERS:
-        sol = runBlenders(&inst);
+    case MODE_BENDERS:
+        sol = runBenders(&inst);
         break;
     }
 
@@ -110,16 +110,16 @@ static Solution runVariableNeighborhoodSearch(Instance *inst)
     return sol;
 }
 
-static Solution runBlenders(Instance *inst)
+static Solution runBenders(Instance *inst)
 {
     printf("##############################################################################################################################\n");
-    printf("Blenders starting...\n");
+    printf("Benders starting...\n");
     printf("##############################################################################################################################\n");
 
-    Solution em = blenders(inst, inst->params.tlim);
+    Solution em = benders(inst, inst->params.tlim);
 
     printf("##############################################################################################################################\n");
-    printf("Blenders finished in %lf seconds\n", em.execTime);
+    printf("Benders finished in %lf seconds\n", em.execTime);
     printf("Cost = %lf\n", em.cost);
     printf("##############################################################################################################################\n");
 

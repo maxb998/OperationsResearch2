@@ -9,7 +9,7 @@ Specify the type of solver to use: \n\
     nn  : Use Nearest Neighbor\n\
     em  : Use Extra Mileage\n\
     vns : Use Variable Neighborhood Search\
-    blenders: Use cplex mipopt in combination with blenders heuristic\n\
+    benders: Use cplex mipopt in combination with benders heuristic\n\
 "
 
 # define MODES_COUNT 3
@@ -17,7 +17,7 @@ static const char *modeStrings[] = {
     "nn",
     "em",
     "vns",
-    "blenders"
+    "benders"
 };
 
 #define ARGP_GRASP_DOC "\
@@ -245,8 +245,8 @@ static int parseMode(char *arg, Instance *inst)
         inst->params.mode = MODE_EM;
     else if (strcmp(arg, modeStrings[MODE_VNS]) == 0)
         inst->params.mode = MODE_VNS;
-    else if (strcmp(arg, modeStrings[MODE_BLENDERS]) == 0)
-        inst->params.mode = MODE_BLENDERS;
+    else if (strcmp(arg, modeStrings[MODE_BENDERS]) == 0)
+        inst->params.mode = MODE_BENDERS;
 
     // error check
     if (inst->params.mode == MODE_NONE)

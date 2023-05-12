@@ -28,10 +28,10 @@ void cvtCPXtoSuccessors(double *xstar, int ncols, size_t nNodes, int *successors
 void cvtSuccessorsToSolution(int *successors, Solution *sol);
 
 //###################################################################################################################################
-// BLENDERS
+// BENDERS
 //###################################################################################################################################
 
-Solution blenders(Instance *inst, double tlim);
+Solution benders(Instance *inst, double tlim);
 
 //###################################################################################################################################
 // LAZY_CALLBACK

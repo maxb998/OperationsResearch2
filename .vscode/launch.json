@@ -12,8 +12,8 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
-                "--file", "data/ts225.tsp",
-                "--mode", "blenders",
+                "--file", "data/att48.tsp",
+                "--mode", "benders",
 
                 "--grasp", "random(0.05)",
                 "--2opt",

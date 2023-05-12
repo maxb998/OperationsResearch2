@@ -13,7 +13,7 @@ static void RepairHeuristic(int *successors, Solution *out, int *subtourMap, int
 static inline void findBestSubtourMerge(Solution *sol, int mergeIndexes[2], int mergeIndexesSubtourIDs[2], int *invertOrientation, int subtourCount, size_t *subtourPosition);
 
 
-Solution blenders(Instance *inst, double tlim)
+Solution benders(Instance *inst, double tlim)
 {
 	size_t n = inst->nNodes;
 
@@ -45,10 +45,10 @@ Solution blenders(Instance *inst, double tlim)
 		CPXsetdblparam(cpx.env, CPX_PARAM_TILIM, currentTimeSec + tlim - startTimeSec);
 
 		if (CPXmipopt(cpx.env, cpx.lp))
-			throwError(inst, NULL, "Blenders: output of CPXmipopt != 0");
+			throwError(inst, NULL, "Benders: output of CPXmipopt != 0");
 
 		if (CPXgetx(cpx.env, cpx.lp, xstar, 0, ncols - 1))
-			throwError(inst, NULL, "Blenders: output of CPXgetx != 0");
+			throwError(inst, NULL, "Benders: output of CPXgetx != 0");
 
 		int subtourCount = 0;
 		
@@ -123,7 +123,7 @@ static void setSEC(double *coeffs, int *indexes, CplexData *cpx, int *successors
 		sprintf(cname, "SEC(%03d,%03d)", iterNum, subtourID);
 
 		if (CPXaddrows(cpx->env, cpx->lp, 0, 1, nnz, &rhs, &sense, &izero, indexes, coeffs, NULL, &cname))
-			throwError(inst, NULL, "blenders: add SEC -> CPXaddrows(): error");
+			throwError(inst, NULL, "benders: add SEC -> CPXaddrows(): error");
 	}
 
 	free(cname);
