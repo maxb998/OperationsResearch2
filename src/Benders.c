@@ -43,10 +43,10 @@ Solution benders(Instance *inst, double tlim)
 		CPXsetdblparam(cpx.env, CPX_PARAM_TILIM, currentTimeSec + tlim - startTimeSec);
 
 		if (CPXmipopt(cpx.env, cpx.lp))
-			throwError(inst, NULL, "Benders: output of CPXmipopt != 0");
+			cplexError(&cpx, inst, NULL, "Benders: output of CPXmipopt != 0");
 
 		if (CPXgetx(cpx.env, cpx.lp, xstar, 0, ncols - 1))
-			throwError(inst, NULL, "Benders: output of CPXgetx != 0");
+			cplexError(&cpx, inst, NULL, "Benders: output of CPXgetx != 0");
 
 		int subtourCount = 0;
 		

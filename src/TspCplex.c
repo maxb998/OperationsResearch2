@@ -3,10 +3,12 @@
 
 #include <cplex.h>
 #include <time.h>
+#include <stdio.h>
+#include <stdarg.h> // used for logger va_list
 
 CplexData initCplexData(Instance *inst)
 {
-	CplexData cpxData;
+	CplexData cpxData = { 0 };
 
 	int errno = 0;
 	cpxData.env = CPXopenCPLEX(&errno);
@@ -46,9 +48,9 @@ CplexData initCplexData(Instance *inst)
 			double obj = computeEdgeCost(inst->X[i], inst->Y[i], inst->X[j], inst->Y[j], ewt, roundFlag); // cost == distance
 			double ub = 1.0;
 			if ( CPXnewcols(cpxData.env, cpxData.lp, 1, &obj, NULL, &ub, &binary, cname) ) 
-				throwError(inst, NULL, "initCplexData: wrong CPXnewcols on x var.s");
+				cplexError(&cpxData, inst, NULL, "initCplexData: wrong CPXnewcols on x var.s");
     		if ( CPXgetnumcols(cpxData.env, cpxData.lp)-1 != xpos(i,j,n) )
-				throwError(inst, NULL, "initCplexData: wrong position for x var.s");
+				cplexError(&cpxData, inst, NULL, "initCplexData: wrong position for x var.s");
 		}
 	} 
 
@@ -72,7 +74,7 @@ CplexData initCplexData(Instance *inst)
 		}
 		int izero = 0;
 		if ( CPXaddrows(cpxData.env, cpxData.lp, 0, 1, nnz, &rhs, &sense, &izero, index, value, NULL, &cname[0]) ) 
-			throwError(inst, NULL, "initCplexData: CPXaddrows(): error 1");
+			cplexError(&cpxData, inst, NULL, "initCplexData: CPXaddrows(): error 1");
 	} 
 
 	free(value);
@@ -90,6 +92,24 @@ void destroyCplexData(CplexData * cpxData)
     CPXcloseCPLEX(&cpxData->env);
 }
 
+void cplexError(CplexData *cpxData, Instance *inst, Solution *sol, char *line, ...)
+{
+	printf("\033[1;31mERR \033[0m");
+
+	va_list params;
+    va_start(params, line);
+    vprintf(line, params);
+    va_end(params);
+
+    printf("\n");
+
+    // free allocated memory
+    if (inst) destroyInstance(inst);
+    if (sol) destroySolution(sol);
+	if (cpxData) destroyCplexData(cpxData);
+
+    exit(EXIT_FAILURE);
+}
 
 size_t xpos(size_t i, size_t j, size_t n)
 {
@@ -194,22 +214,16 @@ void setSEC(double *coeffs, int *indexes, CplexData *cpx, int *successors, int *
 		if(isBenders)
 		{
 			if (CPXaddrows(cpx->env, cpx->lp, 0, 1, nnz, &rhs, &sense, &izero, indexes, coeffs, NULL, &cname))
-			throwError(inst, NULL, "setSEC ->benders: CPXaddrows() error");
-		}else
+				cplexError(cpx, inst, NULL, "setSEC ->benders: CPXaddrows() error");
+		}
+		else
 		{
 			if (CPXaddlazyconstraints(cpx->env, cpx->lp, 1, nnz, &rhs, &sense, &izero, indexes, coeffs, &cname))
-			throwError(inst, NULL, "setSEC ->lazyCallback: CPXaddlazyconstraints() error");
+				cplexError(cpx, inst, NULL, "setSEC ->lazyCallback: CPXaddlazyconstraints() error");
 		}
 	}
 
 	free(cname);
-}
-
-
-void RepairHeuristicSuccessors(int *successors, int *subtoursMap, int subtoursCount, Instance *inst)
-{
-	
-
 }
 
 

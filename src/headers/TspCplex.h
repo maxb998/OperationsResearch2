@@ -31,6 +31,8 @@ CplexData initCplexData(Instance *inst);
 
 void destroyCplexData(CplexData * cpxData);
 
+void cplexError(CplexData *cpxData, Instance *inst, Solution *sol, char *line, ...);
+
 size_t xpos(size_t i, size_t j, size_t n);
 
 void cvtCPXtoSuccessors(double *xstar, int ncols, size_t nNodes, int *successors, int *subtoursMap, int *subtourCount);

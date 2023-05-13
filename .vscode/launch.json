@@ -28,7 +28,7 @@
                 "--roundcosts",
                 "--plot", 
                 //"--save",
-                "--loglvl", "log"
+                "--loglvl", "debug"
             ],
             "cwd": "${workspaceFolder}"
        },
