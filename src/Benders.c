@@ -6,7 +6,7 @@
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
 
-static void RepairHeuristic(int *successors, Solution *out, int *subtourMap, int subtourCount, double startTimeSec);
+static void RepairHeuristic(SubtoursData *subData, Solution *out, double startTimeSec);
 
 static inline void findBestSubtourMerge(Solution *sol, int mergeIndexes[2], int mergeIndexesSubtourIDs[2], int *invertOrientation, int subtourCount, size_t *subtourPosition);
 
@@ -28,8 +28,9 @@ Solution benders(Instance *inst, double tlim)
 	int ncols = CPXgetnumcols(cpx.env, cpx.lp);
 	double *xstar = malloc(ncols * sizeof(double));
 
-	int *successors = malloc(n * sizeof(int) * 2);
-	int *subtoursMap = &successors[n];
+	SubtoursData subData = {0};
+	subData.successors = malloc(n * sizeof(int) * 2);
+	subData.subtoursMap = &subData.successors[n];
 
 	int *indexes = malloc(ncols * sizeof(int));
 
@@ -48,12 +49,12 @@ Solution benders(Instance *inst, double tlim)
 		if (CPXgetx(cpx.env, cpx.lp, xstar, 0, ncols - 1))
 			cplexError(&cpx, inst, NULL, "Benders: output of CPXgetx != 0");
 
-		int subtourCount = 0;
+		subData.subtoursCount = 0;
 		
-		cvtCPXtoSuccessors(xstar, ncols, n, successors, subtoursMap, &subtourCount);
+		cvtCPXtoSuccessors(xstar, ncols, n, &subData);
 		
 		// generate a solution using Repair Heuristic and check if it is better than the previous solutions
-		RepairHeuristic(successors, repaired, subtoursMap, subtourCount, startTimeSec);
+		RepairHeuristic(&subData, repaired, startTimeSec);
 
 		if (best->cost > repaired->cost)
 		{
@@ -61,15 +62,15 @@ Solution benders(Instance *inst, double tlim)
 			swapElems(best, repaired, temp);
 		}
 
-		LOG(LOG_LVL_LOG, "Number of subtours detected at iteration %d is %d", iterNum, subtourCount);
+		LOG(LOG_LVL_LOG, "Number of subtours detected at iteration %d is %d", iterNum, subData.subtoursCount);
 
-		if (subtourCount == 1) // means that there is only one subtour
+		if (subData.subtoursCount == 1) // means that there is only one subtour
 			break;
 
 		// add subtour elimination constraints
 		double * coeffs = xstar; // reuse xStar instead of allocating new memory
 
-		setSEC(coeffs, indexes, &cpx, NULL, successors, subtoursMap, subtourCount, iterNum, inst, ncols, 1);
+		setSEC(coeffs, indexes, &cpx, NULL, &subData, iterNum, inst, ncols, 1);
 		
 		iterNum++;
 	}
@@ -79,12 +80,12 @@ Solution benders(Instance *inst, double tlim)
 	destroyCplexData(&cpx);
 
 	destroySolution(repaired);
-	free(successors);
+	free(subData.successors);
 
     return *best;
 }
 
-static void RepairHeuristic(int *successors, Solution *out, int *subtourMap, int subtourCount, double startTimeSec)
+static void RepairHeuristic(SubtoursData *subData, Solution *out, double startTimeSec)
 {
 	Instance *inst = out->instance;
 	size_t n = out->instance->nNodes;
@@ -95,9 +96,9 @@ static void RepairHeuristic(int *successors, Solution *out, int *subtourMap, int
 	// convert successor array to standard solution form adopted in Solution.indexpath
 
 	// array containing the starting position of each subtour in the converted solution
-	size_t *subtourPosition = malloc(subtourCount * sizeof(size_t));
+	size_t *subtourPosition = malloc(subData->subtoursCount * sizeof(size_t));
 
-	for (int subtourID = 0, pos = 0; subtourID < subtourCount; subtourID++)
+	for (int subtourID = 0, pos = 0; subtourID < subData->subtoursCount; subtourID++)
 	{
 		// find first node of the subtour with id subtourID in successors
 
@@ -105,7 +106,7 @@ static void RepairHeuristic(int *successors, Solution *out, int *subtourMap, int
 
 		size_t subtourFirstPos = 0;
 		for (; subtourFirstPos < n; subtourFirstPos++)
-			if (subtourMap[subtourFirstPos] == subtourID)
+			if (subData->subtoursMap[subtourFirstPos] == subtourID)
 				break;
 		
 		// add elements to out.indexPath and .x and .y until we complete the subtour
@@ -116,13 +117,13 @@ static void RepairHeuristic(int *successors, Solution *out, int *subtourMap, int
 			out->X[pos] = inst->X[i];
 			out->Y[pos] = inst->Y[i];
 			pos++;
-			i = successors[i];
+			i = subData->successors[i];
 		} while ((int)i != subtourFirstPos);
 	}
 
 	// ###############################################################################
 	// Now to "repair" the solution
-	while (subtourCount > 1)
+	while (subData->subtoursCount > 1)
 	{
 		// find the two subtours that merge with minimal cost increase (kind of like extra mileage heuristic but for subtours)
 
@@ -130,10 +131,10 @@ static void RepairHeuristic(int *successors, Solution *out, int *subtourMap, int
 		int invertOrientation;
 		int mergeIndexes[2], mergeIndexesSubtourIDs[2];
 		
-		findBestSubtourMerge(out, mergeIndexes, mergeIndexesSubtourIDs, &invertOrientation, subtourCount, subtourPosition);
+		findBestSubtourMerge(out, mergeIndexes, mergeIndexesSubtourIDs, &invertOrientation, subData->subtoursCount, subtourPosition);
 		
 		size_t lastPos = n; // last position +1  of the of the subtour that will be merged and disappear (only used in the for condition)
-		if (mergeIndexesSubtourIDs[1] < subtourCount-1)
+		if (mergeIndexesSubtourIDs[1] < subData->subtoursCount-1)
 			lastPos = subtourPosition[mergeIndexesSubtourIDs[1] + 1];
 
 		size_t subtourSize = lastPos - subtourPosition[mergeIndexesSubtourIDs[1]];
@@ -189,8 +190,8 @@ static void RepairHeuristic(int *successors, Solution *out, int *subtourMap, int
 		free(xCopyBuff);
 
 		// fix auxiliary data structures
-		subtourCount--;
-		for (size_t i = mergeIndexesSubtourIDs[0] + 1; i < subtourCount; i++)
+		subData->subtoursCount--;
+		for (size_t i = mergeIndexesSubtourIDs[0] + 1; i < subData->subtoursCount; i++)
 		{
 			if (i < mergeIndexesSubtourIDs[1])
 				subtourPosition[i] += subtourSize;

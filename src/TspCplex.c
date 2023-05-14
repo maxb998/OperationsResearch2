@@ -139,36 +139,36 @@ size_t xpos(size_t i, size_t j, size_t n)
     return pos;
 }
 
-void cvtCPXtoSuccessors(double *xstar, int ncols, size_t nNodes, int *successors, int *subtoursMap, int *subtourCount)
+void cvtCPXtoSuccessors(double *xstar, int ncols, size_t nNodes, SubtoursData *subData)
 {
 	// reset arrays
 	for (size_t i = 0; i < nNodes; i++)
-		successors[i] = -1;
+		subData->successors[i] = -1;
 	for (size_t i = 0; i < nNodes; i++)
-		subtoursMap[i] = -1;
+		subData->subtoursMap[i] = -1;
 
-	LOG(LOG_LVL_EVERYTHING, "-------------------------------------------------------------------------");
+	LOG(LOG_LVL_EVERYTHING, "###################################################");
 
 	for (size_t i = 0; i < nNodes; i++)
 	{
 		size_t succ = i;
 		for (size_t j = 0; j < nNodes; j++)
 		{
-			if ((succ != j) && (xstar[xpos(succ, j, nNodes)] > 0.5) && (subtoursMap[j] == -1))
+			if ((succ != j) && (xstar[xpos(succ, j, nNodes)] > 0.5) && (subData->subtoursMap[j] == -1))
 			{
-				successors[succ] = (int)j;
-				subtoursMap[succ] = *subtourCount;
-				LOG(LOG_LVL_EVERYTHING, "x(%3d,%3d) = 1   subtour n° %d\n", succ, j, subtoursMap[succ] + 1);
+				subData->successors[succ] = (int)j;
+				subData->subtoursMap[succ] = subData->subtoursCount;
+				LOG(LOG_LVL_EVERYTHING, "x(%3d,%3d) = 1   subtour n° %d\n", succ, j, subData->subtoursMap[succ] + 1);
 				succ = j;
 				j = 0;
 			}
 		}
 		if (succ != i)
 		{
-			successors[succ] = i;
-			subtoursMap[succ] = *subtourCount;
-			LOG(LOG_LVL_EVERYTHING, "x(%3d,%3d) = 1   subtour n° %d\n", succ, i, subtoursMap[succ] + 1);
-			(*subtourCount)++;
+			subData->successors[succ] = i;
+			subData->subtoursMap[succ] = subData->subtoursCount;
+			LOG(LOG_LVL_EVERYTHING, "x(%3d,%3d) = 1   subtour n° %d\n", succ, i, subData->subtoursMap[succ] + 1);
+			(subData->subtoursCount)++;
 		}
 	}
 }
@@ -197,7 +197,7 @@ void cvtSuccessorsToSolution(int *successors, Solution *sol)
 	sol->Y[n] = inst->Y[0];
 }
 
-void setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, int *successors, int *subtoursMap, int subtourCount, int iterNum, Instance *inst, int nCols, int isBenders)
+void setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, SubtoursData *subData, int iterNum, Instance *inst, int nCols, int isBenders)
 {
 	size_t n = inst->nNodes;
 
@@ -209,11 +209,11 @@ void setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr 
 	char *cname = malloc(20);
 	static int izero = 0;
 
-	for (int subtourID = 0; subtourID < subtourCount; subtourID++)
+	for (int subtourID = 0; subtourID < subData->subtoursCount; subtourID++)
 	{
 		// get first node of next subtour
 		int subtourStart = 0;
-		for (;subtoursMap[subtourStart] < subtourID; subtourStart++);
+		for (;subData->subtoursMap[subtourStart] < subtourID; subtourStart++);
 
 		int nnz = 0;
 		double rhs = -1;
@@ -222,13 +222,13 @@ void setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr 
 		int next = subtourStart;
 		do
 		{
-			for (int i = successors[next]; i != subtourStart; i = successors[i])
+			for (int i = subData->successors[next]; i != subtourStart; i = subData->successors[i])
 			{
 				indexes[nnz] = (int)xpos(next, i, n);
 				nnz++;
 			}
 			rhs++;
-			next = successors[next];
+			next = subData->successors[next];
 		} while (next != subtourStart);
 
 		sprintf(cname, "SEC(%03d,%03d)", iterNum, subtourID);

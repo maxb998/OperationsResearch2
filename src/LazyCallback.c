@@ -58,34 +58,35 @@ static int CPXPUBLIC subtourEliminationCallback(CPXCALLBACKCONTEXTptr context, C
 	if (CPXcallbackgetcandidatepoint(context, xstar, 0, cbData->ncols-1, NULL) != 0) return callbackError("subtourEliminationCallback: CPXgetcallbacknodex error.");
 
 	// Stores the solution with the "successor" convention
-	int *successors = malloc(nNodes * 2 * sizeof(int)); 
-	if (successors == NULL) return callbackError("subtourEliminationCallback: successor allocation error.");
+	SubtoursData subData = {0};
+	subData.successors = malloc(nNodes * 2 * sizeof(int)); 
+	if (subData.successors == NULL) return callbackError("subtourEliminationCallback: successor allocation error.");
 	
 	// Stores the subtour in which the nodes represented buy the indexes are in
-	int *subtoursMap = &successors[nNodes];
+	subData.subtoursMap = &subData.successors[nNodes];
 
 	// Stores the number of subtours foúnd by CPLEX
-	int subtourCount = 0;
+	subData.subtoursCount = 0;
 	
 	// Stores the index of the coefficients that we pass to CPLEX 
 	int *indexes = malloc(cbData->ncols * sizeof(int));
 	if (indexes == NULL) return callbackError("subtourEliminationCallback: indexes allocation error.");
 
-	cvtCPXtoSuccessors(xstar, cbData->ncols, nNodes, successors, subtoursMap, &subtourCount);
+	cvtCPXtoSuccessors(xstar, cbData->ncols, nNodes, &subData);
 
-	if(subtourCount != 1)
+	if(subData.subtoursCount != 1)
 	{
 		double * coeffs = xstar;
-		setSEC(coeffs, indexes, NULL, context, successors, subtoursMap, subtourCount, 0, inst, cbData->ncols, 0);
+		setSEC(coeffs, indexes, NULL, context, &subData, 0, inst, cbData->ncols, 0);
 		if (CPXcallbackrejectcandidate(context, 0, 0, NULL, NULL, NULL, NULL, NULL))
 			return callbackError("subtourEliminationCallback: candidate solution rejection failed");
 	}
 	else
-		cvtSuccessorsToSolution(successors, cbData->sol);
+		cvtSuccessorsToSolution(subData.successors, cbData->sol);
 	
 
 	free(xstar);
-	free(successors);
+	free(subData.successors);
 	free(indexes);
 	return 0;
 }

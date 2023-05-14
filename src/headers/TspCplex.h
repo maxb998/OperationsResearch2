@@ -22,6 +22,13 @@ typedef struct
 	int ncols;
 } CallbackData;
 
+typedef struct 
+{
+	int *successors;
+	int *subtoursMap;
+	int subtoursCount;
+} SubtoursData;
+
 
 //###################################################################################################################################
 // TSP_CPLEX_BASE
@@ -37,12 +44,12 @@ int callbackError(char *line, ...);
 
 size_t xpos(size_t i, size_t j, size_t n);
 
-void cvtCPXtoSuccessors(double *xstar, int ncols, size_t nNodes, int *successors, int *subtoursMap, int *subtourCount);
+void cvtCPXtoSuccessors(double *xstar, int ncols, size_t nNodes, SubtoursData *subData);
 
 void cvtSuccessorsToSolution(int *successors, Solution *sol);
 
 // Flag "isBenders" to know what method to use to add the SEC
-void setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, int *successors, int *subtoursMap, int subtourCount, int iterNum, Instance *inst, int nCols, int isBenders);
+void setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, SubtoursData *subData, int iterNum, Instance *inst, int nCols, int isBenders);
 
 //###################################################################################################################################
 // BENDERS
