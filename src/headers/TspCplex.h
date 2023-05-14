@@ -33,6 +33,8 @@ void destroyCplexData(CplexData * cpxData);
 
 void cplexError(CplexData *cpxData, Instance *inst, Solution *sol, char *line, ...);
 
+int callbackError(char *line, ...);
+
 size_t xpos(size_t i, size_t j, size_t n);
 
 void cvtCPXtoSuccessors(double *xstar, int ncols, size_t nNodes, int *successors, int *subtoursMap, int *subtourCount);
@@ -40,7 +42,7 @@ void cvtCPXtoSuccessors(double *xstar, int ncols, size_t nNodes, int *successors
 void cvtSuccessorsToSolution(int *successors, Solution *sol);
 
 // Flag "isBenders" to know what method to use to add the SEC
-void setSEC(double *coeffs, int *indexes, CplexData *cpx, int *successors, int *subtoursMap, int subtourCount, int iterNum, Instance *inst, int nCols, int isBenders);
+void setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, int *successors, int *subtoursMap, int subtourCount, int iterNum, Instance *inst, int nCols, int isBenders);
 
 //###################################################################################################################################
 // BENDERS

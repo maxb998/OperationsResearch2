@@ -111,6 +111,20 @@ void cplexError(CplexData *cpxData, Instance *inst, Solution *sol, char *line, .
     exit(EXIT_FAILURE);
 }
 
+int callbackError(char *line, ...)
+{
+	printf("\033[1;31mERR \033[0m");
+
+	va_list params;
+    va_start(params, line);
+    vprintf(line, params);
+    va_end(params);
+
+    printf("\n");
+
+    exit(EXIT_FAILURE);
+}
+
 size_t xpos(size_t i, size_t j, size_t n)
 {
     if (i == j)
@@ -132,6 +146,8 @@ void cvtCPXtoSuccessors(double *xstar, int ncols, size_t nNodes, int *successors
 		successors[i] = -1;
 	for (size_t i = 0; i < nNodes; i++)
 		subtoursMap[i] = -1;
+
+	LOG(LOG_LVL_EVERYTHING, "-------------------------------------------------------------------------");
 
 	for (size_t i = 0; i < nNodes; i++)
 	{
@@ -160,6 +176,7 @@ void cvtCPXtoSuccessors(double *xstar, int ncols, size_t nNodes, int *successors
 void cvtSuccessorsToSolution(int *successors, Solution *sol)
 {
 	Instance *inst = sol->instance;
+	size_t n = inst->nNodes;
 	
 	// start from 0
 	sol->indexPath[0] = 0;
@@ -174,9 +191,13 @@ void cvtSuccessorsToSolution(int *successors, Solution *sol)
 
 		pos++;
 	}
+
+	sol->indexPath[n] = 0;
+	sol->X[n] = inst->X[0];
+	sol->Y[n] = inst->Y[0];
 }
 
-void setSEC(double *coeffs, int *indexes, CplexData *cpx, int *successors, int *subtoursMap, int subtourCount, int iterNum, Instance *inst, int nCols, int isBenders)
+void setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, int *successors, int *subtoursMap, int subtourCount, int iterNum, Instance *inst, int nCols, int isBenders)
 {
 	size_t n = inst->nNodes;
 
@@ -218,7 +239,7 @@ void setSEC(double *coeffs, int *indexes, CplexData *cpx, int *successors, int *
 		}
 		else
 		{
-			if (CPXaddlazyconstraints(cpx->env, cpx->lp, 1, nnz, &rhs, &sense, &izero, indexes, coeffs, &cname))
+			if (CPXcallbackrejectcandidate(context, 1, nnz, &rhs, &sense, &izero, indexes, coeffs))
 				cplexError(cpx, inst, NULL, "setSEC ->lazyCallback: CPXaddlazyconstraints() error");
 		}
 	}

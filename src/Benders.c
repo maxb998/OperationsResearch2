@@ -69,7 +69,7 @@ Solution benders(Instance *inst, double tlim)
 		// add subtour elimination constraints
 		double * coeffs = xstar; // reuse xStar instead of allocating new memory
 
-		setSEC(coeffs, indexes, &cpx, successors, subtoursMap, subtourCount, iterNum, inst, ncols, 1);
+		setSEC(coeffs, indexes, &cpx, NULL, successors, subtoursMap, subtourCount, iterNum, inst, ncols, 1);
 		
 		iterNum++;
 	}
