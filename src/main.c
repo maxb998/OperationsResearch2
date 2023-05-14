@@ -10,6 +10,7 @@ static Solution runExtraMileage(Instance *inst);
 static Solution runVariableNeighborhoodSearch(Instance *inst);
 
 static Solution runBenders(Instance *inst);
+static Solution runBranchAndCut(Instance *inst);
 
 
 static void run2Opt(Solution *sol);
@@ -62,8 +63,8 @@ int main (int argc, char *argv[])
     case MODE_BENDERS:
         sol = runBenders(&inst);
         break;
-    case MODE_LAZYCB:
-        sol = lazyCallback(&inst);
+    case MODE_BRANCH_CUT:
+        sol = runBranchAndCut(&inst);
         break;
     }
 
@@ -119,14 +120,30 @@ static Solution runBenders(Instance *inst)
     printf("Benders starting...\n");
     printf("##############################################################################################################################\n");
 
-    Solution em = benders(inst, inst->params.tlim);
+    Solution sol = benders(inst, inst->params.tlim);
 
     printf("##############################################################################################################################\n");
-    printf("Benders finished in %lf seconds\n", em.execTime);
-    printf("Cost = %lf\n", em.cost);
+    printf("Benders finished in %lf seconds\n", sol.execTime);
+    printf("Cost = %lf\n", sol.cost);
     printf("##############################################################################################################################\n");
 
-    return em;
+    return sol;
+}
+
+static Solution runBranchAndCut(Instance *inst)
+{
+    printf("##############################################################################################################################\n");
+    printf("Branch & Cut starting...\n");
+    printf("##############################################################################################################################\n");
+
+    Solution sol = BranchAndCut(inst, inst->params.tlim);
+
+    printf("##############################################################################################################################\n");
+    printf("Branch & Cut finished in %lf seconds\n", sol.execTime);
+    printf("Cost = %lf\n", sol.cost);
+    printf("##############################################################################################################################\n");
+
+    return sol;
 }
 
 static void run2Opt(Solution *sol)

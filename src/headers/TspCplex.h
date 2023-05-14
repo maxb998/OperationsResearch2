@@ -34,34 +34,99 @@ typedef struct
 // TSP_CPLEX_BASE
 //###################################################################################################################################
 
+/*!
+* @brief Generate CplexData struct using a tsp instance as input
+* @param inst Instance to initialize within cplex
+* @result Initialized cplex basic structure
+*/
 CplexData initCplexData(Instance *inst);
 
+/*!
+* @brief Destroys cplex enviroment and instanced problem. (Free memory)
+* @param cpxData Pointer to CplexData.
+*/
 void destroyCplexData(CplexData * cpxData);
 
+/*!
+* @brief Print error message and frees any memory from each pointer that is not NULL. Then exits the program with code 1.
+* @param cpxData Pointer to CplexData that will be destroyed before exiting
+* @param inst Pointer to Instance that will be destroyed before exiting.
+* @param sol Pointer to Solution that will be destroyed before exiting.
+* @param line Error message and format
+*/
 void cplexError(CplexData *cpxData, Instance *inst, Solution *sol, char *line, ...);
 
+/*!
+* @brief Print error message and returns 1. Useful when getting errors inside a callback.
+* @param line Error message and format
+* @result 1
+*/
 int callbackError(char *line, ...);
 
+/*!
+* @brief Convert a simple edge coordinates (given by 2 nodes indexes) to an index for the cplex edges array format. 
+* @attention i and j must be different
+* @param i First node of edge
+* @param j Second node of edge
+* @param n Number of nodes
+* @result Index of edge selected by i and j in cplex format
+*/
 size_t xpos(size_t i, size_t j, size_t n);
 
+/*!
+* @brief Convert Cplex solution to a SubtoursData format
+* @attention subData.successors and subData.subtoursMap must point to allocated memory spaces of size nNodes
+* @param xstar Cplex solution array in cplex format
+* @param ncols Number of elements composing xstar
+* @param nNodes Number of nodes in the instance
+* @param subData Output of conversion is stored here
+*/
 void cvtCPXtoSuccessors(double *xstar, int ncols, size_t nNodes, SubtoursData *subData);
 
+/*!
+* @brief Convert a successors array in a standard Solution struct
+* @attention Successors must not contain any subtour
+* @param successors Array of successors
+* @param sol Pointer to already initialized solution that points to the target Instance
+*/
 void cvtSuccessorsToSolution(int *successors, Solution *sol);
 
-// Flag "isBenders" to know what method to use to add the SEC
+/*!
+* @brief Set subtour elimination constraints given a solution that have more than one subtour.
+* @param coeffs Allocated memory of nCols doubles used to add SEC
+* @param indexes Allocated memory of nCols integers used to add SEC
+* @param cpx Cplex Environment and Linear Problem Pointers. Can be NULL if in a callback
+* @param context Contex of Callback if inside a Callback. Can be NULL if not in callback
+* @param subData Pointer to Data realtive to subtours
+* @param iterNum Integer used for logging information and cplex constraints naming
+* @param inst Pointer to Instance of the problem
+* @param nCols Number of Columns/Variables defined by the problem
+* @param isBenders Flag to decide which function to use to add constraints to the problem
+*/
 void setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, SubtoursData *subData, int iterNum, Instance *inst, int nCols, int isBenders);
 
 //###################################################################################################################################
 // BENDERS
 //###################################################################################################################################
 
+/*!
+* @brief Apply benders method to the tsp instance inst. Uses Repair Heurstic between calls of CPXmipopt to provide a solution if time limit does not allow to find optimal solution.
+* @param inst Instance of the tsp problem to solve
+* @param tlim Time limit for benders
+* @result Optimal solution or solution built using repair heuristic if time limit wasn't long enough
+*/
 Solution benders(Instance *inst, double tlim);
 
 //###################################################################################################################################
 // LAZY_CALLBACK
 //###################################################################################################################################
 
-// Method that computes the solution using SEC internally
-Solution lazyCallback(Instance *inst);
+/*!
+* @brief Implement Branch and Cut method in Cplex using a generic callback to add SEC to the problem.
+* @param inst Instance of the tsp problem to solve
+* @param tlim Time limit for benders
+* @result Solution of the problem obtained by branch and cut method
+*/
+Solution BranchAndCut(Instance *inst, double tlim);
 
 #endif // TSP_CPLEX

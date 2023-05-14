@@ -44,7 +44,7 @@ enum execMode{
 	MODE_EM,
 	MODE_VNS,
 	MODE_BENDERS,
-	MODE_LAZYCB
+	MODE_BRANCH_CUT
 };
 
 enum graspOption{

@@ -7,10 +7,14 @@
 
 
 // Callback for adding the lazy subtour elimination cuts
-static int CPXPUBLIC subtourEliminationCallback(CPXCALLBACKCONTEXTptr context, CPXLONG contextid, void *userhandle ) ;
+static int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG contextid, void *userhandle ) ;
 
-Solution lazyCallback(Instance *inst)
+Solution BranchAndCut(Instance *inst, double tlim)
 {
+	struct timespec currT;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
+    double startTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
+
 	// Stores the solution so that we can populate cbData and return a Solution type for the method
 	Solution sol = newSolution(inst);
 	CplexData cpx = initCplexData(inst);
@@ -26,7 +30,7 @@ Solution lazyCallback(Instance *inst)
 	
 	if (CPXsetintparam(cpx.env, CPX_PARAM_MIPCBREDLP, CPX_OFF))
 		cplexError(&cpx, inst, &sol, "lazyCallback: error on CPXsetinitparam(CPX_PARAM_MIPCBREDLP)");
-	if (CPXcallbacksetfunc(cpx.env, cpx.lp, CPX_CALLBACKCONTEXT_CANDIDATE, subtourEliminationCallback, &cbData))
+	if (CPXcallbacksetfunc(cpx.env, cpx.lp, CPX_CALLBACKCONTEXT_CANDIDATE, genericCallbackCandidate, &cbData))
 		cplexError(&cpx, inst, &sol, "lazyCallback: error on CPXsetlazyconstraintcallbackfunc");
 	
 	/*int ncores = 1;
@@ -39,10 +43,15 @@ Solution lazyCallback(Instance *inst)
 	if (CPXmipopt(cpx.env, cpx.lp))
 		cplexError(&cpx, inst, NULL, "lazyCallback: output of CPXmipopt != 0");
 	
+	sol.cost = computeSolutionCost(&sol);
+
+	clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
+	sol.execTime = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0 - startTimeSec;
+
 	return sol;
 }
 
-static int CPXPUBLIC subtourEliminationCallback(CPXCALLBACKCONTEXTptr context, CPXLONG contextid, void *userhandle ) 
+static int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG contextid, void *userhandle ) 
 {
 	CallbackData *cbData = (CallbackData *) userhandle;
 

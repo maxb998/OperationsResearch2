@@ -9,16 +9,17 @@ Specify the type of solver to use: \n\
     nn  : Use Nearest Neighbor\n\
     em  : Use Extra Mileage\n\
     vns : Use Variable Neighborhood Search\
-    benders: Use cplex mipopt in combination with benders heuristic\n\
+    benders: Use Benders method to find an optimal solution\n\
+    branch_cut: Use cplex generic callback to perform Branch & Cut to find optimal solution\n\
 "
 
-# define MODES_COUNT 3
+# define MODES_COUNT 5
 static const char *modeStrings[] = {
     "nn",
     "em",
     "vns",
     "benders",
-    "lazycb"
+    "branch_cut"
 };
 
 #define ARGP_GRASP_DOC "\
@@ -248,8 +249,8 @@ static int parseMode(char *arg, Instance *inst)
         inst->params.mode = MODE_VNS;
     else if (strcmp(arg, modeStrings[MODE_BENDERS]) == 0)
         inst->params.mode = MODE_BENDERS;
-    else if (strcmp(arg, modeStrings[MODE_LAZYCB]) == 0)
-        inst->params.mode = MODE_LAZYCB;
+    else if (strcmp(arg, modeStrings[MODE_BRANCH_CUT]) == 0)
+        inst->params.mode = MODE_BRANCH_CUT;
 
     // error check
     if (inst->params.mode == MODE_NONE)

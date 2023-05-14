@@ -13,7 +13,7 @@
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
                 "--file", "data/att48.tsp",
-                "--mode", "lazycb",
+                "--mode", "branch_cut",
 
                 "--grasp", "random(0.05)",
                 "--2opt",
@@ -28,7 +28,7 @@
                 "--roundcosts",
                 "--plot", 
                 //"--save",
-                "--loglvl", "all"
+                "--loglvl", "debug"
             ],
             "cwd": "${workspaceFolder}"
        },

@@ -116,10 +116,10 @@ void setLogLevel(enum logLevel lvl)
     LOG_LEVEL = lvl;
 }
 
-int LOG (enum logLevel lvl, char * line, ...)
+void LOG (enum logLevel lvl, char * line, ...)
 {
     // check log level
-    if (lvl > LOG_LEVEL) return 0;
+    if (lvl > LOG_LEVEL) return;
 
     // print log level
     printf("[%s] ", logLevelString[lvl]);
@@ -133,8 +133,6 @@ int LOG (enum logLevel lvl, char * line, ...)
     // add new line at the end
     if (line[strlen(line)-1] != '\n')
         printf("\n");
-
-    return 0;
 }
 
 void throwError (Instance *inst, Solution *sol, char * line, ...)
