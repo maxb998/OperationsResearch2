@@ -203,7 +203,7 @@ void checkSolution(Solution *sol)
             throwError(inst, sol, "SolutionCheck: sol.Y[sol.indexPath[%ld]] = %.3e and does not correspond with inst.Y[%ld] = %.3e", i, inst->Y[sol->indexPath[i]], i, sol->Y[i]);
     }
 
-    double recomputedCost = computeSolutionCostVectorized(sol);
+    double recomputedCost = computeSolutionCost(sol);//computeSolutionCostVectorized(sol);
 
     if (recomputedCost != sol->cost)
         throwError(sol->instance, sol, "SolutionCheck: Error in the computation of the pathCost. Recomputed Cost: %lf Cost in Solution: %lf", recomputedCost, sol->cost);

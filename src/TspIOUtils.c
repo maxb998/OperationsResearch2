@@ -56,6 +56,7 @@ static size_t getDimensionFromLine(char * line, int lineSize, Instance *inst);
 // check that the string associated with "EDGE_WEIGHT_TYPE" is correct and return it as a number
 static size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *inst);
 
+static void readTspLine(char *line, size_t length, size_t index, Instance *inst, size_t keywordsLinesCount);
 
 double readFile (Instance *inst)
 {
@@ -158,49 +159,7 @@ double readFile (Instance *inst)
             break;
         }
 
-        // get the line number, convert it and check it's ok
-        char * endPtr = NULL;
-        size_t lineNumber = strtoul(line, &endPtr, 10);
-        if (lineNumber == 0)
-            throwError(inst, NULL, "Conversion at line %lu of the line number has gone wrong(must not be 0)", keywordsLinesCount + i + 1);
-        else if (lineNumber != i+1)
-            LOG(LOG_LVL_WARNING, "readFile: File has inconsistent enumeration, node %ld at line %ld should be identified with %ld", lineNumber, keywordsLinesCount + i + 1, i+1);
-        
-        
-        char * separatorPtr = strchr(line, ' ');
-        if (!separatorPtr)
-            throwError(inst, NULL, "Space separator at line %lu of file has not been found");
-        if (endPtr != separatorPtr)
-            throwError(inst, NULL, "Conversion at line %lu of the line number has gone wrong(must be an integer separated from other value by a space at the end)", keywordsLinesCount + i + 1);
-
-        // now we can convert the actual coordinates
-        char * xCoordStrPtr = separatorPtr + 1;
-        separatorPtr = strchr(xCoordStrPtr, ' ');
-        if (!separatorPtr)
-            throwError(inst, NULL, "Space separator at line %lu of file has not been found");
-
-        inst->X[i] = strtof(xCoordStrPtr, &endPtr);
-
-        if (xCoordStrPtr == endPtr)
-            throwError(inst, NULL, "Conversion of X coordinate at line %lu has gone wrong. Check the .tsp file", keywordsLinesCount + i + 1);
-        if (endPtr != separatorPtr)
-            throwError(inst, NULL, "Conversion of X coordinate at line %lu has gone wrong. There are unwanted characters at the end ", keywordsLinesCount + i + 1);
-        if (fabsf(inst->X[i]) == HUGE_VALF)
-            throwError(inst, NULL, "Coordinate X at line %lu has caused overflow", keywordsLinesCount + i + 1);
-
-        char * yCoordStrPtr = separatorPtr + 1;
-        separatorPtr = strchr(yCoordStrPtr, '\n');
-        if (!separatorPtr)
-            throwError(inst, NULL, "'\n' at line %lu of file has not been found");
-        
-        inst->Y[i] = strtof(yCoordStrPtr, &endPtr);
-
-        if (yCoordStrPtr == endPtr)
-            throwError(inst, NULL, "Conversion of Y coordinate at line %lu has gone wrong. Check the .tsp file", keywordsLinesCount + i + 1);
-        if (endPtr != separatorPtr)
-            throwError(inst, NULL, "Conversion of Y coordinate at line %lu has gone wrong. There are unwanted characters at the end ", keywordsLinesCount + i + 1);
-        if (fabsf(inst->Y[i]) == HUGE_VAL)
-            throwError(inst, NULL, "Coordinate Y at line %lu has caused overflow", keywordsLinesCount + i + 1);
+        readTspLine(line, lineSize, i, inst, keywordsLinesCount);
 
         i++;
     }
@@ -331,6 +290,42 @@ static size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *ins
         throwError(inst, NULL, "Getting the edge weight type from file: Could not identify the \"EDGE_WEIGTH_TYPE property\"");
 
     return foundEdgeWeightTypeID;
+}
+
+static void readTspLine(char *line, size_t length, size_t index, Instance *inst, size_t keywordsLinesCount)
+{
+    double numbers[3] = { 0 };
+    char *endPtr = line;
+
+    size_t i = 0, numID = 0;
+    while (i < length)
+    {
+        // scroll past any black spaces
+        if (line[i] == ' ')
+        {
+            i++;
+            continue;
+        }
+
+        if (numID >= 3)
+            throwError(inst, NULL, "Line %lu is not formatted correctly. More than 3 numbers for each line are not supported.", keywordsLinesCount + index + 1);
+
+        // convert number and save into array
+        char *oldEndPtr = endPtr;
+        numbers[numID] = strtod(&line[i], &endPtr);
+        if (endPtr == oldEndPtr) // error on strtod
+            throwError(inst, NULL, "Conversion at line %lu has gone wrong", keywordsLinesCount + index + 1);
+        numID++;
+
+        // move i to end of number
+        i += endPtr - oldEndPtr;
+    }
+
+    if ((size_t)numbers[0] != index + 1)
+        LOG(LOG_LVL_WARNING, "readFile: File has inconsistent enumeration, node %lu at line %lu should be identified with %ld", (size_t)numbers[0], keywordsLinesCount + index + 1, index + 1);
+
+    inst->X[index] = numbers[1];
+    inst->Y[index] = numbers[2];
 }
 
 void saveSolution(Solution *sol, int argc, char *argv[])
