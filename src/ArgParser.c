@@ -9,8 +9,8 @@ Specify the type of solver to use: \n\
     nn  : Use Nearest Neighbor\n\
     em  : Use Extra Mileage\n\
     vns : Use Variable Neighborhood Search\
-    benders: Use Benders method to find an optimal solution\n\
-    branch_cut: Use cplex generic callback to perform Branch & Cut to find optimal solution\n\
+    benders: Use Benders method\n\
+    branch_cut: Use cplex generic callback to perform Branch & Cut\n\
 "
 
 # define MODES_COUNT 5
@@ -24,7 +24,7 @@ static const char *modeStrings[] = {
 
 #define ARGP_GRASP_DOC "\
 Specify to Grasp mode (DEFAULT=random(0.1))\
-    almostbest         : The Use of grasp will be limited(if possible) to selecting another good choice with default probability value \n\
+    almostbest         : The Use of grasp will be limited to selecting another good choice with default probability value \n\
     almostbest(<GRASP_CHANCE>) : Same as \"almostbest\" but the selection of the secondary choice happens with probability specified with <GRASP_CHANCE>\n\
     random             : At every iteration have a completely random choice with default probability\n\
     random(<GRASP_CHANCE>)     : Same as \"random\" but the probability of the random choice is specified with <GRASP_CHANCE>\n\
@@ -147,9 +147,9 @@ void argParse(Instance * inst, int argc, char *argv[])
         { .name="2opt", .key=ARGP_2OPT, .arg=NULL, .flags=0, .doc="Specify to use 2-opt at the end of the selected heuristic\n", .group=2 },
         { .name="tlim", .key=ARGP_TLIM, .arg="UINT", .flags=0, .doc="Specify time limit for the execution\n", .group=2 },
 
-        { .name="nnOption", .key=ARGP_NN_MODE, .arg="STRING", .flags=0, .doc=ARGP_NN_DOC, .group=3 },
-        { .name="emOption", .key=ARGP_EM_MODE, .arg="STRING", .flags=0, .doc=ARGP_EM_DOC, .group=3 },
-        { .name="vnsOption", .key=ARGP_VNS_MODE, .arg="STRING", .flags=0, .doc=ARGP_VNS_DOC, .group=3 },
+        { .name="nnOpt", .key=ARGP_NN_MODE, .arg="STRING", .flags=0, .doc=ARGP_NN_DOC, .group=3 },
+        { .name="emOpt", .key=ARGP_EM_MODE, .arg="STRING", .flags=0, .doc=ARGP_EM_DOC, .group=3 },
+        { .name="vnsOpt", .key=ARGP_VNS_MODE, .arg="STRING", .flags=0, .doc=ARGP_VNS_DOC, .group=3 },
 
         { .name="seed", .key=ARGP_SEED, .arg="UINT", .flags=0, .doc="Random Seed [0,MAX_INT32] to use as random seed for the current run. If -1 seed will be random\n", .group=4 },
         { .name="threads", .key=ARGP_NTHREADS, .arg="INT32", .flags=0, .doc="Maximum number of threads to use. If not specified gets maximum automatically\n", .group=4 },

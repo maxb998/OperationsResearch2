@@ -19,15 +19,15 @@
                 "--2opt",
                 "--tlim", "1000",
 
-                //"--nnOption", "tryall",
-                //"--emOption", "random",
-                //"--vnsOption", "nn",
+                //"--nnOpt", "tryall",
+                //"--emOpt", "random",
+                //"--vnsOpt", "nn",
 
                 //"--seed", "2023",
                 "--threads", "1",
                 "--roundcosts",
                 "--plot", 
-                //"--save",
+                "--save",
                 "--loglvl", "debug"
             ],
             "cwd": "${workspaceFolder}"
@@ -46,9 +46,9 @@
                 "--2opt",
                 "--tlim", "1",
 
-                //"--nnOption", "tryall",
-                //"--emOption", "random",
-                //"--vnsOption", "nn",
+                //"--nnOpt", "tryall",
+                //"--emOpt", "random",
+                //"--vnsOpt", "nn",
 
                 //"--seed", "2023",
                 //"--threads", "4",

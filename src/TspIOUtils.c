@@ -328,6 +328,21 @@ static void readTspLine(char *line, size_t length, size_t index, Instance *inst,
     inst->Y[index] = numbers[2];
 }
 
+#define MEANINGLESS_FLAGS_COUNT 4
+const char *meaninglessFlags[] = {
+    "--plot",
+    "-p",
+    "--save",
+    "-s"
+};
+#define MEANINGLESS_ARGS_COUNT 4
+const char *meaninglessArgs[] = {
+    "--loglvl",
+    "-l",
+    "--threads",
+    "-j"
+};
+
 void saveSolution(Solution *sol, int argc, char *argv[])
 {
     // define file name
@@ -351,17 +366,32 @@ void saveSolution(Solution *sol, int argc, char *argv[])
     char comment[1000] = { 0 };
     for (size_t i = 1; i < argc-1; i++)
     {
+        // check if args is meaningless to save
+        int skip = 0;
+        for (size_t j = 0; j < MEANINGLESS_FLAGS_COUNT; j++)
+            if (strcmp(argv[i], meaninglessFlags[j]) == 0)
+                { skip = 1; break; }
+        for (size_t j = 0; j < MEANINGLESS_ARGS_COUNT; j++)
+            if (strcmp(argv[i], meaninglessArgs[j]) == 0)
+                { i++; skip = 1; break; }
+        if (skip) continue;
+
+        // avoid saving the dashes
+        char *argStart = argv[i];
+        for (; *argStart == '-'; argStart++){}
+        
+        // save the args
         if ((i + 1 < argc) && (argv[i + 1][0] != '-'))
         {
-            strcat(comment, argv[i]);
+            strcat(comment, argStart);
             strcat(comment, "=");
             i++;
             strcat(comment, argv[i]);
         }
         else
-            strcat(comment, argv[i]);
+            strcat(comment, argStart);
         
-        strcat(comment, " ");
+        strcat(comment, "  ");
     }
     fprintf(solutionFile, "COMMENT : %s\n", comment);
 
