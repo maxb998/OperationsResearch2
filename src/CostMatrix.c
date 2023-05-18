@@ -36,7 +36,7 @@ double computeCostMatrix(Instance *inst)
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &start);
 
     // first check that distance type is supported
-    if (inst->params.edgeWeightType > ATT)
+    if (inst->params.edgeWeightType  > ATT)
         throwError(inst, NULL, "Distance Matrix Computation: Edge weight type unsupported");
 
     // allocate memory
@@ -109,7 +109,7 @@ static void * computeDistMatThread(void* arg)
             __m256 x2 = _mm256_loadu_ps(&th->inst->X[i]);
             __m256 y2 = _mm256_loadu_ps(&th->inst->Y[i]);
 
-            __m256 dist = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType, inst->params.roundWeightsFlag);
+            __m256 dist = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType , inst->params.roundWeightsFlag);
 
             // store result in memory
             _mm256_storeu_ps(&inst->edgeCostMat[row * n + i], dist);
@@ -120,7 +120,7 @@ static void * computeDistMatThread(void* arg)
         // do the same as in the loop
         __m256 x2 = _mm256_loadu_ps(&th->inst->X[i]);
         __m256 y2 = _mm256_loadu_ps(&th->inst->Y[i]);
-        __m256 dist = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType, inst->params.roundWeightsFlag);
+        __m256 dist = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType , inst->params.roundWeightsFlag);
 
         // maskstore the result avoiding to overwrite data
         _mm256_maskstore_ps(&inst->edgeCostMat[row * n + i], _mm256_loadu_si256((__m256i*)mask), dist);

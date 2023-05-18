@@ -105,6 +105,23 @@ void cvtSuccessorsToSolution(int *successors, Solution *sol);
 */
 void setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, SubtoursData *subData, int iterNum, Instance *inst, int nCols, int isBenders);
 
+/*!
+* @brief "Fix" a successors-based solution that presents subtours by merging them in the best possible way.
+* @param sub Data relative to the subtours
+* @param inst Instance of the problem
+* @attention Mutex only locks bestSuccessorsSol and bestCost, the other ones must be thread-local data
+* @result Cost of the Repaired Solution
+*/
+double RepairHeuristicSuccessors(SubtoursData *sub, Instance *inst);
+
+/*!
+* @brief Check Solution in the form of an array of successors
+* @param inst Instance of the problem
+* @param successors Successors array
+* @result 0 if everything is correct. 1 if successors is not correct
+*/
+int checkSuccessorSolution(Instance *inst, int *successors);
+
 //###################################################################################################################################
 // BENDERS
 //###################################################################################################################################

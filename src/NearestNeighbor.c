@@ -84,7 +84,7 @@ static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos
 static inline size_t findSuccessorID(Solution *sol, size_t iterNum, double *pathCost)
 {
     Instance *inst = sol->instance;
-    enum edgeWeightType ewt = inst->params.edgeWeightType;
+    enum EdgeWeightType ewt = inst->params.edgeWeightType ;
     int roundFlag = inst->params.roundWeightsFlag;
 
     float minVecStore[AVX_VEC_SIZE];
@@ -178,7 +178,7 @@ static void applyNearestNeighbor(Solution *sol, size_t startingNodeIndex)
 {
     Instance *inst = sol->instance;
     size_t n = inst->nNodes;
-    enum edgeWeightType ewt = inst->params.edgeWeightType;
+    enum EdgeWeightType ewt = inst->params.edgeWeightType ;
     int roundFlag = inst->params.roundWeightsFlag;
 
     // set first node

@@ -12,7 +12,7 @@
 #define SMALLX 1e-6
 #define EPSILON 1e-9
 
-enum logLevel{
+enum LogLevel{
 	LOG_LVL_ERROR,
 	LOG_LVL_CRITICAL,
 	LOG_LVL_WARNING,
@@ -22,7 +22,7 @@ enum logLevel{
 	LOG_LVL_EVERYTHING
 };
 
-enum edgeWeightType{
+enum EdgeWeightType{
 	EUC_2D, // euclidean distance 2d
 	MAN_2D, // manhattan distance 2d
 	MAX_2D, // maximum distance 2d
@@ -38,7 +38,7 @@ enum edgeWeightType{
 	SPECIAL // special type of distance documented elsewhere
 };
 
-enum execMode{
+enum ExecMode{
 	MODE_NONE=-1,
 	MODE_NN,
 	MODE_EM,
@@ -47,7 +47,7 @@ enum execMode{
 	MODE_BRANCH_CUT
 };
 
-enum graspOption{
+enum GraspOption{
 	GRASP_NONE=-1,
 	GRASP_ALMOSTBEST,
 	GRASP_RANDOM
@@ -88,9 +88,9 @@ enum VNSInitType {
 typedef struct
 {
 	char inputFile[1000];
-	enum execMode mode;
+	enum ExecMode mode;
 
-	enum graspOption graspType;
+	enum GraspOption graspType;
 	int use2OptFlag;
 	double tlim;
 
@@ -103,9 +103,9 @@ typedef struct
 	int roundWeightsFlag;
 	int showPlotFlag;
 	int saveFlag;
-	enum logLevel logLevel;
+	enum LogLevel logLevel;
 
-	int edgeWeightType;
+	enum EdgeWeightType edgeWeightType;
 	char name[200];
 	double graspChance;
 } Parameters;

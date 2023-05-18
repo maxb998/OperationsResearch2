@@ -118,7 +118,7 @@ double readFile (Instance *inst)
             break;
 
         case EDGE_WEIGHT_TYPE_KEYWORD_ID:
-            inst->params.edgeWeightType = getEdgeWeightTypeFromLine(line, lineSize, inst);
+            inst->params.edgeWeightType  = getEdgeWeightTypeFromLine(line, lineSize, inst);
             // if this point is reached a correct number for dimension has been taken from the file -> set the flag
             keywordsFound[EDGE_WEIGHT_TYPE_KEYWORD_ID] = 1;
             break;

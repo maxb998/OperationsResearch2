@@ -92,14 +92,14 @@ Solution cloneSolution(Solution *sol);
 * @brief Set the log level value which indicates how many information shall be printed as output on the console.
 * @param lvl set log level desired
 */
-void setLogLevel(enum logLevel lvl);
+void setLogLevel(enum LogLevel lvl);
 
 /*!
 * @brief Print a message on output
 * @param lvl Desired level of logging priority. If this value is greater than global value than LOG does not print anything.
 * @param line Arguments that are directly fed to printf
 */
-void LOG (enum logLevel lvl, char * line, ...);
+void LOG (enum LogLevel lvl, char * line, ...);
 
 /*!
 * @brief Print a message with LOG_LVL_ERROR and then destroys the passed Instance and Solution when available.

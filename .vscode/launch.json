@@ -12,8 +12,8 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
-                "--file", "data/att48.tsp",
-                "--mode", "branch_cut",
+                "--file", "data/a280.tsp",
+                "--mode", "benders",
 
                 "--grasp", "random(0.05)",
                 "--2opt",
@@ -27,7 +27,7 @@
                 "--threads", "1",
                 "--roundcosts",
                 "--plot", 
-                "--save",
+                //"--save",
                 "--loglvl", "debug"
             ],
             "cwd": "${workspaceFolder}"
@@ -39,12 +39,12 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/x64/main",
             "args": [
-                "--file", "data/att48.tsp",
-                "--mode", "nn",
+                "--file", "data/a280.tsp",
+                "--mode", "vns",
 
                 "--grasp", "random(0.05)",
                 "--2opt",
-                "--tlim", "1",
+                "--tlim", "10",
 
                 //"--nnOpt", "tryall",
                 //"--emOpt", "random",

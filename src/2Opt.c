@@ -206,7 +206,7 @@ static void _2optBestFixBase(Solution *sol)
 
     // setup "shortcuts" variables to declutter the code
     size_t n = inst->nNodes;
-    enum edgeWeightType edgeWgtType = inst->params.edgeWeightType;
+    enum EdgeWeightType edgeWgtType = inst->params.edgeWeightType ;
     int roundFlag = inst->params.roundWeightsFlag;
 
     int finishedFlag = 0;
@@ -307,7 +307,7 @@ static void _2OptBestFixAVX(Solution *sol)
 
     // setup "shortcuts" variables to declutter the code
     size_t n = inst->nNodes;
-    enum edgeWeightType edgeWgtType = inst->params.edgeWeightType;
+    enum EdgeWeightType edgeWgtType = inst->params.edgeWeightType ;
     int roundFlag = inst->params.roundWeightsFlag;
 
     float vecStore[AVX_VEC_SIZE];
@@ -470,7 +470,7 @@ static void *_2OptBestFixAVXThread(void *arg)
 
     // setup "shortcuts" variables to declutter the code
     size_t n = inst->nNodes;
-    enum edgeWeightType edgeWgtType = inst->params.edgeWeightType;
+    enum EdgeWeightType edgeWgtType = inst->params.edgeWeightType ;
     int roundFlag = inst->params.roundWeightsFlag;
 
     float vecStore[AVX_VEC_SIZE];

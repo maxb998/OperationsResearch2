@@ -4,10 +4,13 @@
 #include <cplex.h>
 #include <time.h>
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
+#include <pthread.h>
+
 
 
 // Callback for adding the lazy subtour elimination cuts
 static int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG contextid, void *userhandle ) ;
+
 
 Solution BranchAndCut(Instance *inst, double tlim)
 {
@@ -30,13 +33,10 @@ Solution BranchAndCut(Instance *inst, double tlim)
 	
 	if (CPXsetintparam(cpx.env, CPX_PARAM_MIPCBREDLP, CPX_OFF))
 		cplexError(&cpx, inst, &sol, "lazyCallback: error on CPXsetinitparam(CPX_PARAM_MIPCBREDLP)");
+
 	if (CPXcallbacksetfunc(cpx.env, cpx.lp, CPX_CALLBACKCONTEXT_CANDIDATE, genericCallbackCandidate, &cbData))
 		cplexError(&cpx, inst, &sol, "lazyCallback: error on CPXsetlazyconstraintcallbackfunc");
 	
-	/*int ncores = 1;
-	if (CPXgetnumcores(cpx.env, &ncores))
-		cplexError(&cpx, inst, &tempSolution, "lazyCallback: error on CPXgetnumcores");
-	if (ncores != inst->params.nThreads)*/
 	if (CPXsetintparam(cpx.env, CPX_PARAM_THREADS, inst->params.nThreads))
 		cplexError(&cpx, inst, &sol, "lazyCallback: error on CPXsetintparam(CPX_PARAM_THREADS)");
 
@@ -99,3 +99,5 @@ static int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPX
 	free(indexes);
 	return 0;
 }
+
+

@@ -6,17 +6,10 @@
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
 
-static void RepairHeuristic(SubtoursData *subData, Solution *out, double startTimeSec);
-
-static inline void findBestSubtourMerge(Solution *sol, int mergeIndexes[2], int mergeIndexesSubtourIDs[2], int *invertOrientation, int subtourCount, size_t *subtourPosition);
-
 
 Solution benders(Instance *inst, double tlim)
 {
 	size_t n = inst->nNodes;
-
-	Solution sol1 = newSolution(inst), sol2 = newSolution(inst);
-	Solution *best = &sol1, *repaired = &sol2;
 
     CplexData cpx = initCplexData(inst);
 
@@ -29,8 +22,11 @@ Solution benders(Instance *inst, double tlim)
 	double *xstar = malloc(ncols * sizeof(double));
 
 	SubtoursData subData = {0};
-	subData.successors = malloc(n * sizeof(int) * 2);
-	subData.subtoursMap = &subData.successors[n];
+	subData.successors = malloc(n * sizeof(int));
+	subData.subtoursMap = malloc(n * sizeof(int));
+
+	double bestCost = INFINITY;
+	int *bestSuccessorsSol = malloc(n * sizeof(int));
 
 	int *indexes = malloc(ncols * sizeof(int));
 
@@ -52,26 +48,38 @@ Solution benders(Instance *inst, double tlim)
 		subData.subtoursCount = 0;
 		
 		cvtCPXtoSuccessors(xstar, ncols, n, &subData);
-		
-		// generate a solution using Repair Heuristic and check if it is better than the previous solutions
-		RepairHeuristic(&subData, repaired, startTimeSec);
-
-		if (best->cost > repaired->cost)
-		{
-			Solution *temp;
-			swapElems(best, repaired, temp);
-		}
-
-		LOG(LOG_LVL_LOG, "Number of subtours detected at iteration %d is %d", iterNum, subData.subtoursCount);
 
 		if (subData.subtoursCount == 1) // means that there is only one subtour
+		{
+			LOG(LOG_LVL_LOG, "Optimal Solution found.");
+			register int *temp;
+			swapElems(bestSuccessorsSol, subData.successors, temp);
 			break;
+		}
 
 		// add subtour elimination constraints
 		double * coeffs = xstar; // reuse xStar instead of allocating new memory
 
 		setSEC(coeffs, indexes, &cpx, NULL, &subData, iterNum, inst, ncols, 1);
 		
+		// generate a solution using Repair Heuristic and check if it is better than the previous solutions
+		double cost = RepairHeuristicSuccessors(&subData, inst);
+
+		if (checkSuccessorSolution(inst, subData.successors))
+		{
+			free(xstar); free(subData.subtoursMap); free(subData.successors); free(bestSuccessorsSol); free(indexes);
+			cplexError(&cpx, inst, NULL, "Benders: Successors after repair heuristic does not represent a loop");
+		}
+
+		if (cost < bestCost)
+		{
+			register int *temp;
+			swapElems(bestSuccessorsSol, subData.successors, temp);
+			bestCost = cost;
+		}
+
+		LOG(LOG_LVL_LOG, "Subtours at iteration %d is %d. Cost of Repaired Solution: %lf  Incumbent: %lf", iterNum, subData.subtoursCount, cost, bestCost);
+
 		iterNum++;
 	}
 
@@ -79,205 +87,20 @@ Solution benders(Instance *inst, double tlim)
 	free(indexes);
 	destroyCplexData(&cpx);
 
-	destroySolution(repaired);
 	free(subData.successors);
+	free(subData.subtoursMap);
 
-    return *best;
-}
+	Solution sol = newSolution(inst);
 
-static void RepairHeuristic(SubtoursData *subData, Solution *out, double startTimeSec)
-{
-	Instance *inst = out->instance;
-	size_t n = out->instance->nNodes;
+	cvtSuccessorsToSolution(bestSuccessorsSol, &sol);
 
-	out->cost = 0.;
+	free(bestSuccessorsSol);
 
-	// ##############################################################################
-	// convert successor array to standard solution form adopted in Solution.indexpath
+	sol.cost = computeSolutionCost(&sol);
+	clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
+    currentTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
+	sol.execTime = currentTimeSec - startTimeSec;
 
-	// array containing the starting position of each subtour in the converted solution
-	size_t *subtourPosition = malloc(subData->subtoursCount * sizeof(size_t));
-
-	for (int subtourID = 0, pos = 0; subtourID < subData->subtoursCount; subtourID++)
-	{
-		// find first node of the subtour with id subtourID in successors
-
-		subtourPosition[subtourID] = pos;
-
-		size_t subtourFirstPos = 0;
-		for (; subtourFirstPos < n; subtourFirstPos++)
-			if (subData->subtoursMap[subtourFirstPos] == subtourID)
-				break;
-		
-		// add elements to out.indexPath and .x and .y until we complete the subtour
-		size_t i = subtourFirstPos;
-		do
-		{
-			out->indexPath[pos] = i;
-			out->X[pos] = inst->X[i];
-			out->Y[pos] = inst->Y[i];
-			pos++;
-			i = subData->successors[i];
-		} while ((int)i != subtourFirstPos);
-	}
-
-	// ###############################################################################
-	// Now to "repair" the solution
-	while (subData->subtoursCount > 1)
-	{
-		// find the two subtours that merge with minimal cost increase (kind of like extra mileage heuristic but for subtours)
-
-		// flag to check whether or not the direction of the loop might be inverted
-		int invertOrientation;
-		int mergeIndexes[2], mergeIndexesSubtourIDs[2];
-		
-		findBestSubtourMerge(out, mergeIndexes, mergeIndexesSubtourIDs, &invertOrientation, subData->subtoursCount, subtourPosition);
-		
-		size_t lastPos = n; // last position +1  of the of the subtour that will be merged and disappear (only used in the for condition)
-		if (mergeIndexesSubtourIDs[1] < subData->subtoursCount-1)
-			lastPos = subtourPosition[mergeIndexesSubtourIDs[1] + 1];
-
-		size_t subtourSize = lastPos - subtourPosition[mergeIndexesSubtourIDs[1]];
-
-		// create the "copy buffer" which contains the subtour rearranged in a way such that we just need to copy it into the correct position inside the other subtour
-
-		double *xCopyBuff = malloc(subtourSize * (sizeof(double) * 2 + sizeof(int)));
-		double *yCopyBuff = &xCopyBuff[subtourSize];
-		int *indexCopyBuff = (int*)&yCopyBuff[subtourSize];
-		
-		size_t startPos = subtourPosition[mergeIndexesSubtourIDs[1]];
-		for (size_t i = 0; i < subtourSize; i++)
-		{
-			size_t posToCopy;
-			if (invertOrientation)
-			{
-				if (i < mergeIndexes[1] - startPos + 1)
-					posToCopy = mergeIndexes[1] - i;
-				else
-					posToCopy = lastPos + (mergeIndexes[1] - startPos) - i;
-			}
-			else
-			{
-				if (i < lastPos - mergeIndexes[1] - 1)
-					posToCopy = mergeIndexes[1] + 1 + i;
-				else
-					posToCopy = i - (lastPos - mergeIndexes[1] - 1) + startPos;
-			}
-
-			indexCopyBuff[i] = out->indexPath[posToCopy];
-			xCopyBuff[i] = out->X[posToCopy];
-			yCopyBuff[i] = out->Y[posToCopy];
-		}
-
-		// now to shift all data in order to make space inside subtour 0 to fit subtour 1 (0 and 1 are the subtour that will be merged)
-		for (size_t i = subtourPosition[mergeIndexesSubtourIDs[1]]-1; i > mergeIndexes[0]; i--)
-		{
-			size_t shiftAmount = subtourSize;
-
-			out->X[i + shiftAmount] = out->X[i];
-			out->Y[i + shiftAmount] = out->Y[i];
-			out->indexPath[i + shiftAmount] = out->indexPath[i];
-		}
-
-		// now to insert subtour 1 into subtour 0
-		for (size_t i = 0; i < subtourSize; i++)
-		{
-			out->X[mergeIndexes[0] + 1 + i] = xCopyBuff[i];
-			out->Y[mergeIndexes[0] + 1 + i] = yCopyBuff[i];
-			out->indexPath[mergeIndexes[0] + 1 + i] = indexCopyBuff[i];
-		}
-		
-		free(xCopyBuff);
-
-		// fix auxiliary data structures
-		subData->subtoursCount--;
-		for (size_t i = mergeIndexesSubtourIDs[0] + 1; i < subData->subtoursCount; i++)
-		{
-			if (i < mergeIndexesSubtourIDs[1])
-				subtourPosition[i] += subtourSize;
-			else
-				subtourPosition[i] = subtourPosition[i + 1];
-		}
-		
-	}
-
-	// set last position of the loop
-	out->X[n] = out->X[0];
-	out->Y[n] = out->Y[0];
-	out->indexPath[n] = out->indexPath[0]; 
-
-	out->cost = computeSolutionCostVectorized(out);
-
-	if (inst->params.logLevel >= LOG_LVL_DEBUG)
-		checkSolution(out);
-
-	struct timespec currT;
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-    double currentTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
-
-	out->execTime = currentTimeSec - startTimeSec;
-
-	free(subtourPosition);
-}
-
-static inline void findBestSubtourMerge(Solution *sol, int mergeIndexes[2], int mergeIndexesSubtourIDs[2], int *invertOrientation, int subtourCount, size_t *subtourPosition)
-{
-	// THIS FUNCTION IS DEFINETIVELY VECTORIZABLE,
-	// however I'm not going to do it since the extra code complexity isn't probably worth it since here the bottleneck is almost surely cplex's mipopt
-	size_t n = sol->instance->nNodes;
-	enum edgeWeightType ewt = sol->instance->params.edgeWeightType;
-	int roundFlag = sol->instance->params.roundWeightsFlag;
-
-	double min = INFINITY;
-
-	for (size_t subtourID = 0; subtourID < subtourCount-1; subtourID++)
-	{
-		for (size_t subtourToCompare = subtourID+1; subtourToCompare < subtourCount; subtourToCompare++)
-		{
-			size_t last = subtourPosition[subtourToCompare+1];
-			if (subtourToCompare == subtourCount - 1)
-				last = n;
-
-			for (size_t i = subtourPosition[subtourID]; i < subtourPosition[subtourID+1]; i++)
-			{
-				size_t secondI = i + 1;
-				if (secondI == subtourPosition[subtourID+1])
-					secondI = subtourPosition[subtourID];
-				
-				for (size_t j = subtourPosition[subtourToCompare]; j < last; j++ )
-				{
-					size_t secondJ = j + 1;
-					if (secondJ == subtourPosition[subtourToCompare + 1])
-						secondJ = subtourPosition[subtourToCompare];
-
-					double cost = computeEdgeCost(sol->X[i], sol->Y[i], sol->X[secondJ], sol->Y[secondJ], ewt, roundFlag) +\
-								   computeEdgeCost(sol->X[secondI], sol->Y[secondI], sol->X[j], sol->Y[j], ewt, roundFlag);
-					
-					if (cost < min)
-					{
-						min = cost;
-						mergeIndexes[0] = i;
-						mergeIndexes[1] = j;
-						mergeIndexesSubtourIDs[0] = subtourID;
-						mergeIndexesSubtourIDs[1] = subtourToCompare;
-						*invertOrientation = 0;
-					}
-
-					cost = computeEdgeCost(sol->X[i], sol->Y[i], sol->X[j], sol->Y[j], ewt, roundFlag) +\
-						   computeEdgeCost(sol->X[secondI], sol->Y[secondI], sol->X[secondJ], sol->Y[secondJ], ewt, roundFlag);
-
-					if (cost < min)
-					{
-						min = cost;
-						mergeIndexes[0] = i;
-						mergeIndexes[1] = j;
-						mergeIndexesSubtourIDs[0] = subtourID;
-						mergeIndexesSubtourIDs[1] = subtourToCompare;
-						*invertOrientation = 1;
-					}
-				}
-			}
-		}
-	}
+    return sol;
 }
 

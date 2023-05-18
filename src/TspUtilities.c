@@ -42,7 +42,7 @@ Instance newInstance ()
             .saveFlag=0,
             .logLevel=LOG_LVL_LOG,
 
-            .edgeWeightType = -1,
+            .edgeWeightType  = -1,
             .name = { 0 },
             .graspChance = 0.1
         }
@@ -110,13 +110,13 @@ Solution cloneSolution(Solution *sol)
     return s;
 }
 
-static enum logLevel LOG_LEVEL = LOG_LVL_LOG;
-void setLogLevel(enum logLevel lvl)
+static enum LogLevel LOG_LEVEL = LOG_LVL_LOG;
+void setLogLevel(enum LogLevel lvl)
 {
     LOG_LEVEL = lvl;
 }
 
-void LOG (enum logLevel lvl, char * line, ...)
+void LOG (enum LogLevel lvl, char * line, ...)
 {
     // check log level
     if (lvl > LOG_LEVEL) return;
@@ -216,7 +216,7 @@ void checkSolution(Solution *sol)
 double computeSolutionCostVectorized(Solution *sol)
 {
     size_t n = sol->instance->nNodes;
-    enum edgeWeightType ewt = sol->instance->params.edgeWeightType;
+    enum EdgeWeightType ewt = sol->instance->params.edgeWeightType ;
     int roundFlag = sol->instance->params.roundWeightsFlag;
 
     __m256d costVec = _mm256_setzero_pd();
@@ -270,7 +270,7 @@ double computeSolutionCostVectorized(Solution *sol)
 
 double computeSolutionCost(Solution *sol)
 {
-    enum edgeWeightType ewt = sol->instance->params.edgeWeightType;
+    enum EdgeWeightType ewt = sol->instance->params.edgeWeightType ;
     int roundFlag = sol->instance->params.roundWeightsFlag;
 
     double cost = 0.0;
