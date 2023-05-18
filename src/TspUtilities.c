@@ -34,6 +34,7 @@ Instance newInstance ()
 
             .nnFirstNodeOption = NN_FIRST_RANDOM,
             .emInitOption = EM_INIT_RANDOM,
+            .vnsInitOption = VNS_INIT_NN,
 
             .randomSeed = -1,
             .nThreads = nProcessors(),

@@ -110,7 +110,7 @@ static Solution runExtraMileage(Instance *inst)
 
 static Solution runVariableNeighborhoodSearch(Instance *inst)
 {
-    Solution sol = { 0 };
+    Solution sol = VariableNeighborhood(inst, inst->params.vnsInitOption);
     return sol;
 }
 

@@ -35,9 +35,12 @@ Solution VariableNeighborhood(Instance *inst, enum VNSInitType config)
             while(checkTime(start, inst->params.tlim) == 0)
             {
                 _5Kick(&sol);
-                //plotSolution(&sol, "1600,900", "green", "black", 1, 0);
-                //getchar();
                 apply2OptBestFix(&sol, _2OPT_AVX_ST);
+                if(inst->params.logLevel == LOG_LVL_DEBUG && inst->params.mode == MODE_VNS)
+                {
+                    plotSolution(&sol, "1600,900", "green", "black", 1, 0);
+                    getchar();
+                }
             }
 
         }else // (config == VNS_INIT_EM)
@@ -108,6 +111,8 @@ static inline void _5Kick(Solution *sol)
         sol->X[i] = sol->instance->X[newPath[i]];
         sol->Y[i] = sol->instance->Y[newPath[i]];
     }
+    
+    sol->cost = computeSolutionCost(sol);
 
     free(randomEdges);
     free(newPath);
