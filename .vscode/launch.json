@@ -13,7 +13,7 @@
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
                 "--file", "data/att48.tsp",
-                "--mode", "benders",
+                "--mode", "branch_cut",
 
                 "--grasp", "random(0.05)",
                 "--2opt",

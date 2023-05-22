@@ -136,7 +136,11 @@ static Solution runBranchAndCut(Instance *inst)
     printf("Branch & Cut starting...\n");
     printf("##############################################################################################################################\n");
 
-    Solution sol = BranchAndCut(inst, inst->params.tlim);
+    Solution warmStart = ExtraMileage(inst, 0, EM_INIT_EXTREMES);
+
+    Solution sol = BranchAndCut(inst, inst->params.tlim, &warmStart);
+
+    destroySolution(&warmStart);
 
     printf("##############################################################################################################################\n");
     printf("Branch & Cut finished in %lf seconds\n", sol.execTime);

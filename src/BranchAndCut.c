@@ -12,11 +12,13 @@
 static int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG contextid, void *userhandle ) ;
 
 
-Solution BranchAndCut(Instance *inst, double tlim)
+Solution BranchAndCut(Instance *inst, double tlim, Solution *warmStartSol)
 {
 	struct timespec currT;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
     double startTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
+
+	size_t n = inst->nNodes;
 
 	// Stores the solution so that we can populate cbData and return a Solution type for the method
 	Solution sol = newSolution(inst);
@@ -30,7 +32,32 @@ Solution BranchAndCut(Instance *inst, double tlim)
 		.cpx = &cpx,
 		.ncols = ncols
 	};
-	
+
+	// ********** warm start setup **************
+	if (warmStartSol)
+	{
+		if (inst->params.logLevel >= LOG_LVL_DEBUG)
+			checkSolution(warmStartSol);
+		
+		double *vars = malloc(n * sizeof(double));
+		int *indexes = malloc(n * sizeof(int));
+		for (size_t i = 0; i < n; i++)
+			vars[i] = 1.0;
+		for (size_t i = 0; i < n; i++)
+			indexes[i] = xpos(warmStartSol->indexPath[i], warmStartSol->indexPath[i+1], n);
+		
+		int izero = 0;
+		char *mipstartName = "Warm Start, External";
+		int effort = CPX_MIPSTART_CHECKFEAS;
+
+		if (CPXaddmipstarts(cpx.env, cpx.lp, 1, n, &izero, indexes, vars, &effort, &mipstartName) != 0)
+			cplexError(&cpx, inst, &sol, "lazyCallback: error on CPXaddmipstarts");
+
+		free(vars); free(indexes);
+	}
+
+	// ******************************************
+
 	if (CPXsetintparam(cpx.env, CPX_PARAM_MIPCBREDLP, CPX_OFF))
 		cplexError(&cpx, inst, &sol, "lazyCallback: error on CPXsetinitparam(CPX_PARAM_MIPCBREDLP)");
 

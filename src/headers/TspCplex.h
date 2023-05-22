@@ -142,9 +142,10 @@ Solution benders(Instance *inst, double tlim);
 * @brief Implement Branch and Cut method in Cplex using a generic callback to add SEC to the problem.
 * @param inst Instance of tsp to solve
 * @param tlim Time limit for benders
+* @param warmStartSol Pointer to solution to use as warm start. If set to NULL warm start is not used
 * @result Solution of the problem obtained by branch and cut method
 */
-Solution BranchAndCut(Instance *inst, double tlim);
+Solution BranchAndCut(Instance *inst, double tlim, Solution *warmStartSol);
 
 
 //###################################################################################################################################
