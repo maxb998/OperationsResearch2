@@ -140,10 +140,23 @@ Solution benders(Instance *inst, double tlim);
 
 /*!
 * @brief Implement Branch and Cut method in Cplex using a generic callback to add SEC to the problem.
-* @param inst Instance of the tsp problem to solve
+* @param inst Instance of tsp to solve
 * @param tlim Time limit for benders
 * @result Solution of the problem obtained by branch and cut method
 */
 Solution BranchAndCut(Instance *inst, double tlim);
+
+
+//###################################################################################################################################
+// HARD_FIXING
+//###################################################################################################################################
+
+/*!
+* @brief 
+* @param sol Feasible solution to optimize with Hard-Fixing
+* @param tlim Time limit
+* @result Optimization of sol
+*/
+Solution HardFixing(Solution *sol, double tlim);
 
 #endif // TSP_CPLEX
