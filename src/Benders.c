@@ -63,7 +63,7 @@ Solution benders(Instance *inst, double tlim)
 		setSEC(coeffs, indexes, &cpx, NULL, &subData, iterNum, inst, ncols, 1);
 		
 		// generate a solution using Repair Heuristic and check if it is better than the previous solutions
-		double cost = RepairHeuristicSuccessors(&subData, inst);
+		double cost = PatchingHeuristic(&subData, inst);
 
 		if (checkSuccessorSolution(inst, subData.successors))
 		{

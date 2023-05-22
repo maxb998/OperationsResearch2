@@ -112,7 +112,7 @@ void setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr 
 * @attention Mutex only locks bestSuccessorsSol and bestCost, the other ones must be thread-local data
 * @result Cost of the Repaired Solution
 */
-double RepairHeuristicSuccessors(SubtoursData *sub, Instance *inst);
+double PatchingHeuristic(SubtoursData *sub, Instance *inst);
 
 /*!
 * @brief Check Solution in the form of an array of successors

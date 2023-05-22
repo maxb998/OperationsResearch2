@@ -25,7 +25,7 @@ endif
 
 # separate files into the ones that use cplex and will need the extra compiler flag to find cplex headers and the ones which don't use it
 SOURCE_NAMES_NO_CPLEX = TspUtilities.c ArgParser.c TspIOUtils.c CostMatrix.c NearestNeighbor.c ExtraMileage.c 2Opt.c VariableNeighborhood.c 
-SOURCE_NAMES_CPLEX = main.c TspCplex.c Benders.c BranchAndCut.c HardFixing.c 
+SOURCE_NAMES_CPLEX = main.c TspCplex.c Benders.c PatchingHeuristic.c BranchAndCut.c HardFixing.c 
 
 HEADER_NAMES_NO_CPLEX = TspBase.h Tsp.h EdgeCostFunctions.h
 HEADER_NAMES_CPLEX = TspCplex.h
