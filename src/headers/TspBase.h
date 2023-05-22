@@ -84,6 +84,13 @@ enum VNSInitType {
 	VNS_INIT_EM
 };
 
+enum HardFixPolicy {
+	HARDFIX_POLICY_RANDOM,
+	HARDFIX_POLICY_SMALLEST,
+	HARDFIX_POLICY_PROBABILITY,
+	HARDFIX_POLICY_MIXED
+};
+
 // data structures
 typedef struct
 {

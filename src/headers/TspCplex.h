@@ -155,8 +155,7 @@ Solution BranchAndCut(Instance *inst, double tlim);
 * @brief 
 * @param sol Feasible solution to optimize with Hard-Fixing
 * @param tlim Time limit
-* @result Optimization of sol
 */
-Solution HardFixing(Solution *sol, double tlim);
+void HardFixing(Solution *sol, double fixingAmount, enum HardFixPolicy policy, double tlim);
 
 #endif // TSP_CPLEX
