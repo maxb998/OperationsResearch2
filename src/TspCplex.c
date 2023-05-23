@@ -271,7 +271,7 @@ int checkSuccessorSolution(Instance *inst, int *successors)
 	return 0;
 }
 
-void WarmStart(CplexData *cpx, Solution *sol)
+int WarmStart(CplexData *cpx, Solution *sol)
 {
 	Instance *inst = sol->instance;
 	size_t n = inst->nNodes;
@@ -292,35 +292,7 @@ void WarmStart(CplexData *cpx, Solution *sol)
 	if (inst->params.logLevel >= LOG_LVL_DEBUG)
 		effort = CPX_MIPSTART_CHECKFEAS;
 
-	if (CPXaddmipstarts(cpx->env, cpx->lp, 1, n, &izero, indexes, ones, &effort, &mipstartName) != 0)
-	{
-		destroyCplexData(cpx);
-		throwError(inst, sol, "WarmStart: error on CPXaddmipstarts");
-	}
-
-	free(ones);
-	free(indexes);
-}
-
-int PostSolution(CPXCALLBACKCONTEXTptr context, Instance *inst, int *successors, double cost)
-{
-	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (checkSuccessorSolution(inst, successors) != 0))
-		return 1;
-
-	size_t n = inst->nNodes;
-
-	double *ones = malloc(n * sizeof(double));
-	int *indexes = malloc(n * sizeof(int));
-	for (size_t i = 0; i < n; i++)
-		ones[i] = 1.0;
-	for (size_t i = 0; i < n; i++)
-		indexes[i] = xpos(i, successors[i], n);
-
-	int retVal;
-	if (inst->params.logLevel >= LOG_LVL_DEBUG)
-		retVal = CPXcallbackpostheursoln(context, (int)n, indexes, ones, cost, CPXCALLBACKSOLUTION_CHECKFEAS);
-	else
-		retVal = CPXcallbackpostheursoln(context, (int)n, indexes, ones, cost, CPXCALLBACKSOLUTION_NOCHECK);
+	int retVal = CPXaddmipstarts(cpx->env, cpx->lp, 1, n, &izero, indexes, ones, &effort, &mipstartName);
 
 	free(ones);
 	free(indexes);

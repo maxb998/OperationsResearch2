@@ -109,18 +109,9 @@ int checkSuccessorSolution(Instance *inst, int *successors);
 * @brief Add feasible solution to cplex warm start set
 * @param cpx Pointer to the initialized cplex data
 * @param sol Solution to add to the warm start set. Must be feasible
-*/
-void WarmStart(CplexData *cpx, Solution *sol);
-
-/*!
-* @brief Post a solution of the tsp problem to cplex while inside a callback
-* @param context Context value of the callback
-* @param inst Instance of the problem
-* @param successors Pointer to solution in "successors" form
-* @param cost Cost of the successors solution
 * @result Returns 0 on success, Cplex Error code on failure
 */
-int PostSolution(CPXCALLBACKCONTEXTptr context, Instance *inst, int *successors, double cost);
+int WarmStart(CplexData *cpx, Solution *sol);
 
 //###################################################################################################################################
 // BENDERS

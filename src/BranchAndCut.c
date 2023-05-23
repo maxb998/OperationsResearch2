@@ -12,12 +12,15 @@ typedef struct
 	CplexData *cpx;
 
 	int ncols; // Number of columns of the matrix inside cplex linear problem
+	int iterNum;
+	pthread_mutex_t mutex;
 
 	double bestCost;
 	int *bestSuccessors;
 } CallbackData;
 
-
+// Function to post the solution to cplex. Vals and indexes are two allocated portions of memory of ncols elements each.
+static int PostSolution(CPXCALLBACKCONTEXTptr context, Instance *inst, int ncols, int *successors, double cost, double *vals, int *indexes);
 
 // Callback for adding the lazy subtour elimination cuts
 static int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG contextid, void *userhandle ) ;
@@ -38,12 +41,17 @@ Solution BranchAndCut(Instance *inst, double tlim, Solution *warmStartSol)
 		.inst = inst,
 		.cpx = &cpx,
 		.ncols = ncols,
+		.iterNum = 0,
 		.bestSuccessors = malloc(n * sizeof(int)),
 		.bestCost = INFINITY,
 	};
+	pthread_mutex_init(&cbData.mutex, NULL);
 
-	if (warmStartSol)
-		WarmStart(&cpx, warmStartSol);
+	if ((warmStartSol) && (WarmStart(&cpx, warmStartSol) != 0))
+	{
+		destroyCplexData(&cpx);
+		throwError(inst, NULL, "lazyCallback: error on WarmStart");
+	}
 
 	if (CPXsetintparam(cpx.env, CPX_PARAM_MIPCBREDLP, CPX_OFF))
 	{
@@ -68,6 +76,8 @@ Solution BranchAndCut(Instance *inst, double tlim, Solution *warmStartSol)
 		destroyCplexData(&cpx);
 		throwError(inst, NULL, "lazyCallback: output of CPXmipopt != 0");
 	}
+
+	pthread_mutex_destroy(&cbData.mutex);
 	
 	Solution sol = newSolution(inst);
 	cvtSuccessorsToSolution(cbData.bestSuccessors, &sol);
@@ -108,6 +118,11 @@ static int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPX
 
 	cvtCPXtoSuccessors(xstar, cbData->ncols, nNodes, &sub);
 
+	pthread_mutex_lock(&cbData->mutex);
+	LOG(LOG_LVL_LOG, "Iteration %d subtours detected %d", cbData->iterNum, sub.subtoursCount);
+	cbData->iterNum++;
+	pthread_mutex_unlock(&cbData->mutex);
+
 	double cost = INFINITY;
 	if(sub.subtoursCount > 1)
 	{
@@ -127,12 +142,13 @@ static int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPX
 	// set new incumbent if found
 	if (cost < cbData->bestCost)
 	{
-		cbData->bestCost = cost;
 		int *temp;
 		swapElems(cbData->bestSuccessors, sub.successors, temp);
+		LOG(LOG_LVL_NOTICE, "New incumbent %lf    Old incumbent %lf", cost, cbData->bestCost);
+		cbData->bestCost = cost;
 
 		// post solution to cplex
-		if ((sub.subtoursCount > 1) && ((errCode = PostSolution(context, inst, cbData->bestSuccessors, cbData->bestCost)) != 0))
+		if ((sub.subtoursCount > 1) && ((errCode = PostSolution(context, inst, cbData->ncols, cbData->bestSuccessors, cbData->bestCost, xstar, indexes)) != 0))
 		{
 			free(xstar); free(sub.successors); free(sub.subtoursMap); free(indexes);
 			LOG(LOG_LVL_ERROR,"BranchAndCut callback: postSolution failed with code %d", errCode);
@@ -145,4 +161,26 @@ static int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPX
 	return 0;
 }
 
+static int PostSolution(CPXCALLBACKCONTEXTptr context, Instance *inst, int ncols, int *successors, double cost, double *vals, int *indexes)
+{
+	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (checkSuccessorSolution(inst, successors) != 0))
+		return 1;
 
+	for (size_t i = 0; i < ncols; i++)
+		vals[i] = 0.0;
+	for (size_t i = 0; i < ncols; i++)
+		indexes[i] = i;
+	for (size_t i = 0; i < inst->nNodes; i++)
+	{
+		int pos = xpos(i, successors[i], inst->nNodes);
+		vals[pos] = 1.0;
+	}
+
+	int strat = CPXCALLBACKSOLUTION_NOCHECK;
+	if (inst->params.logLevel >= LOG_LVL_DEBUG)
+		strat = CPXCALLBACKSOLUTION_CHECKFEAS;
+
+	int retVal = CPXcallbackpostheursoln(context, ncols, indexes, vals, cost, strat);
+
+	return retVal;
+}
