@@ -12,16 +12,6 @@ typedef struct
 	Instance *inst;
 } CplexData;
 
-// Contains useful data for the callback. It will go in the parameter cbhandle of the callback call.
-typedef struct
-{
-	Solution *sol;
-	CplexData *cpx;
-
-	// Number of columns of the solution
-	int ncols;
-} CallbackData;
-
 typedef struct 
 {
 	int *successors;
@@ -48,22 +38,6 @@ CplexData initCplexData(Instance *inst);
 void destroyCplexData(CplexData * cpxData);
 
 /*!
-* @brief Print error message and frees any memory from each pointer that is not NULL. Then exits the program with code 1.
-* @param cpxData Pointer to CplexData that will be destroyed before exiting
-* @param inst Pointer to Instance that will be destroyed before exiting.
-* @param sol Pointer to Solution that will be destroyed before exiting.
-* @param line Error message and format
-*/
-void cplexError(CplexData *cpxData, Instance *inst, Solution *sol, char *line, ...);
-
-/*!
-* @brief Print error message and returns 1. Useful when getting errors inside a callback.
-* @param line Error message and format
-* @result 1
-*/
-int callbackError(char *line, ...);
-
-/*!
 * @brief Convert a simple edge coordinates (given by 2 nodes indexes) to an index for the cplex edges array format. 
 * @attention i and j must be different
 * @param i First node of edge
@@ -84,6 +58,14 @@ size_t xpos(size_t i, size_t j, size_t n);
 void cvtCPXtoSuccessors(double *xstar, int ncols, size_t nNodes, SubtoursData *subData);
 
 /*!
+* @brief Compute the cost of a solution in "successors" form
+* @param successors Pointer to solution in "successors" form
+* @param inst Pointer to the instance of the problem
+* @result Cost of the solution
+*/
+double computeSuccessorsSolCost(int *successors, Instance *inst);
+
+/*!
 * @brief Convert a successors array in a standard Solution struct
 * @attention Successors must not contain any subtour
 * @param successors Array of successors
@@ -102,8 +84,9 @@ void cvtSuccessorsToSolution(int *successors, Solution *sol);
 * @param inst Pointer to Instance of the problem
 * @param nCols Number of Columns/Variables defined by the problem
 * @param isBenders Flag to decide which function to use to add constraints to the problem
+* @result 0 if everything run smoothly, Cplex Error code is returned otherwise
 */
-void setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, SubtoursData *subData, int iterNum, Instance *inst, int nCols, int isBenders);
+int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, SubtoursData *subData, int iterNum, Instance *inst, int nCols, int isBenders);
 
 /*!
 * @brief "Fix" a successors-based solution that presents subtours by merging them in the best possible way.
@@ -121,6 +104,23 @@ double PatchingHeuristic(SubtoursData *sub, Instance *inst);
 * @result 0 if everything is correct. 1 if successors is not correct
 */
 int checkSuccessorSolution(Instance *inst, int *successors);
+
+/*!
+* @brief Add feasible solution to cplex warm start set
+* @param cpx Pointer to the initialized cplex data
+* @param sol Solution to add to the warm start set. Must be feasible
+*/
+void WarmStart(CplexData *cpx, Solution *sol);
+
+/*!
+* @brief Post a solution of the tsp problem to cplex while inside a callback
+* @param context Context value of the callback
+* @param inst Instance of the problem
+* @param successors Pointer to solution in "successors" form
+* @param cost Cost of the successors solution
+* @result Returns 0 on success, Cplex Error code on failure
+*/
+int PostSolution(CPXCALLBACKCONTEXTptr context, Instance *inst, int *successors, double cost);
 
 //###################################################################################################################################
 // BENDERS

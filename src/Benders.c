@@ -42,10 +42,16 @@ Solution benders(Instance *inst, double tlim)
 		CPXsetdblparam(cpx.env, CPX_PARAM_TILIM, currentTimeSec + tlim - startTimeSec);
 
 		if (CPXmipopt(cpx.env, cpx.lp))
-			cplexError(&cpx, inst, NULL, "Benders: output of CPXmipopt != 0");
+		{
+			destroyCplexData(&cpx);
+			throwError(inst, NULL, "Benders: output of CPXmipopt != 0");
+		}
 
 		if (CPXgetx(cpx.env, cpx.lp, xstar, 0, ncols - 1))
-			cplexError(&cpx, inst, NULL, "Benders: output of CPXgetx != 0");
+		{
+			destroyCplexData(&cpx);
+			throwError(inst, NULL, "Benders: output of CPXgetx != 0");
+		}
 
 		sub.subtoursCount = 0;
 		
@@ -62,7 +68,12 @@ Solution benders(Instance *inst, double tlim)
 		// add subtour elimination constraints
 		double * coeffs = xstar; // reuse xStar instead of allocating new memory
 
-		setSEC(coeffs, indexes, &cpx, NULL, &sub, iterNum, inst, ncols, 1);
+		if (setSEC(coeffs, indexes, &cpx, NULL, &sub, iterNum, inst, ncols, 1) == 1)
+		{
+			free(xstar); free(sub.subtoursMap); free(sub.successors); free(bestSuccessorsSol); free(indexes);
+			destroyCplexData(&cpx);
+			throwError(inst, NULL, "Benders: SetSEC failed");
+		}
 		
 		// generate a solution using Repair Heuristic and check if it is better than the previous solutions
 		double cost = PatchingHeuristic(&sub, inst);
@@ -70,7 +81,8 @@ Solution benders(Instance *inst, double tlim)
 		if (checkSuccessorSolution(inst, sub.successors))
 		{
 			free(xstar); free(sub.subtoursMap); free(sub.successors); free(bestSuccessorsSol); free(indexes);
-			cplexError(&cpx, inst, NULL, "Benders: Successors after repair heuristic does not represent a loop");
+			destroyCplexData(&cpx);
+			throwError(inst, NULL, "Benders: Successors after repair heuristic does not represent a loop");
 		}
 
 		if (cost < bestCost)

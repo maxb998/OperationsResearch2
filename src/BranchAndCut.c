@@ -6,6 +6,17 @@
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 #include <pthread.h>
 
+typedef struct
+{
+	Instance *inst;
+	CplexData *cpx;
+
+	int ncols; // Number of columns of the matrix inside cplex linear problem
+
+	double bestCost;
+	int *bestSuccessors;
+} CallbackData;
+
 
 
 // Callback for adding the lazy subtour elimination cuts
@@ -19,58 +30,48 @@ Solution BranchAndCut(Instance *inst, double tlim, Solution *warmStartSol)
     double startTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
 
 	size_t n = inst->nNodes;
-
-	// Stores the solution so that we can populate cbData and return a Solution type for the method
-	Solution sol = newSolution(inst);
 	CplexData cpx = initCplexData(inst);
-
 	int ncols = CPXgetnumcols(cpx.env, cpx.lp);
 
 	CallbackData cbData = 
 	{
-		.sol = &sol,
+		.inst = inst,
 		.cpx = &cpx,
-		.ncols = ncols
+		.ncols = ncols,
+		.bestSuccessors = malloc(n * sizeof(int)),
+		.bestCost = INFINITY,
 	};
 
-	// ********** warm start setup **************
 	if (warmStartSol)
-	{
-		if (inst->params.logLevel >= LOG_LVL_DEBUG)
-			checkSolution(warmStartSol);
-		
-		double *vars = malloc(n * sizeof(double));
-		int *indexes = malloc(n * sizeof(int));
-		for (size_t i = 0; i < n; i++)
-			vars[i] = 1.0;
-		for (size_t i = 0; i < n; i++)
-			indexes[i] = xpos(warmStartSol->indexPath[i], warmStartSol->indexPath[i+1], n);
-		
-		int izero = 0;
-		char *mipstartName = "Warm Start, External";
-		int effort = CPX_MIPSTART_CHECKFEAS;
-
-		if (CPXaddmipstarts(cpx.env, cpx.lp, 1, n, &izero, indexes, vars, &effort, &mipstartName) != 0)
-			cplexError(&cpx, inst, &sol, "lazyCallback: error on CPXaddmipstarts");
-
-		free(vars); free(indexes);
-	}
-
-	// ******************************************
+		WarmStart(&cpx, warmStartSol);
 
 	if (CPXsetintparam(cpx.env, CPX_PARAM_MIPCBREDLP, CPX_OFF))
-		cplexError(&cpx, inst, &sol, "lazyCallback: error on CPXsetinitparam(CPX_PARAM_MIPCBREDLP)");
+	{
+		destroyCplexData(&cpx);
+		throwError(inst, NULL, "lazyCallback: error on CPXsetinitparam(CPX_PARAM_MIPCBREDLP)");
+	}
 
 	if (CPXcallbacksetfunc(cpx.env, cpx.lp, CPX_CALLBACKCONTEXT_CANDIDATE, genericCallbackCandidate, &cbData))
-		cplexError(&cpx, inst, &sol, "lazyCallback: error on CPXsetlazyconstraintcallbackfunc");
+	{
+		destroyCplexData(&cpx);
+		throwError(inst, NULL, "lazyCallback: error on CPXsetlazyconstraintcallbackfunc");
+	}
 	
 	if (CPXsetintparam(cpx.env, CPX_PARAM_THREADS, inst->params.nThreads))
-		cplexError(&cpx, inst, &sol, "lazyCallback: error on CPXsetintparam(CPX_PARAM_THREADS)");
+	{
+		destroyCplexData(&cpx);
+		throwError(inst, NULL, "lazyCallback: error on CPXsetintparam(CPX_PARAM_THREADS)");
+	}
 
 	if (CPXmipopt(cpx.env, cpx.lp))
-		cplexError(&cpx, inst, NULL, "lazyCallback: output of CPXmipopt != 0");
+	{
+		destroyCplexData(&cpx);
+		throwError(inst, NULL, "lazyCallback: output of CPXmipopt != 0");
+	}
 	
-	sol.cost = computeSolutionCost(&sol);
+	Solution sol = newSolution(inst);
+	cvtSuccessorsToSolution(cbData.bestSuccessors, &sol);
+	sol.cost = cbData.bestCost;
 
 	clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
 	sol.execTime = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0 - startTimeSec;
@@ -82,48 +83,65 @@ static int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPX
 {
 	CallbackData *cbData = (CallbackData *) userhandle;
 
-	Solution *sol = cbData->sol;
-	Instance *inst = sol->instance;
+	Instance *inst = cbData->inst;
+	int errCode = 0;
 
 	// Stores the number of nodes in the problem
 	int nNodes = inst->nNodes;
 
 	// Stores current vector x from CPLEX
 	double *xstar = malloc(cbData->ncols * sizeof(double));
-	if (xstar == NULL) return callbackError("subtourEliminationCallback: xstar allocation error: out of memory");
-	if (CPXcallbackgetcandidatepoint(context, xstar, 0, cbData->ncols-1, NULL) != 0) return callbackError("subtourEliminationCallback: CPXgetcallbacknodex error.");
+	if ((errCode = CPXcallbackgetcandidatepoint(context, xstar, 0, cbData->ncols-1, NULL)) != 0) 
+	{
+		LOG(LOG_LVL_ERROR, "subtourEliminationCallback: CPXgetcallbacknodex failed with code %d", errCode);
+		return 1;
+	}
 
-	// Stores the solution with the "successor" convention
-	SubtoursData subData = {0};
-	subData.successors = malloc(nNodes * 2 * sizeof(int)); 
-	if (subData.successors == NULL) return callbackError("subtourEliminationCallback: successor allocation error.");
-	
-	// Stores the subtour in which the nodes represented buy the indexes are in
-	subData.subtoursMap = &subData.successors[nNodes];
-
-	// Stores the number of subtours foúnd by CPLEX
-	subData.subtoursCount = 0;
+	SubtoursData sub = {
+		.successors = malloc(nNodes * sizeof(int)),
+		.subtoursMap = malloc(nNodes * sizeof(int)),
+		.subtoursCount = 0
+	};
 	
 	// Stores the index of the coefficients that we pass to CPLEX 
 	int *indexes = malloc(cbData->ncols * sizeof(int));
-	if (indexes == NULL) return callbackError("subtourEliminationCallback: indexes allocation error.");
 
-	cvtCPXtoSuccessors(xstar, cbData->ncols, nNodes, &subData);
+	cvtCPXtoSuccessors(xstar, cbData->ncols, nNodes, &sub);
 
-	if(subData.subtoursCount != 1)
+	double cost = INFINITY;
+	if(sub.subtoursCount > 1)
 	{
 		double * coeffs = xstar;
-		setSEC(coeffs, indexes, NULL, context, &subData, 0, inst, cbData->ncols, 0);
-		if (CPXcallbackrejectcandidate(context, 0, 0, NULL, NULL, NULL, NULL, NULL))
-			return callbackError("subtourEliminationCallback: candidate solution rejection failed");
+		if ((errCode = setSEC(coeffs, indexes, NULL, context, &sub, 0, inst, cbData->ncols, 0)) != 0)
+		{
+			free(xstar); free(sub.successors); free(sub.subtoursMap); free(indexes);
+			LOG(LOG_LVL_ERROR,"BranchAndCut callback: setSEC failed with code %d", errCode);
+			return 1;
+		}
+
+		cost = PatchingHeuristic(&sub, inst);
 	}
 	else
-		cvtSuccessorsToSolution(subData.successors, cbData->sol);
-	
+		cost = computeSuccessorsSolCost(sub.successors, inst);
 
-	free(xstar);
-	free(subData.successors);
-	free(indexes);
+	// set new incumbent if found
+	if (cost < cbData->bestCost)
+	{
+		cbData->bestCost = cost;
+		int *temp;
+		swapElems(cbData->bestSuccessors, sub.successors, temp);
+
+		// post solution to cplex
+		if ((sub.subtoursCount > 1) && ((errCode = PostSolution(context, inst, cbData->bestSuccessors, cbData->bestCost)) != 0))
+		{
+			free(xstar); free(sub.successors); free(sub.subtoursMap); free(indexes);
+			LOG(LOG_LVL_ERROR,"BranchAndCut callback: postSolution failed with code %d", errCode);
+			return 1;
+		}
+
+	}
+
+	free(xstar); free(sub.successors); free(sub.subtoursMap); free(indexes);
 	return 0;
 }
 

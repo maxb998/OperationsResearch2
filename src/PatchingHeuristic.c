@@ -3,9 +3,6 @@
 
 static inline void findBestSubtourMerge(SubtoursData *sub, int subtoursCount, Instance *inst, int mergeIndexes[2], int *invertOrientation);
 
-static double computeSuccessorsSolCost(int *successors, Instance *inst);
-
-
 double PatchingHeuristic(SubtoursData *sub, Instance *inst)
 {
 	size_t n = inst->nNodes;
@@ -122,29 +119,5 @@ static inline void findBestSubtourMerge(SubtoursData *sub, int subtoursCount, In
 			}
 		}
 	}
-}
-
-static double computeSuccessorsSolCost(int *successors, Instance *inst)
-{
-	int n = (int)inst->nNodes;
-	enum EdgeWeightType ewt = inst->params.edgeWeightType ;
-	int roundFlag = inst->params.roundWeightsFlag;
-
-	double cost = 0.0;
-
-	int i = 0;
-	int counter = 0;
-	do
-	{
-		int succ = successors[i];
-		cost += computeEdgeCost(inst->X[i], inst->Y[i], inst->X[succ], inst->Y[succ], ewt, roundFlag);
-		i = succ;
-
-		if (counter > n)
-			throwError(inst, NULL, "computeSuccessorsSolCost: There are subtours inside the successor array even after repair heuristic");
-		counter++;
-	} while (i != 0);
-	
-	return cost;
 }
 

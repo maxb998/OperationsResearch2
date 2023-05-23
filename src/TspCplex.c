@@ -48,10 +48,16 @@ CplexData initCplexData(Instance *inst)
 			sprintf(cname[0], "x(%d,%d)", i+1,j+1);  		// ... x(1,2), x(1,3) ....
 			double obj = computeEdgeCost(inst->X[i], inst->Y[i], inst->X[j], inst->Y[j], ewt, roundFlag); // cost == distance
 			double ub = 1.0;
-			if ( CPXnewcols(cpxData.env, cpxData.lp, 1, &obj, NULL, &ub, &binary, cname) ) 
-				cplexError(&cpxData, inst, NULL, "initCplexData: wrong CPXnewcols on x var.s");
+			if ( CPXnewcols(cpxData.env, cpxData.lp, 1, &obj, NULL, &ub, &binary, cname) )
+			{
+				destroyCplexData(&cpxData);
+				throwError(inst, NULL, "initCplexData: wrong CPXnewcols on x var.s");
+			}
     		if ( CPXgetnumcols(cpxData.env, cpxData.lp)-1 != xpos(i,j,n) )
-				cplexError(&cpxData, inst, NULL, "initCplexData: wrong position for x var.s");
+			{
+				destroyCplexData(&cpxData);
+				throwError(inst, NULL, "initCplexData: wrong position for x var.s");
+			}
 		}
 	} 
 
@@ -74,8 +80,11 @@ CplexData initCplexData(Instance *inst)
 			nnz++;
 		}
 		int izero = 0;
-		if ( CPXaddrows(cpxData.env, cpxData.lp, 0, 1, nnz, &rhs, &sense, &izero, index, value, NULL, &cname[0]) ) 
-			cplexError(&cpxData, inst, NULL, "initCplexData: CPXaddrows(): error 1");
+		if ( CPXaddrows(cpxData.env, cpxData.lp, 0, 1, nnz, &rhs, &sense, &izero, index, value, NULL, &cname[0]) )
+		{
+			destroyCplexData(&cpxData);
+			throwError(inst, NULL, "initCplexData: CPXaddrows(): error 1");
+		}
 	} 
 
 	free(value);
@@ -91,39 +100,6 @@ void destroyCplexData(CplexData * cpxData)
 {
 	CPXfreeprob(cpxData->env, &cpxData->lp);
     CPXcloseCPLEX(&cpxData->env);
-}
-
-void cplexError(CplexData *cpxData, Instance *inst, Solution *sol, char *line, ...)
-{
-	printf("\033[1;31mERR \033[0m");
-
-	va_list params;
-    va_start(params, line);
-    vprintf(line, params);
-    va_end(params);
-
-    printf("\n");
-
-    // free allocated memory
-    if (inst) destroyInstance(inst);
-    if (sol) destroySolution(sol);
-	if (cpxData) destroyCplexData(cpxData);
-
-    exit(EXIT_FAILURE);
-}
-
-int callbackError(char *line, ...)
-{
-	printf("\033[1;31mERR \033[0m");
-
-	va_list params;
-    va_start(params, line);
-    vprintf(line, params);
-    va_end(params);
-
-    printf("\n");
-
-    exit(EXIT_FAILURE);
 }
 
 size_t xpos(size_t i, size_t j, size_t n)
@@ -198,8 +174,9 @@ void cvtSuccessorsToSolution(int *successors, Solution *sol)
 	sol->Y[n] = inst->Y[0];
 }
 
-void setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, SubtoursData *subData, int iterNum, Instance *inst, int nCols, int isBenders)
+int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, SubtoursData *subData, int iterNum, Instance *inst, int nCols, int isBenders)
 {
+	int retVal = 0;
 	size_t n = inst->nNodes;
 
 	// set all coeffs to 1 at the beggining so we don't have to think about them again
@@ -210,7 +187,7 @@ void setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr 
 	char *cname = malloc(20);
 	static int izero = 0;
 
-	for (int subtourID = 0; subtourID < subData->subtoursCount; subtourID++)
+	for (int subtourID = 0; (subtourID < subData->subtoursCount) && (retVal == 0); subtourID++)
 	{
 		// get first node of next subtour
 		int subtourStart = 0;
@@ -233,19 +210,43 @@ void setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr 
 		} while (next != subtourStart);
 
 		sprintf(cname, "SEC(%03d,%03d)", iterNum, subtourID);
+
 		if(isBenders)
-		{
-			if (CPXaddrows(cpx->env, cpx->lp, 0, 1, nnz, &rhs, &sense, &izero, indexes, coeffs, NULL, &cname))
-				cplexError(cpx, inst, NULL, "setSEC ->benders: CPXaddrows() error");
-		}
+			retVal = CPXaddrows(cpx->env, cpx->lp, 0, 1, nnz, &rhs, &sense, &izero, indexes, coeffs, NULL, &cname);
 		else
-		{
-			if (CPXcallbackrejectcandidate(context, 1, nnz, &rhs, &sense, &izero, indexes, coeffs))
-				cplexError(cpx, inst, NULL, "setSEC ->lazyCallback: CPXaddlazyconstraints() error");
-		}
+			retVal = CPXcallbackrejectcandidate(context, 1, nnz, &rhs, &sense, &izero, indexes, coeffs);
 	}
 
 	free(cname);
+
+	return retVal;
+}
+
+double computeSuccessorsSolCost(int *successors, Instance *inst)
+{
+	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (checkSuccessorSolution(inst, successors) != 0))
+		return -1.0;
+
+	int n = (int)inst->nNodes;
+	enum EdgeWeightType ewt = inst->params.edgeWeightType ;
+	int roundFlag = inst->params.roundWeightsFlag;
+
+	double cost = 0.0;
+
+	int i = 0;
+	int counter = 0;
+	do
+	{
+		int succ = successors[i];
+		cost += computeEdgeCost(inst->X[i], inst->Y[i], inst->X[succ], inst->Y[succ], ewt, roundFlag);
+		i = succ;
+
+		if (counter > n)
+			throwError(inst, NULL, "computeSuccessorsSolCost: There are subtours inside the successor array even after repair heuristic");
+		counter++;
+	} while (i != 0);
+	
+	return cost;
 }
 
 int checkSuccessorSolution(Instance *inst, int *successors)
@@ -268,5 +269,62 @@ int checkSuccessorSolution(Instance *inst, int *successors)
 	} while (count <= n);
 	
 	return 0;
+}
+
+void WarmStart(CplexData *cpx, Solution *sol)
+{
+	Instance *inst = sol->instance;
+	size_t n = inst->nNodes;
+
+	if (inst->params.logLevel >= LOG_LVL_DEBUG)
+		checkSolution(sol);
+
+	double *ones = malloc(n * sizeof(double));
+	int *indexes = malloc(n * sizeof(int));
+	for (size_t i = 0; i < n; i++)
+		ones[i] = 1.0;
+	for (size_t i = 0; i < n; i++)
+		indexes[i] = xpos(sol->indexPath[i], sol->indexPath[i + 1], n);
+
+	int izero = 0;
+	char *mipstartName = "Warm Start, External";
+	int effort = CPX_MIPSTART_NOCHECK;
+	if (inst->params.logLevel >= LOG_LVL_DEBUG)
+		effort = CPX_MIPSTART_CHECKFEAS;
+
+	if (CPXaddmipstarts(cpx->env, cpx->lp, 1, n, &izero, indexes, ones, &effort, &mipstartName) != 0)
+	{
+		destroyCplexData(cpx);
+		throwError(inst, sol, "WarmStart: error on CPXaddmipstarts");
+	}
+
+	free(ones);
+	free(indexes);
+}
+
+int PostSolution(CPXCALLBACKCONTEXTptr context, Instance *inst, int *successors, double cost)
+{
+	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (checkSuccessorSolution(inst, successors) != 0))
+		return 1;
+
+	size_t n = inst->nNodes;
+
+	double *ones = malloc(n * sizeof(double));
+	int *indexes = malloc(n * sizeof(int));
+	for (size_t i = 0; i < n; i++)
+		ones[i] = 1.0;
+	for (size_t i = 0; i < n; i++)
+		indexes[i] = xpos(i, successors[i], n);
+
+	int retVal;
+	if (inst->params.logLevel >= LOG_LVL_DEBUG)
+		retVal = CPXcallbackpostheursoln(context, (int)n, indexes, ones, cost, CPXCALLBACKSOLUTION_CHECKFEAS);
+	else
+		retVal = CPXcallbackpostheursoln(context, (int)n, indexes, ones, cost, CPXCALLBACKSOLUTION_NOCHECK);
+
+	free(ones);
+	free(indexes);
+
+	return retVal;
 }
 
