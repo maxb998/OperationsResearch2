@@ -13,11 +13,11 @@
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
                 "--file", "data/att48.tsp",
-                "--mode", "branch_cut",
+                "--mode", "hardfix",
 
                 "--grasp", "random(0.05)",
                 "--2opt",
-                "--tlim", "1000",
+                "--tlim", "10",
 
                 //"--nnOpt", "tryall",
                 //"--emOpt", "random",
@@ -28,7 +28,7 @@
                 "--roundcosts",
                 "--plot", 
                 //"--save",
-                "--loglvl", "debug"
+                "--loglvl", "notice"
             ],
             "cwd": "${workspaceFolder}"
        },

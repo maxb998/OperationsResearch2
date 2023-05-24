@@ -9,7 +9,7 @@
 
 CplexData initCplexData(Instance *inst)
 {
-	CplexData cpxData = { 0 };
+	CplexData cpxData = { .inst = inst };
 
 	int errno = 0;
 	cpxData.env = CPXopenCPLEX(&errno);
@@ -174,6 +174,17 @@ void cvtSuccessorsToSolution(int *successors, Solution *sol)
 	sol->Y[n] = inst->Y[0];
 }
 
+void cvtSolutionToSuccessors(Solution *sol, int* successors)
+{
+	size_t n = sol->instance->nNodes;
+
+	for (size_t i = 0; i < n; i++)
+		successors[sol->indexPath[i]] = sol->indexPath[i+1];
+
+	if ((sol->instance->params.logLevel >= LOG_LVL_EVERYTHING) && (checkSuccessorSolution(sol->instance, successors) != 0))
+		throwError(sol->instance, sol, "cvtSolutionToSuccessors: Converted solution is wrong");	
+}
+
 int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, SubtoursData *subData, int iterNum, Instance *inst, int nCols, int isBenders)
 {
 	int retVal = 0;
@@ -300,3 +311,35 @@ int WarmStart(CplexData *cpx, Solution *sol)
 	return retVal;
 }
 
+
+int WarmStartSuccessors(CplexData *cpx, int *successors)
+{
+	Instance *inst = cpx->inst;
+	size_t n = inst->nNodes;
+
+	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (checkSuccessorSolution(inst, successors) != 0))
+	{
+		LOG(LOG_LVL_ERROR, "WarStartSuccessors: successor solution is incorrect");
+		return 1;
+	}
+
+	double *ones = malloc(n * sizeof(double));
+	int *indexes = malloc(n * sizeof(int));
+	for (size_t i = 0; i < n; i++)
+		ones[i] = 1.0;
+	for (size_t i = 0; i < n; i++)
+		indexes[i] = xpos(i, successors[i], n);
+
+	int izero = 0;
+	char *mipstartName = "Warm Start, External";
+	int effort = CPX_MIPSTART_NOCHECK;
+	if (inst->params.logLevel >= LOG_LVL_DEBUG)
+		effort = CPX_MIPSTART_CHECKFEAS;
+
+	int retVal = CPXaddmipstarts(cpx->env, cpx->lp, 1, n, &izero, indexes, ones, &effort, &mipstartName);
+
+	free(ones);
+	free(indexes);
+
+	return retVal;
+}

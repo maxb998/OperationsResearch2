@@ -11,6 +11,7 @@ Specify the type of solver to use: \n\
     vns : Use Variable Neighborhood Search\
     benders: Use Benders method\n\
     branch_cut: Use cplex generic callback to perform Branch & Cut\n\
+    hardfix: Use Hard Fixing Matheuristic\n\
 "
 
 # define MODES_COUNT 5
@@ -19,7 +20,8 @@ static const char *modeStrings[] = {
     "em",
     "vns",
     "benders",
-    "branch_cut"
+    "branch_cut",
+    "hardfix"
 };
 
 #define ARGP_GRASP_DOC "\
@@ -251,6 +253,8 @@ static int parseMode(char *arg, Instance *inst)
         inst->params.mode = MODE_BENDERS;
     else if (strcmp(arg, modeStrings[MODE_BRANCH_CUT]) == 0)
         inst->params.mode = MODE_BRANCH_CUT;
+    else if (strcmp(arg, modeStrings[MODE_HARDFIX]) == 0)
+        inst->params.mode = MODE_HARDFIX;
 
     // error check
     if (inst->params.mode == MODE_NONE)

@@ -4,6 +4,7 @@
 #include "TspBase.h"
 #include "EdgeCostFunctions.h"
 #include <cpxconst.h> // contains only basic data (avoids user to indirectly include cplex.h as a whole)
+#include <pthread.h>
 
 typedef struct
 {
@@ -19,6 +20,17 @@ typedef struct
 	int subtoursCount;
 } SubtoursData;
 
+typedef struct
+{
+	Instance *inst;
+
+	int ncols; // Number of columns of the matrix inside cplex linear problem
+	int iterNum;
+	pthread_mutex_t mutex;
+
+	double bestCost;
+	int *bestSuccessors;
+} CallbackData;
 
 //###################################################################################################################################
 // TSP_CPLEX_BASE
@@ -74,6 +86,13 @@ double computeSuccessorsSolCost(int *successors, Instance *inst);
 void cvtSuccessorsToSolution(int *successors, Solution *sol);
 
 /*!
+* @brief Convert a Solution to a successors array
+* @param sol Solution to convert
+* @param successors Output memory
+*/
+void cvtSolutionToSuccessors(Solution *sol, int* successors);
+
+/*!
 * @brief Set subtour elimination constraints given a solution that have more than one subtour.
 * @param coeffs Allocated memory of nCols doubles used to add SEC
 * @param indexes Allocated memory of nCols integers used to add SEC
@@ -113,6 +132,14 @@ int checkSuccessorSolution(Instance *inst, int *successors);
 */
 int WarmStart(CplexData *cpx, Solution *sol);
 
+/*!
+* @brief Add feasible solution in successors form to cplex warm start set
+* @param cpx Pointer to the initialized cplex data
+* @param sol Successor solution to add to the warm start set. Must be feasible
+* @result Returns 0 on success, Cplex Error code on failure
+*/
+int WarmStartSuccessors(CplexData *cpx, int *successors);
+
 //###################################################################################################################################
 // BENDERS
 //###################################################################################################################################
@@ -138,6 +165,8 @@ Solution benders(Instance *inst, double tlim);
 */
 Solution BranchAndCut(Instance *inst, double tlim, Solution *warmStartSol);
 
+// cplex callback to that solves tsp instance
+int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG contextid, void *userhandle );
 
 //###################################################################################################################################
 // HARD_FIXING

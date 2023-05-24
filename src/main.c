@@ -11,6 +11,7 @@ static Solution runVariableNeighborhoodSearch(Instance *inst);
 
 static Solution runBenders(Instance *inst);
 static Solution runBranchAndCut(Instance *inst);
+static Solution runHardFixing(Instance *inst);
 
 
 static void run2Opt(Solution *sol);
@@ -63,8 +64,13 @@ int main (int argc, char *argv[])
     case MODE_BENDERS:
         sol = runBenders(&inst);
         break;
+
     case MODE_BRANCH_CUT:
         sol = runBranchAndCut(&inst);
+        break;
+
+    case MODE_HARDFIX:
+        sol = runHardFixing(&inst);
         break;
     }
 
@@ -132,11 +138,13 @@ static Solution runBenders(Instance *inst)
 
 static Solution runBranchAndCut(Instance *inst)
 {
+    printf("Running TEMPORARELY extra mileage to get a warm start solution\n");
+    Solution warmStart = ExtraMileage(inst, 0, EM_INIT_EXTREMES);
+    apply2OptBestFix(&warmStart, 0);
+
     printf("##############################################################################################################################\n");
     printf("Branch & Cut starting...\n");
     printf("##############################################################################################################################\n");
-
-    Solution warmStart = ExtraMileage(inst, 0, EM_INIT_EXTREMES);
 
     Solution sol = BranchAndCut(inst, inst->params.tlim, &warmStart);
 
@@ -144,6 +152,28 @@ static Solution runBranchAndCut(Instance *inst)
 
     printf("##############################################################################################################################\n");
     printf("Branch & Cut finished in %lf seconds\n", sol.execTime);
+    printf("Cost = %lf\n", sol.cost);
+    printf("##############################################################################################################################\n");
+
+    return sol;
+}
+
+static Solution runHardFixing(Instance *inst)
+{
+    printf("Running TEMPORARELY extra mileage to get a warm start solution\n");
+    Solution sol = ExtraMileage(inst, 0, EM_INIT_EXTREMES);
+    apply2OptBestFix(&sol, 0);
+
+    plotSolution(&sol, "720,576", "blue", "black", 1, 0);
+
+    printf("##############################################################################################################################\n");
+    printf("Hard Fixing Starting...\n");
+    printf("##############################################################################################################################\n");
+
+    HardFixing(&sol, 0.9, HARDFIX_POLICY_RANDOM, inst->params.tlim);
+
+    printf("##############################################################################################################################\n");
+    printf("Hard Fixing finished in %lf seconds\n", sol.execTime);
     printf("Cost = %lf\n", sol.cost);
     printf("##############################################################################################################################\n");
 

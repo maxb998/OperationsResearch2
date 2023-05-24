@@ -4,26 +4,13 @@
 #include <cplex.h>
 #include <time.h>
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
-#include <pthread.h>
 
-typedef struct
-{
-	Instance *inst;
-	CplexData *cpx;
-
-	int ncols; // Number of columns of the matrix inside cplex linear problem
-	int iterNum;
-	pthread_mutex_t mutex;
-
-	double bestCost;
-	int *bestSuccessors;
-} CallbackData;
 
 // Function to post the solution to cplex. Vals and indexes are two allocated portions of memory of ncols elements each.
 static int PostSolution(CPXCALLBACKCONTEXTptr context, Instance *inst, int ncols, int *successors, double cost, double *vals, int *indexes);
 
 // Callback for adding the lazy subtour elimination cuts
-static int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG contextid, void *userhandle ) ;
+
 
 
 Solution BranchAndCut(Instance *inst, double tlim, Solution *warmStartSol)
@@ -39,7 +26,6 @@ Solution BranchAndCut(Instance *inst, double tlim, Solution *warmStartSol)
 	CallbackData cbData = 
 	{
 		.inst = inst,
-		.cpx = &cpx,
 		.ncols = ncols,
 		.iterNum = 0,
 		.bestSuccessors = malloc(n * sizeof(int)),
@@ -50,31 +36,31 @@ Solution BranchAndCut(Instance *inst, double tlim, Solution *warmStartSol)
 	if ((warmStartSol) && (WarmStart(&cpx, warmStartSol) != 0))
 	{
 		destroyCplexData(&cpx);
-		throwError(inst, NULL, "lazyCallback: error on WarmStart");
+		throwError(inst, NULL, "BranchAndCut: error on WarmStart");
 	}
 
 	if (CPXsetintparam(cpx.env, CPX_PARAM_MIPCBREDLP, CPX_OFF))
 	{
 		destroyCplexData(&cpx);
-		throwError(inst, NULL, "lazyCallback: error on CPXsetinitparam(CPX_PARAM_MIPCBREDLP)");
+		throwError(inst, NULL, "BranchAndCut: error on CPXsetinitparam(CPX_PARAM_MIPCBREDLP)");
 	}
 
 	if (CPXcallbacksetfunc(cpx.env, cpx.lp, CPX_CALLBACKCONTEXT_CANDIDATE, genericCallbackCandidate, &cbData))
 	{
 		destroyCplexData(&cpx);
-		throwError(inst, NULL, "lazyCallback: error on CPXsetlazyconstraintcallbackfunc");
+		throwError(inst, NULL, "BranchAndCut: error on CPXsetlazyconstraintcallbackfunc");
 	}
 	
 	if (CPXsetintparam(cpx.env, CPX_PARAM_THREADS, inst->params.nThreads))
 	{
 		destroyCplexData(&cpx);
-		throwError(inst, NULL, "lazyCallback: error on CPXsetintparam(CPX_PARAM_THREADS)");
+		throwError(inst, NULL, "BranchAndCut: error on CPXsetintparam(CPX_PARAM_THREADS)");
 	}
 
 	if (CPXmipopt(cpx.env, cpx.lp))
 	{
 		destroyCplexData(&cpx);
-		throwError(inst, NULL, "lazyCallback: output of CPXmipopt != 0");
+		throwError(inst, NULL, "BranchAndCut: output of CPXmipopt != 0");
 	}
 
 	pthread_mutex_destroy(&cbData.mutex);
@@ -89,7 +75,7 @@ Solution BranchAndCut(Instance *inst, double tlim, Solution *warmStartSol)
 	return sol;
 }
 
-static int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG contextid, void *userhandle ) 
+int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG contextid, void *userhandle ) 
 {
 	CallbackData *cbData = (CallbackData *) userhandle;
 
