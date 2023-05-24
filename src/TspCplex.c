@@ -282,37 +282,7 @@ int checkSuccessorSolution(Instance *inst, int *successors)
 	return 0;
 }
 
-int WarmStart(CplexData *cpx, Solution *sol)
-{
-	Instance *inst = sol->instance;
-	size_t n = inst->nNodes;
-
-	if (inst->params.logLevel >= LOG_LVL_DEBUG)
-		checkSolution(sol);
-
-	double *ones = malloc(n * sizeof(double));
-	int *indexes = malloc(n * sizeof(int));
-	for (size_t i = 0; i < n; i++)
-		ones[i] = 1.0;
-	for (size_t i = 0; i < n; i++)
-		indexes[i] = xpos(sol->indexPath[i], sol->indexPath[i + 1], n);
-
-	int izero = 0;
-	char *mipstartName = "Warm Start, External";
-	int effort = CPX_MIPSTART_NOCHECK;
-	if (inst->params.logLevel >= LOG_LVL_DEBUG)
-		effort = CPX_MIPSTART_CHECKFEAS;
-
-	int retVal = CPXaddmipstarts(cpx->env, cpx->lp, 1, n, &izero, indexes, ones, &effort, &mipstartName);
-
-	free(ones);
-	free(indexes);
-
-	return retVal;
-}
-
-
-int WarmStartSuccessors(CplexData *cpx, int *successors)
+int WarmStart(CplexData *cpx, int *successors)
 {
 	Instance *inst = cpx->inst;
 	size_t n = inst->nNodes;

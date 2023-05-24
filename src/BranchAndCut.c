@@ -22,6 +22,7 @@ Solution BranchAndCut(Instance *inst, double tlim, Solution *warmStartSol)
 	size_t n = inst->nNodes;
 	CplexData cpx = initCplexData(inst);
 	int ncols = CPXgetnumcols(cpx.env, cpx.lp);
+	int errCode = 0;
 
 	CallbackData cbData = 
 	{
@@ -33,33 +34,42 @@ Solution BranchAndCut(Instance *inst, double tlim, Solution *warmStartSol)
 	};
 	pthread_mutex_init(&cbData.mutex, NULL);
 
-	if ((warmStartSol) && (WarmStart(&cpx, warmStartSol) != 0))
+	if (warmStartSol)
 	{
-		destroyCplexData(&cpx);
-		throwError(inst, NULL, "BranchAndCut: error on WarmStart");
+		if (inst->params.logLevel >= LOG_LVL_DEBUG)
+			checkSolution(warmStartSol);
+
+		cvtSolutionToSuccessors(warmStartSol, cbData.bestSuccessors);
+		cbData.bestCost = warmStartSol->cost;
+
+		if ((errCode = WarmStart(&cpx, cbData.bestSuccessors)) != 0)
+		{
+			destroyCplexData(&cpx); free(cbData.bestSuccessors); destroySolution(warmStartSol);
+			throwError(inst, NULL, "BranchAndCut: error on WarmStart with code %d", errCode);
+		}
 	}
 
 	if (CPXsetintparam(cpx.env, CPX_PARAM_MIPCBREDLP, CPX_OFF))
 	{
-		destroyCplexData(&cpx);
+		destroyCplexData(&cpx); free(cbData.bestSuccessors); destroySolution(warmStartSol);
 		throwError(inst, NULL, "BranchAndCut: error on CPXsetinitparam(CPX_PARAM_MIPCBREDLP)");
 	}
 
 	if (CPXcallbacksetfunc(cpx.env, cpx.lp, CPX_CALLBACKCONTEXT_CANDIDATE, genericCallbackCandidate, &cbData))
 	{
-		destroyCplexData(&cpx);
+		destroyCplexData(&cpx); free(cbData.bestSuccessors); destroySolution(warmStartSol);
 		throwError(inst, NULL, "BranchAndCut: error on CPXsetlazyconstraintcallbackfunc");
 	}
 	
 	if (CPXsetintparam(cpx.env, CPX_PARAM_THREADS, inst->params.nThreads))
 	{
-		destroyCplexData(&cpx);
+		destroyCplexData(&cpx); free(cbData.bestSuccessors); destroySolution(warmStartSol);
 		throwError(inst, NULL, "BranchAndCut: error on CPXsetintparam(CPX_PARAM_THREADS)");
 	}
 
 	if (CPXmipopt(cpx.env, cpx.lp))
 	{
-		destroyCplexData(&cpx);
+		destroyCplexData(&cpx); free(cbData.bestSuccessors); destroySolution(warmStartSol);
 		throwError(inst, NULL, "BranchAndCut: output of CPXmipopt != 0");
 	}
 

@@ -125,20 +125,12 @@ double PatchingHeuristic(SubtoursData *sub, Instance *inst);
 int checkSuccessorSolution(Instance *inst, int *successors);
 
 /*!
-* @brief Add feasible solution to cplex warm start set
-* @param cpx Pointer to the initialized cplex data
-* @param sol Solution to add to the warm start set. Must be feasible
-* @result Returns 0 on success, Cplex Error code on failure
-*/
-int WarmStart(CplexData *cpx, Solution *sol);
-
-/*!
 * @brief Add feasible solution in successors form to cplex warm start set
 * @param cpx Pointer to the initialized cplex data
 * @param sol Successor solution to add to the warm start set. Must be feasible
 * @result Returns 0 on success, Cplex Error code on failure
 */
-int WarmStartSuccessors(CplexData *cpx, int *successors);
+int WarmStart(CplexData *cpx, int *successors);
 
 //###################################################################################################################################
 // BENDERS

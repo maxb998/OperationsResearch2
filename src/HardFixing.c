@@ -85,7 +85,7 @@ void HardFixing(Solution *sol, double fixingAmount, enum HardFixPolicy policy, d
             throwError(inst, sol, "HardFix: CPXsetdblparam failed with code %d", errCode);
         }
 
-        if ((errCode = WarmStartSuccessors(&cpx, cbData.bestSuccessors)) != 0)
+        if ((errCode = WarmStart(&cpx, cbData.bestSuccessors)) != 0)
         {
             destroyCplexData(&cpx); free(xstar); free(indexes); free(boundsType); free(sub.successors); free(sub.subtoursMap); free(cbData.bestSuccessors);
             throwError(inst, sol, "HardFix: CPXsetdblparam failed with code %d", errCode);
@@ -167,6 +167,8 @@ static int randomFix(CplexData *cpx, int fixAmount, int *successors, int *indexe
         }
     }
     int retVal = CPXchgbds(cpx->env, cpx->lp, i, indexes, boundsType, bounds);
+    LOG(LOG_LVL_DEBUG, "The number of fixed elements is %d and the fixAmount is set to %d", i, fixAmount);
 
     return retVal;
 }
+

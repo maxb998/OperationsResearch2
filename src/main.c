@@ -170,7 +170,7 @@ static Solution runHardFixing(Instance *inst)
     printf("Hard Fixing Starting...\n");
     printf("##############################################################################################################################\n");
 
-    HardFixing(&sol, 0.9, HARDFIX_POLICY_RANDOM, inst->params.tlim);
+    HardFixing(&sol, 0.5, HARDFIX_POLICY_RANDOM, inst->params.tlim);
 
     printf("##############################################################################################################################\n");
     printf("Hard Fixing finished in %lf seconds\n", sol.execTime);

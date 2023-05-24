@@ -12,7 +12,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
-                "--file", "data/att48.tsp",
+                "--file", "data/a280.tsp",
                 "--mode", "hardfix",
 
                 "--grasp", "random(0.05)",
@@ -24,11 +24,11 @@
                 //"--vnsOpt", "nn",
 
                 //"--seed", "2023",
-                "--threads", "1",
+                "--threads", "8",
                 "--roundcosts",
                 "--plot", 
                 //"--save",
-                "--loglvl", "notice"
+                "--loglvl", "debug"
             ],
             "cwd": "${workspaceFolder}"
        },
@@ -39,12 +39,12 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/x64/main",
             "args": [
-                "--file", "data/a280.tsp",
-                "--mode", "vns",
+                "--file", "data/usa13509.tsp",
+                "--mode", "nn",
 
                 "--grasp", "random(0.05)",
                 "--2opt",
-                "--tlim", "10",
+                "--tlim", "20",
 
                 //"--nnOpt", "tryall",
                 //"--emOpt", "random",
