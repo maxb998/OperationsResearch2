@@ -76,7 +76,7 @@ int main (int argc, char *argv[])
 
 
     if (inst.params.showPlotFlag)
-        plotSolution(&sol, "720,576", "green", "black", 1, 0);
+        plotSolution(&sol, "2560,1440", "green", "black", 1, 0);
     
     if (inst.params.saveFlag)
         saveSolution(&sol, argc, argv);

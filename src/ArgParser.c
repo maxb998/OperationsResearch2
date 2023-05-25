@@ -25,7 +25,7 @@ static const char *modeStrings[] = {
 };
 
 #define ARGP_GRASP_DOC "\
-Specify to Grasp mode (DEFAULT=random(0.1))\
+Specify to Grasp mode (DEFAULT=random(0.1))\n\
     almostbest         : The Use of grasp will be limited to selecting another good choice with default probability value \n\
     almostbest(<GRASP_CHANCE>) : Same as \"almostbest\" but the selection of the secondary choice happens with probability specified with <GRASP_CHANCE>\n\
     random             : At every iteration have a completely random choice with default probability\n\
@@ -476,7 +476,7 @@ void printInfo(Instance *inst)
 {
     const char * blank = "   ";
 
-    printf("SETTINGS:\n\n");
+    printf("SETTINGS:\n");
 
     // input file
     printf("%sInput File/Problem: \"%s\"\n", blank, inst->params.inputFile);

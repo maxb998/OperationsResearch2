@@ -123,7 +123,7 @@ void LOG (enum LogLevel lvl, char * line, ...)
     if (lvl > LOG_LEVEL) return;
 
     // print log level
-    printf("[%s] ", logLevelString[lvl]);
+    printf("  [%s] ", logLevelString[lvl]);
 
     // print passed message and values
     va_list params;

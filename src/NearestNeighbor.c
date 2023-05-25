@@ -17,16 +17,23 @@ typedef struct
     size_t startingNode;
 
     double tlim;
+    int nThreads;
 
-}NNThreadsData;
+}NNThreadsSharedData;
+
+typedef struct
+{
+    NNThreadsSharedData *thShared;
+    unsigned int rndState;
+} NNThreadsDataRnd;
 
 
 static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos2);
 
 // finds the closest unvisited node (pathCost is also updated in this method)
-static inline size_t findSuccessorID(Solution *sol, size_t iterNum, double *pathCost);
+static inline size_t findSuccessorID(Solution *sol, size_t iterNum, double *pathCost, unsigned int *state);
 
-static void applyNearestNeighbor(Solution *sol, size_t startingNodeIndex);
+static void applyNearestNeighbor(Solution *sol, size_t startingNodeIndex, unsigned int *state);
 
 static void updateBestSolutionNN(Solution *bestSol, Solution *newBest);
 
@@ -41,30 +48,45 @@ Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, do
     struct timespec start, finish;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &start);
 
-    size_t nThreads = inst->params.nThreads;
+    NNThreadsSharedData th = {
+        .sol = &sol,
+        .startOption=startOption,
+        .startingNode = 0,
+        .tlim = timeLimit + (double)start.tv_sec + (double)start.tv_nsec / 1000000000.0,
+        .nThreads = inst->params.nThreads
+    };
+
     if (!useThreads)
-        nThreads = 1;
+        th.nThreads = 1;
 
-    NNThreadsData th = {.sol = &sol, .startOption=startOption, .startingNode = 0, .tlim = timeLimit + (double)start.tv_sec + (double)start.tv_nsec / 1000000000.0};
 
-    pthread_mutex_init(&th.getStartNodeMutex, NULL);
-    pthread_mutex_init(&th.saveSolutionMutex, NULL);
-
-    pthread_t threads[nThreads];
-    for (int i = 0; i < nThreads; i++)
+    if (th.nThreads > 1)
     {
-        pthread_create(&threads[i], NULL, nnThread, (void*)&th);
-        LOG(LOG_LVL_DEBUG, "Nearest Neighbour : Thread %d CREATED", i);
-    }
+        pthread_mutex_init(&th.getStartNodeMutex, NULL);
+        pthread_mutex_init(&th.saveSolutionMutex, NULL);
 
-    for (int i = 0; i < inst->params.nThreads; i++)
+        pthread_t threads[MAX_THREADS];
+        for (int i = 0; i < th.nThreads; i++)
+        {
+            NNThreadsDataRnd data = { .thShared = &th, .rndState = rand() };
+            pthread_create(&threads[i], NULL, nnThread, (void *)&data);
+            LOG(LOG_LVL_DEBUG, "Nearest Neighbour : Thread %d CREATED", i);
+        }
+
+        for (int i = 0; i < inst->params.nThreads; i++)
+        {
+            pthread_join(threads[i], NULL);
+            LOG(LOG_LVL_DEBUG, "Nearest Neighbour : Thread %d finished", i);
+        }
+
+        pthread_mutex_destroy(&th.getStartNodeMutex);
+        pthread_mutex_destroy(&th.saveSolutionMutex);
+    }
+    else
     {
-        pthread_join(threads[i], NULL);
-        LOG(LOG_LVL_DEBUG, "Nearest Neighbour : Thread %d finished", i);
+        NNThreadsDataRnd data = { .thShared = &th, .rndState = rand() };
+        nnThread(&data);
     }
-
-    pthread_mutex_destroy(&th.getStartNodeMutex);
-    pthread_mutex_destroy(&th.saveSolutionMutex);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &finish);
     sol.execTime = ((finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0);
@@ -81,7 +103,7 @@ static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos
     swapElems(sol->indexPath[pos1], sol->indexPath[pos2], tempi);
 }
 
-static inline size_t findSuccessorID(Solution *sol, size_t iterNum, double *pathCost)
+static inline size_t findSuccessorID(Solution *sol, size_t iterNum, double *pathCost, unsigned int *state)
 {
     Instance *inst = sol->instance;
     enum EdgeWeightType ewt = inst->params.edgeWeightType ;
@@ -147,9 +169,9 @@ static inline size_t findSuccessorID(Solution *sol, size_t iterNum, double *path
         break;
 
     case GRASP_RANDOM:
-        if (rand() < graspThreshold) // wastes an iteration (could be placed outside all as a "big" if however that reduces readability)
+        if (rand_r(state) < graspThreshold) // wastes an iteration (could be placed outside all as a "big" if however that reduces readability)
         {
-            successor = iterNum + (rand() % (inst->nNodes - iterNum));
+            successor = iterNum + (rand_r(state) % (inst->nNodes - iterNum));
             *pathCost += computeEdgeCost(sol->X[iterNum-1], sol->Y[iterNum-1], sol->X[successor], sol->Y[successor], ewt, roundFlag);
         }
         else
@@ -157,9 +179,9 @@ static inline size_t findSuccessorID(Solution *sol, size_t iterNum, double *path
         break;
     
     case GRASP_ALMOSTBEST:
-        if (rand() < graspThreshold)
+        if (rand_r(state) < graspThreshold)
         {
-            size_t succID = rand() % (AVX_VEC_SIZE - 1);
+            size_t succID = rand_r(state) % (AVX_VEC_SIZE - 1);
             if (minIDsVecStore[succID] == -1)
                 succID = 0;
                 
@@ -174,7 +196,7 @@ static inline size_t findSuccessorID(Solution *sol, size_t iterNum, double *path
     return successor;
 }
 
-static void applyNearestNeighbor(Solution *sol, size_t startingNodeIndex)
+static void applyNearestNeighbor(Solution *sol, size_t startingNodeIndex, unsigned int *state)
 {
     Instance *inst = sol->instance;
     size_t n = inst->nNodes;
@@ -189,7 +211,7 @@ static void applyNearestNeighbor(Solution *sol, size_t startingNodeIndex)
 
     for (size_t i = 1; i < n-1; i++)
     {
-        size_t successorIndex = findSuccessorID(sol, i, &sol->cost);
+        size_t successorIndex = findSuccessorID(sol, i, &sol->cost, state);
 
         if (successorIndex >= n)
             throwError(inst, sol, "applyNearestNeighbor: Value of successor isn't applicable: %lu (startNode=%lu)", successorIndex, startingNodeIndex);
@@ -214,6 +236,8 @@ static void updateBestSolutionNN(Solution *bestSol, Solution *newBest)
     if (bestSol->instance->params.logLevel >= LOG_LVL_EVERYTHING)
         checkSolution(newBest);
 
+    LOG(LOG_LVL_LOG, "Found better solution: New cost: %f   Old cost: %f", newBest->cost, bestSol->cost);
+
     bestSol->cost = newBest->cost;
 
     { // swap pointers with macro
@@ -225,8 +249,6 @@ static void updateBestSolutionNN(Solution *bestSol, Solution *newBest)
         register int *temp;
         swapElems(bestSol->indexPath, newBest->indexPath, temp);
     }
-
-    LOG(LOG_LVL_EVERYTHING, "Found better solution starting from node %d, cost: %f", bestSol->indexPath[0], bestSol->cost);
 }
 
 
@@ -234,7 +256,9 @@ static void updateBestSolutionNN(Solution *bestSol, Solution *newBest)
 
 static void *nnThread(void *arg)
 {
-    NNThreadsData *th = (NNThreadsData *)arg;
+    NNThreadsDataRnd *thRnd = (NNThreadsDataRnd*)arg;
+    NNThreadsSharedData *th = thRnd->thShared;
+    unsigned int state = thRnd->rndState;
     Solution *sol = th->sol;
     Instance *inst = sol->instance;
 
@@ -266,7 +290,7 @@ static void *nnThread(void *arg)
             pthread_mutex_unlock(&th->getStartNodeMutex);
         }
         else
-            iterNode = (size_t)rand() % inst->nNodes;
+            iterNode = (size_t)rand_r(&state) % inst->nNodes;
 
         // copy all the nodes in the original order from instance into tempSol.X/Y (Take advantage of the way the memory is allocated for the best and current sol)
         for (size_t i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
@@ -275,7 +299,7 @@ static void *nnThread(void *arg)
         for (int i = 0; i < (int)inst->nNodes + 1; i++)
             tempSol.indexPath[i] = i;
         
-        applyNearestNeighbor(&tempSol, iterNode);
+        applyNearestNeighbor(&tempSol, iterNode, &state);
 
         // check cost first to avoid excessive amount of mutex calls
         if (sol->cost > tempSol.cost)
@@ -296,6 +320,10 @@ static void *nnThread(void *arg)
 
     destroySolution(&tempSol);
 
+    // avoid closing thread if working in single thread mode
+    if (th->nThreads == 1)
+        return NULL;
+    
     pthread_exit(NULL);
 }
 

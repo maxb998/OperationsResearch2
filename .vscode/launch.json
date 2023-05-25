@@ -42,16 +42,16 @@
                 "--file", "data/usa13509.tsp",
                 "--mode", "nn",
 
-                "--grasp", "random(0.05)",
+                "--grasp", "random(0.01)",
                 "--2opt",
                 "--tlim", "20",
 
-                //"--nnOpt", "tryall",
+                //"--nnOpt", "random",
                 //"--emOpt", "random",
                 //"--vnsOpt", "nn",
 
                 //"--seed", "2023",
-                //"--threads", "4",
+                "--threads", "1",
                 //"--roundcosts",
                 "--plot", 
                 //"--save",

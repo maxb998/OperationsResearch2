@@ -193,14 +193,6 @@ double applyExtraMileage(Solution *sol, size_t nCovered, enum EMOptions emOpt);
 //###################################################################################################################################
 
 /*!
-* @brief Applies 2Opt solution optimizer to a cloned solution which is returned as output.
-* @param sol Solution to optimize.
-* @param option Type of algorithm to use. Only affects speed of computation. To use the fastest one set to 0.
-* @result 2Optimized version of sol.
-*/
-Solution _2OptBestFix(Solution *sol, enum _2OptOptions option);
-
-/*!
 * @brief  Applies 2Opt solution optimizer to sol.
 * @param sol Solution to optimize.
 * @param option Type of algorithm to use. Only affects speed of computation. To use the fastest one set to 0.
