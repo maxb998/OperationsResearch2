@@ -19,9 +19,12 @@
                 "--2opt",
                 "--tlim", "2",
 
-                //"--nnOpt", "tryall",
-                //"--emOpt", "random",
-                //"--vnsOpt", "nn",
+                //"--nn-opt", "tryall",
+                //"--em-opt", "farthest",
+
+                //"--metaheur-init-mode", "em",
+                //"--matheur-init-mode", "vns",
+                //"--warm-start-mode", "tabu",
 
                 //"--seed", "2023",
                 "--threads", "4",

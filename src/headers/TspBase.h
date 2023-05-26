@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 
-#define MAX_THREADS 32
+#define MAX_THREADS 256
 #define USE_APPROXIMATED_DISTANCES 1
 
 // size of avx vector. 4 is vector of doubles 64bits, 8 is vector of floats 32bits
@@ -38,14 +38,18 @@ enum EdgeWeightType{
 	SPECIAL // special type of distance documented elsewhere
 };
 
-enum ExecMode{
+enum Mode{
 	MODE_NONE=-1,
 	MODE_NN,
 	MODE_EM,
+	MODE_TABU,
 	MODE_VNS,
+	MODE_ANNEALING,
+	MODE_GENETIC,
 	MODE_BENDERS,
 	MODE_BRANCH_CUT,
-	MODE_HARDFIX
+	MODE_HARDFIX,
+	MODE_LOCAL_BRANCHING
 };
 
 enum GraspOption{
@@ -80,11 +84,6 @@ enum _2OptOptions
     _2OPT_AVX_MT
 };
 
-enum VNSInitType {
-	VNS_INIT_NN,
-	VNS_INIT_EM
-};
-
 enum HardFixPolicy {
 	HARDFIX_POLICY_RANDOM,
 	HARDFIX_POLICY_SMALLEST,
@@ -96,7 +95,7 @@ enum HardFixPolicy {
 typedef struct
 {
 	char inputFile[1000];
-	enum ExecMode mode;
+	enum Mode mode;
 
 	enum GraspOption graspType;
 	int use2OptFlag;
@@ -104,7 +103,12 @@ typedef struct
 
 	enum NNFirstNodeOptions nnFirstNodeOption;
 	enum EMInitType emInitOption;
-	enum VNSInitType vnsInitOption;
+
+	enum Mode metaheurInitMode;
+	enum Mode matheurInitMode;
+	enum Mode warmStartMode;
+
+	enum HardFixPolicy hardFixPolicy;
     
     int randomSeed;
 	int nThreads; // if no value has been specified as argument its default value is the number of processors in the machine

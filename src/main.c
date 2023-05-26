@@ -32,8 +32,8 @@ int main (int argc, char *argv[])
     double fileReadTime = readFile(&inst);
     LOG (LOG_LVL_NOTICE, "file %s has been loaded succesfully in %lf milliseconds", inst.params.inputFile, fileReadTime * 1000.);
     
-    double computeMatrixTime = computeCostMatrix(&inst);
-    LOG(LOG_LVL_NOTICE, "Distance Matrix done in %lf seconds", computeMatrixTime);
+    //double computeMatrixTime = computeCostMatrix(&inst);
+    //LOG(LOG_LVL_NOTICE, "Distance Matrix done in %lf seconds", computeMatrixTime);
     
     // initializing pointers to null to avoid possible errors on destruction of sol at the end of main
     Solution sol = { .indexPath = NULL, .X = NULL, .Y = NULL };
@@ -56,9 +56,18 @@ int main (int argc, char *argv[])
         if (inst.params.use2OptFlag)
             run2Opt(&sol);
         break;
+    
+    case MODE_TABU:
+        break;
 
     case MODE_VNS:
         sol = runVariableNeighborhoodSearch(&inst);
+        break;
+
+    case MODE_ANNEALING:
+        break;
+    
+    case MODE_GENETIC:
         break;
 
     case MODE_BENDERS:
@@ -71,6 +80,9 @@ int main (int argc, char *argv[])
 
     case MODE_HARDFIX:
         sol = runHardFixing(&inst);
+        break;
+    
+    case MODE_LOCAL_BRANCHING:
         break;
     }
 
@@ -116,7 +128,7 @@ static Solution runExtraMileage(Instance *inst)
 
 static Solution runVariableNeighborhoodSearch(Instance *inst)
 {
-    Solution sol = VariableNeighborhood(inst, inst->params.vnsInitOption);
+    Solution sol = VariableNeighborhood(inst, inst->params.metaheurInitMode);
     return sol;
 }
 

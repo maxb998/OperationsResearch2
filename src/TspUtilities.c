@@ -34,7 +34,12 @@ Instance newInstance ()
 
             .nnFirstNodeOption = NN_FIRST_RANDOM,
             .emInitOption = EM_INIT_RANDOM,
-            .vnsInitOption = VNS_INIT_NN,
+
+            .metaheurInitMode = MODE_NN,
+            .matheurInitMode = MODE_NN,
+            .warmStartMode = MODE_NN,
+
+            .hardFixPolicy = HARDFIX_POLICY_RANDOM,
 
             .randomSeed = -1,
             .nThreads = nProcessors(),

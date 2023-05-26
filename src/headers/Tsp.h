@@ -211,7 +211,7 @@ double apply2OptBestFix(Solution *sol, enum _2OptOptions option);
 * @param config Type of Solver to use for the first solution. Choose between Nearest Neighbor and Extra Mileage.
 * @result Best solution found with VNS.
 */
-Solution VariableNeighborhood(Instance *inst, enum VNSInitType config);
+Solution VariableNeighborhood(Instance *inst, enum Mode config);
 
 
 #endif //TSP_FUNCTIONS_H
