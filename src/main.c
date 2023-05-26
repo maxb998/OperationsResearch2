@@ -32,8 +32,8 @@ int main (int argc, char *argv[])
     double fileReadTime = readFile(&inst);
     LOG (LOG_LVL_NOTICE, "file %s has been loaded succesfully in %lf milliseconds", inst.params.inputFile, fileReadTime * 1000.);
     
-    //double computeMatrixTime = computeCostMatrix(&inst);
-    //LOG(LOG_LVL_NOTICE, "Distance Matrix done in %lf seconds", computeMatrixTime);
+    double computeMatrixTime = computeCostMatrix(&inst);
+    LOG(LOG_LVL_NOTICE, "Distance Matrix done in %lf seconds", computeMatrixTime);
     
     // initializing pointers to null to avoid possible errors on destruction of sol at the end of main
     Solution sol = { .indexPath = NULL, .X = NULL, .Y = NULL };
@@ -76,7 +76,7 @@ int main (int argc, char *argv[])
 
 
     if (inst.params.showPlotFlag)
-        plotSolution(&sol, "2560,1440", "green", "black", 1, 0);
+        plotSolution(&sol, "800,600", "green", "black", 1, 0);
     
     if (inst.params.saveFlag)
         saveSolution(&sol, argc, argv);
@@ -163,8 +163,6 @@ static Solution runHardFixing(Instance *inst)
     printf("Running TEMPORARELY extra mileage to get a warm start solution\n");
     Solution sol = ExtraMileage(inst, 0, EM_INIT_EXTREMES);
     apply2OptBestFix(&sol, 0);
-
-    plotSolution(&sol, "720,576", "blue", "black", 1, 0);
 
     printf("##############################################################################################################################\n");
     printf("Hard Fixing Starting...\n");

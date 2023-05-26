@@ -25,6 +25,7 @@ typedef struct
 {
     NNThreadsSharedData *thShared;
     unsigned int rndState;
+    unsigned long iterCount;
 } NNThreadsDataRnd;
 
 
@@ -59,16 +60,18 @@ Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, do
     if (!useThreads)
         th.nThreads = 1;
 
+    unsigned long iterCount = 0;
 
     if (th.nThreads > 1)
     {
         pthread_mutex_init(&th.getStartNodeMutex, NULL);
         pthread_mutex_init(&th.saveSolutionMutex, NULL);
 
+        NNThreadsDataRnd data[MAX_THREADS];
         pthread_t threads[MAX_THREADS];
         for (int i = 0; i < th.nThreads; i++)
         {
-            NNThreadsDataRnd data = { .thShared = &th, .rndState = rand() };
+            data[i].thShared = &th; data[i].rndState = rand(); data[i].iterCount = 0;
             pthread_create(&threads[i], NULL, nnThread, (void *)&data);
             LOG(LOG_LVL_DEBUG, "Nearest Neighbour : Thread %d CREATED", i);
         }
@@ -77,6 +80,7 @@ Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, do
         {
             pthread_join(threads[i], NULL);
             LOG(LOG_LVL_DEBUG, "Nearest Neighbour : Thread %d finished", i);
+            iterCount += data[i].iterCount;
         }
 
         pthread_mutex_destroy(&th.getStartNodeMutex);
@@ -84,12 +88,16 @@ Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, do
     }
     else
     {
-        NNThreadsDataRnd data = { .thShared = &th, .rndState = rand() };
+        NNThreadsDataRnd data = { .thShared = &th, .rndState = rand(), .iterCount = 0 };
         nnThread(&data);
+        iterCount += data.iterCount;
     }
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &finish);
     sol.execTime = ((finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0);
+
+    LOG(LOG_LVL_NOTICE, "Total number of iterations: %ld", iterCount);
+    LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)iterCount/sol.execTime);
 
     return sol;
 }
@@ -256,9 +264,9 @@ static void updateBestSolutionNN(Solution *bestSol, Solution *newBest)
 
 static void *nnThread(void *arg)
 {
-    NNThreadsDataRnd *thRnd = (NNThreadsDataRnd*)arg;
-    NNThreadsSharedData *th = thRnd->thShared;
-    unsigned int state = thRnd->rndState;
+    NNThreadsDataRnd *thSpecific = (NNThreadsDataRnd*)arg;
+    NNThreadsSharedData *th = thSpecific->thShared;
+    unsigned int state = thSpecific->rndState;
     Solution *sol = th->sol;
     Instance *inst = sol->instance;
 
@@ -312,6 +320,8 @@ static void *nnThread(void *arg)
             
             pthread_mutex_unlock(&th->saveSolutionMutex);
         }
+
+        thSpecific->iterCount++;
 
         struct timespec currT;
         clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
