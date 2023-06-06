@@ -4,19 +4,58 @@
 #include <unistd.h>
 #include <string.h>
 
+#define SUBOPT_SPACE "  "
+
+#define SUBOPT_NN "nn"
+#define SUBOPT_EM "em"
+#define SUBOPT_TABU "tabu"
+#define SUBOPT_VNS "vns"
+#define SUBOPT_ANNEALING "annealing"
+#define SUBOPT_GENETIC "genetic"
+#define SUBOPT_BENDERS "benders"
+#define SUBOPT_BRANCHCUT "branch-cut"
+#define SUBOPT_HARDFIX "hardfix"
+#define SUBOPT_LOCALBRANCHING "local-branching"
+
+#define SUBOPT_GRASP_ALMOSTBEST "almostbest"
+#define SUBOPT_GRASP_RANDOM "random"
+
+#define SUBOPT_NN_RANDOM "random"
+#define SUBOPT_NN_TRYALL "tryall"
+
+#define SUBOPT_EM_RANDOM "random"
+#define SUBOPT_EM_EXTREMES "extremes"
+#define SUBOPT_EM_FARTHEST "farthest"
+//#define SUBOPT_EM_HULL "hull"
+
+#define SUBOPT_HARDFIX_RANDOM "random"
+#define SUBOPT_HARDFIX_SMALL "small"
+#define SUBOPT_HARDFIX_PROB "prob"
+#define SUBOPT_HARDFIX_MIXED "mixed"
+
+#define SUBOPT_LOG_ERROR "error"
+#define SUBOPT_LOG_CRITICAL "critical"
+#define SUBOPT_LOG_WARNING "warning"
+#define SUBOPT_LOG_NOTICE "notice"
+#define SUBOPT_LOG_LOG "log"
+#define SUBOPT_LOG_DEBUG "debug"
+#define SUBOPT_LOG_ALL "all"
+
+
+#define DOC_NN SUBOPT_SPACE SUBOPT_NN "          : Use Nearest Neighbor\n"
+#define DOC_EM SUBOPT_SPACE SUBOPT_EM "          : Use Extra Mileage\n"
+#define DOC_TABU SUBOPT_SPACE SUBOPT_TABU "        : Use Tabu Search\n"
+#define DOC_VNS SUBOPT_SPACE SUBOPT_VNS "         : Use Variable Neighborhood Search\n"
+#define DOC_ANNEALING SUBOPT_SPACE SUBOPT_ANNEALING "   : Use Simulated Annealing\n"
+#define DOC_GENETIC SUBOPT_SPACE SUBOPT_GENETIC "     : Use Genetic Heuristic\n"
+#define DOC_BENDERS SUBOPT_SPACE SUBOPT_BENDERS "     : Use Benders method\n"
+#define DOC_BRANCHCUT SUBOPT_SPACE SUBOPT_BRANCHCUT "  : Use cplex generic callback to perform Branch & Cut\n"
+#define DOC_HARDFIX SUBOPT_SPACE SUBOPT_HARDFIX "     : Use Hard Fixing Matheuristic\n"
+#define DOC_LOCALBRANCHING SUBOPT_SPACE SUBOPT_LOCALBRANCHING " : Use Local Branching Matheuristic\n"
+
 #define ARGP_MODE_DOC "\
-Specify the type of solver to use: \n\
-    nn          : Use Nearest Neighbor\n\
-    em          : Use Extra Mileage\n\
-    tabu        : Use Tabu Search\n\
-    vns         : Use Variable Neighborhood Search\
-    annealing   : Use Simulated Annealing\n\
-    genetic     : Use Genetic Heuristic\n\
-    benders     : Use Benders method\n\
-    branch_cut  : Use cplex generic callback to perform Branch & Cut\n\
-    hardfix     : Use Hard Fixing Matheuristic\n\
-    local-branching : Use Local Branching Matheuristic\n\
-"
+Specify the type of solver to use: \n"\
+DOC_NN DOC_EM DOC_TABU DOC_VNS DOC_ANNEALING DOC_GENETIC DOC_BENDERS DOC_BRANCHCUT DOC_HARDFIX DOC_LOCALBRANCHING
 
 #define HEURISTICS_MODES_COUNT 2
 #define METAHEUR_MODES_COUNT 4
@@ -25,122 +64,82 @@ Specify the type of solver to use: \n\
 
 #define MODES_COUNT (HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT + EXACT_SOLVERS_COUNT + MATHEURISTICS_COUNT)
 static const char *modeStrings[] = {
-    "nn",
-    "em",
-    "tabu",
-    "vns",
-    "annealing",
-    "genetic",
-    "benders",
-    "branch_cut",
-    "hardfix",
-    "local-branching"
+    SUBOPT_NN,
+    SUBOPT_EM,
+    SUBOPT_TABU,
+    SUBOPT_VNS,
+    SUBOPT_ANNEALING,
+    SUBOPT_GENETIC,
+    SUBOPT_BENDERS,
+    SUBOPT_BRANCHCUT,
+    SUBOPT_HARDFIX,
+    SUBOPT_LOCALBRANCHING
 };
 
-#define ARGP_GRASP_DOC "\
-Specify to Grasp mode (DEFAULT=random(0.1))\n\
-    almostbest         : The Use of grasp will be limited to selecting another good choice with default probability value \n\
-    almostbest(<GRASP_CHANCE>) : Same as \"almostbest\" but the selection of the secondary choice happens with probability specified with <GRASP_CHANCE>\n\
-    random             : At every iteration have a completely random choice with default probability\n\
-    random(<GRASP_CHANCE>)     : Same as \"random\" but the probability of the random choice is specified with <GRASP_CHANCE>\n\
-"
+#define GRASP_DOC "\
+Specify to Grasp mode (DEFAULT=random(0.1))\n" \
+SUBOPT_SPACE SUBOPT_GRASP_ALMOSTBEST " : The Use of grasp will be limited to selecting another good choice with default probability value\n" \
+SUBOPT_SPACE SUBOPT_GRASP_ALMOSTBEST "(<GRASP_CHANCE>) : Same as \"almostbest\" but the selection of the secondary choice happens with probability specified with <GRASP_CHANCE>\n" \
+SUBOPT_SPACE SUBOPT_GRASP_RANDOM "     : At every iteration have a completely random choice with default probability\n" \
+SUBOPT_SPACE SUBOPT_GRASP_RANDOM "(<GRASP_CHANCE>)     : Same as \"random\" but the probability of the random choice is specified with <GRASP_CHANCE>\n"
 
-static const char *graspStrings[] = {
-    "almostbest",
-    "random"
-};
+static const char *graspStrings[] = { SUBOPT_GRASP_ALMOSTBEST, SUBOPT_GRASP_RANDOM };
 
-#define ARGP_NN_DOC "\
-Specify the way the first node is selected when using Nearest Neighbor anywhere in the heuristic (DEFAULT=random)\n\
-    random              : Select a node at random\n\
-    tryall              : Try starting from each node(if time limit allows)\n\
-"
+#define NN_OPTIONS_DOC "\
+Specify the way the first node is selected when using Nearest Neighbor anywhere in the heuristic (DEFAULT=random)\n" \
+SUBOPT_SPACE SUBOPT_NN_RANDOM "     : Select a node at random\n" \
+SUBOPT_SPACE SUBOPT_NN_TRYALL "     : Try starting from each node(if time limit allows)\n"
 
-static const char *nnOptionsStrings[] = {
-    "random",
-    "tryall"
-};
+static const char *nnOptionsStrings[] = { SUBOPT_NN_RANDOM, SUBOPT_NN_TRYALL };
+static const int nnOptionsCount = sizeof(nnOptionsStrings)/sizeof(*nnOptionsStrings);
 
-#define ARGP_EM_DOC "\
-Specify the way Extra Mileage heuristic is initialized every time it's called (DEFAULT=random)\n\
-    random              : Use two random nodes\n\
-    extremes            : Use a node with maximum x coordinate and one with minimum x coordinate\n\
-    farthest            : Use farthest nodes\n\
-"
+#define EM_OPTIONS_DOC "\
+Specify the way Extra Mileage heuristic is initialized every time it's called (DEFAULT=random)\n" \
+SUBOPT_SPACE SUBOPT_EM_RANDOM "     : Use two random nodes\n" \
+SUBOPT_SPACE SUBOPT_EM_EXTREMES "   : Use a node with maximum x coordinate and one with minimum x coordinate\n" \
+SUBOPT_SPACE SUBOPT_EM_FARTHEST "   : Use farthest nodes\n"
 //hull                : Compute the hull of the set using quickhull algorthim and use it as initialization.
 
-static const char *emOptionsStrings[] = {
-    "random",
-    "extremes",
-    "farthest"
-};
-// hull
+static const char *emOptionsStrings[] = { SUBOPT_EM_RANDOM, SUBOPT_EM_EXTREMES, SUBOPT_EM_FARTHEST }; // hull
+static const int emOptionsCount = sizeof(emOptionsStrings)/sizeof(*emOptionsStrings);
 
-#define ARGP_METAHEURISTICS_INIT_MODE_DOC "\
-Specify the heuristic that vns shall use at the start when finding the base solution (DEFAULT=nn)\n\
-    nn                  : Use Nearest Neighbor\n\
-    em                  : Use Extra Mileage\n\
-"
-#define ARGP_METAHEURISTICS_INIT_MODES_COUNT HEURISTICS_MODES_COUNT
+#define METAHEURISTICS_INIT_MODE_DOC "\
+Specify the heuristic that vns shall use at the start when finding the base solution (DEFAULT=nn)\n" \
+DOC_NN DOC_EM
+#define METAHEURISTICS_INIT_MODES_COUNT HEURISTICS_MODES_COUNT
 
-#define ARGP_MATHEUR_INIT_MODE_DOC "\
-Specify which Heuristic/Metaheuristic to use as initialization for matheuristics\n\
-    nn                  : Use Nearest Neighbor\n\
-    em                  : Use Extra Milage\n\
-    tabu                : Use Tabu Search\n\
-    vns                 : Use Variable Neighborhood Search\n\
-    genetic             : Use Genetic Heuristic\n\
-    annealing           : Use Simulated Annealing\n\
-"
-#define ARGP_MATHEUR_INIT_MODES_COUNT (HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT)
+#define MATHEUR_INIT_MODE_DOC "\
+Specify which Heuristic/Metaheuristic to use as initialization for matheuristics\n" \
+DOC_NN DOC_EM DOC_TABU DOC_VNS DOC_ANNEALING DOC_GENETIC
+#define MATHEUR_INIT_MODES_COUNT (HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT)
 
-#define ARGP_WARM_START_MODE_DOC "\
-Specify the type of heuristic to use when computing a warm-start solution\n\
-    nn                  : Use Nearest Neighbor\n\
-    em                  : Use Extra Milage\n\
-    tabu                : Use Tabu Search\n\
-    vns                 : Use Variable Neighborhood Search\n\
-    genetic             : Use Genetic Heuristic\n\
-    annealing           : Use Simulated Annealing\n\
-"
-#define ARGP_WARM_START_MODES_COUNT (HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT)
+#define WARM_START_MODE_DOC "\
+Specify the type of heuristic to use when computing a warm-start solution\n" \
+DOC_NN DOC_EM DOC_TABU DOC_VNS DOC_ANNEALING DOC_GENETIC
+#define WARM_START_MODES_COUNT (HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT)
 
-#define ARGP_HARDFIX_POLICY_DOC "\
-Specify the type of policy Hard Fixing should use when fixing edges\n\
-    random              : Fix random edges\n\
-    small               : Fix edges with smallest cost in solution\n\
-    prob                : Fix edges with probability inversely proportional to their cost\n\
-    mixed               : Use a mix of the policies above\n\
-"
+#define HARDFIX_POLICY_DOC "\
+Specify the type of policy Hard Fixing should use when fixing edges\n" \
+SUBOPT_SPACE SUBOPT_HARDFIX_RANDOM "   : Fix random edges\n" \
+SUBOPT_SPACE SUBOPT_HARDFIX_SMALL "    : Fix edges with smallest cost in solution\n" \
+SUBOPT_SPACE SUBOPT_HARDFIX_PROB "     : Fix edges with probability inversely proportional to their cost\n" \
+SUBOPT_SPACE SUBOPT_HARDFIX_MIXED "    : Use a mix of the policies above\n"
 
-static const char *hardFixPolicyStrings[] = {
-    "random",
-    "small",
-    "prob",
-    "mixed"
-};
+static const char *hardFixPolicyStrings[] = { SUBOPT_HARDFIX_RANDOM, SUBOPT_HARDFIX_SMALL, SUBOPT_HARDFIX_PROB, SUBOPT_HARDFIX_MIXED };
+static const int hardfixOptionsCount = sizeof(hardFixPolicyStrings)/sizeof(*hardFixPolicyStrings);
 
 #define LOG_LEVEL_DOC "\
-Specify the log level (or verbosity level) of for the run. (DEFAULT=log\n\
-    error   : Show only error messages\n\
-    critical: Show critical messages and all above\n\
-    warning : Show warning and all above\n\
-    notice  : Show notice messages and all above\n\
-    log     : Show log messages and all above\n\
-    debug   : Show debug messages and all above\n\
-    all     : Show all messages\n\
-"
+Specify the log level (or verbosity level) of for the run. (DEFAULT=log\n" \
+SUBOPT_SPACE SUBOPT_LOG_ERROR "   : Show only error messages\n" \
+SUBOPT_SPACE SUBOPT_LOG_CRITICAL ": Show critical messages and all above\n" \
+SUBOPT_SPACE SUBOPT_LOG_WARNING " : Show warning and all above\n" \
+SUBOPT_SPACE SUBOPT_LOG_NOTICE "  : Show notice messages and all above\n" \
+SUBOPT_SPACE SUBOPT_LOG_LOG "     : Show log messages and all above\n" \
+SUBOPT_SPACE SUBOPT_LOG_DEBUG "   : Show debug messages and all above\n" \
+SUBOPT_SPACE SUBOPT_LOG_ALL "     : Show all messages\n"
 
-static const char *logLevelStrings[] = {
-    "error",
-    "critical",
-    "warning",
-    "notice",
-    "log",
-    "debug",
-    "all"
-};
-
+static const char *logLevelStrings[] = { SUBOPT_LOG_ERROR, SUBOPT_LOG_CRITICAL, SUBOPT_LOG_WARNING, SUBOPT_LOG_NOTICE, SUBOPT_LOG_LOG, SUBOPT_LOG_DEBUG, SUBOPT_LOG_ALL };
+static const int loglvlsCount = sizeof(logLevelStrings)/sizeof(*logLevelStrings);
 
 enum argpKeys{
     ARGP_FILE='f',
@@ -169,23 +168,13 @@ enum argpKeys{
 
 error_t argpParser(int key, char *arg, struct argp_state *state);
 
-static int parseMode(char *arg, Instance *inst);
+static int parseEnumOption(char *arg, int *savePtr, const char **optionsSet, const int from, const int to, const char *optionName);
 
 static int parseGrasp(char *arg, Instance *inst);
 static int parseTlim(char *arg, Instance *inst);
 
-static int parseNNOption(char *arg, Instance *inst);
-static int parseEMOption(char *arg, Instance *inst);
-
-static int parseMetaheurInitMode(char *arg, Instance *inst);
-static int parseMatheurInitMode(char *arg, Instance *inst);
-static int parseWarmStartMode(char *arg, Instance *inst);
-
-static int parseHardFixPolicy(char *arg, Instance *inst);
-
 static int parseSeed(char *arg, Instance *inst);
 static int parseNThreads(char *arg, Instance *inst);
-static int parseLogLevel(char *arg, Instance *inst);
 
 static int checkEssentials(Instance *inst);
 
@@ -196,18 +185,18 @@ void argParse(Instance * inst, int argc, char *argv[])
         { .name="file", .key=ARGP_FILE, .arg="FILENAME", .flags=0, .doc="Location of the .tsp file containing the instance to use\n", .group=1 },
         { .name="mode", .key=ARGP_MODE, .arg="MODE", .flags=0, .doc=ARGP_MODE_DOC, .group=1 },
 
-        { .name="grasp", .key=ARGP_GRASP, .arg="STRING", .flags=0, .doc=ARGP_GRASP_DOC, .group=2 },
+        { .name="grasp", .key=ARGP_GRASP, .arg="STRING", .flags=0, .doc=GRASP_DOC, .group=2 },
         { .name="2opt", .key=ARGP_2OPT, .arg=NULL, .flags=0, .doc="Specify to use 2-opt at the end of the selected heuristic\n", .group=2 },
         { .name="tlim", .key=ARGP_TLIM, .arg="UINT", .flags=0, .doc="Specify time limit for the execution\n", .group=2 },
 
-        { .name="nn-opt", .key=ARGP_NN_MODE, .arg="STRING", .flags=0, .doc=ARGP_NN_DOC, .group=3 },
-        { .name="em-opt", .key=ARGP_EM_MODE, .arg="STRING", .flags=0, .doc=ARGP_EM_DOC, .group=3 },
+        { .name="nn-opt", .key=ARGP_NN_MODE, .arg="STRING", .flags=0, .doc=NN_OPTIONS_DOC, .group=3 },
+        { .name="em-opt", .key=ARGP_EM_MODE, .arg="STRING", .flags=0, .doc=EM_OPTIONS_DOC, .group=3 },
 
-        { .name="metaheur-init-mode", .key=ARGP_METAHEURISTICS_INIT_MODE, .arg="STRING", .flags=0, .doc=ARGP_METAHEURISTICS_INIT_MODE_DOC, .group=3 },
-        { .name="matheur-init-mode", .key=ARGP_MATHEURISTICS_INIT_MODE, .arg="STRING", .flags=0, .doc=ARGP_MATHEUR_INIT_MODE_DOC, .group=3 },
-        { .name="warm-start-mode", .key=ARGP_WARM_START_MODE, .arg="STRING", .flags=0, .doc=ARGP_WARM_START_MODE_DOC, .group=3 },
+        { .name="metaheur-init-mode", .key=ARGP_METAHEURISTICS_INIT_MODE, .arg="STRING", .flags=0, .doc=METAHEURISTICS_INIT_MODE_DOC, .group=3 },
+        { .name="matheur-init-mode", .key=ARGP_MATHEURISTICS_INIT_MODE, .arg="STRING", .flags=0, .doc=MATHEUR_INIT_MODE_DOC, .group=3 },
+        { .name="warm-start-mode", .key=ARGP_WARM_START_MODE, .arg="STRING", .flags=0, .doc=WARM_START_MODE_DOC, .group=3 },
 
-        { .name="hardfix-policy", .key=ARGP_HARDFIX_POLICY, .arg="STRING", .flags=0, .doc=ARGP_HARDFIX_POLICY_DOC, .group=3 },
+        { .name="hardfix-policy", .key=ARGP_HARDFIX_POLICY, .arg="STRING", .flags=0, .doc=HARDFIX_POLICY_DOC, .group=3 },
 
         { .name="seed", .key=ARGP_SEED, .arg="UINT", .flags=0, .doc="Random Seed [0,MAX_INT32] to use as random seed for the current run. If -1 seed will be random\n", .group=4 },
         { .name="threads", .key=ARGP_NTHREADS, .arg="UINT", .flags=0, .doc="Maximum number of threads to use. If not specified gets maximum automatically\n", .group=4 },
@@ -229,6 +218,7 @@ void argParse(Instance * inst, int argc, char *argv[])
 error_t argpParser(int key, char *arg, struct argp_state *state)
 {
     Instance *inst = state->input;
+    int retVal = 0;
 
     switch (key)
     {
@@ -242,7 +232,7 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
         break;
 
     case ARGP_MODE:
-        return parseMode(arg, inst);
+        return parseEnumOption(arg, &inst->params.mode, modeStrings, 0, MODES_COUNT, "mode");
 
     case ARGP_GRASP:
         return parseGrasp(arg, inst);
@@ -255,22 +245,22 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
         return parseTlim(arg, inst);
 
     case ARGP_NN_MODE:
-        return parseNNOption(arg, inst);
+        return parseEnumOption(arg, (int*)&inst->params.nnFirstNodeOption, nnOptionsStrings, 0, nnOptionsCount, "nn-opt");
     
     case ARGP_EM_MODE:
-        return parseEMOption(arg, inst);
+        return parseEnumOption(arg, (int*)&inst->params.emInitOption, emOptionsStrings, 0, emOptionsCount, "em-opt");
     
     case ARGP_METAHEURISTICS_INIT_MODE:
-        return parseMetaheurInitMode(arg, inst);
+        return parseEnumOption(arg, (int*)&inst->params.metaheurInitMode, modeStrings, 0, HEURISTICS_MODES_COUNT, "metaheur-init-mode");
     
     case ARGP_MATHEURISTICS_INIT_MODE:
-        return parseMatheurInitMode(arg, inst);
+        return parseEnumOption(arg, (int*)&inst->params.matheurInitMode, modeStrings, 0, HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT, "matheur-init-mode");
 
     case ARGP_WARM_START_MODE:
-        return parseWarmStartMode(arg, inst);
+        return parseEnumOption(arg, (int*)&inst->params.warmStartMode, modeStrings, 0, HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT, "warm-start-mode");
 
     case ARGP_HARDFIX_POLICY:
-        return parseHardFixPolicy(arg, inst);
+        return parseEnumOption(arg, (int*)&inst->params.hardFixPolicy, hardFixPolicyStrings, 0, hardfixOptionsCount, "hardfix-policy");
 
     case ARGP_SEED:
         return parseSeed(arg, inst);
@@ -291,7 +281,9 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
         break;
     
     case ARGP_LOG_LEVEL:
-        return parseLogLevel(arg, inst);
+        retVal = parseEnumOption(arg, (int*)&inst->params.logLevel, logLevelStrings, 0, loglvlsCount, "loglvl");
+        setLogLevel(inst->params.logLevel);
+        return retVal;
     
     case ARGP_KEY_END:
         // check if necessary flags have been provided
@@ -304,18 +296,18 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
     return 0;
 }
 
-static int parseMode(char *arg, Instance *inst)
+static int parseEnumOption(char *arg, int *savePtr, const char **optionsSet, const int from, const int to, const char *optionName)
 {
-    for (size_t i = 0; i < MODES_COUNT; i++)
+    for (int i = from; i < to; i++)
     {
-        if (strcmp(arg, modeStrings[i]) == 0)
+        if (strcmp(arg, optionsSet[i]) == 0)
         {
-            inst->params.mode = i;
+            *savePtr = i;
             return 0;
         }
     }
-
-    LOG(LOG_LVL_ERROR, "Mode specified is not valid");
+    
+    LOG(LOG_LVL_ERROR, "%s: argument not valid", optionName);
     return ARGP_ERR_UNKNOWN;
 }
 
@@ -391,102 +383,6 @@ static int parseTlim(char *arg, Instance *inst)
     return 0;
 }
 
-static int parseNNOption(char *arg, Instance *inst)
-{
-    if (strcmp(arg, nnOptionsStrings[NN_FIRST_RANDOM]) == 0)
-        inst->params.nnFirstNodeOption = NN_FIRST_RANDOM;
-    else if (strcmp(arg, nnOptionsStrings[NN_FIRST_TRYALL]) == 0)
-        inst->params.nnFirstNodeOption = NN_FIRST_TRYALL;
-    else
-    {
-        LOG(LOG_LVL_ERROR, "nn-opt: argument not recognized");
-        return ARGP_ERR_UNKNOWN;
-    }
-    
-    return 0;
-}
-
-static int parseEMOption(char *arg, Instance *inst)
-{
-    if (strcmp(arg, emOptionsStrings[EM_INIT_RANDOM]) == 0)
-        inst->params.emInitOption = EM_INIT_RANDOM;
-    else if (strcmp(arg, emOptionsStrings[EM_INIT_EXTREMES]) == 0)
-        inst->params.emInitOption = EM_INIT_EXTREMES;
-    else if (strcmp(arg, emOptionsStrings[EM_INIT_FARTHEST_POINTS]) == 0)
-        inst->params.emInitOption = EM_INIT_FARTHEST_POINTS;
-    else
-    {
-        LOG(LOG_LVL_ERROR, "em-opt: argument not recognized");
-        return ARGP_ERR_UNKNOWN;
-    }
-    
-    return 0;
-}
-
-static int parseMetaheurInitMode(char *arg, Instance *inst)
-{
-    for (size_t i = 0; i < ARGP_METAHEURISTICS_INIT_MODES_COUNT; i++)
-    {
-        if (strcmp(arg, modeStrings[i]) == 0)
-        {
-            inst->params.metaheurInitMode = i;
-            return 0;
-        }
-    }
-
-    LOG(LOG_LVL_ERROR, "metaheur-init-mode: argument not recognized");
-    return ARGP_ERR_UNKNOWN;
-}
-
-static int parseMatheurInitMode(char *arg, Instance *inst)
-{
-    for (size_t i = 0; i < ARGP_MATHEUR_INIT_MODES_COUNT; i++)
-    {
-        if (strcmp(arg, modeStrings[i]) == 0)
-        {
-            inst->params.matheurInitMode = i;
-            return 0;
-        }
-    }
-
-    LOG(LOG_LVL_ERROR, "math-init-mode: argument not recognized");
-    return ARGP_ERR_UNKNOWN;
-}
-
-
-static int parseWarmStartMode(char *arg, Instance *inst)
-{
-    for (size_t i = 0; i < ARGP_WARM_START_MODES_COUNT; i++)
-    {
-        if (strcmp(arg, modeStrings[i]) == 0)
-        {
-            inst->params.warmStartMode = i;
-            return 0;
-        }
-    }
-
-    LOG(LOG_LVL_ERROR, "warm-start-mode: argument not recognized");
-    return ARGP_ERR_UNKNOWN;
-}
-
-static int parseHardFixPolicy(char *arg, Instance *inst)
-{
-    if (strcmp(arg, hardFixPolicyStrings[HARDFIX_POLICY_RANDOM]) == 0)
-        inst->params.hardFixPolicy = HARDFIX_POLICY_RANDOM;
-    else if (strcmp(arg, hardFixPolicyStrings[HARDFIX_POLICY_SMALLEST]) == 0)
-        inst->params.hardFixPolicy = HARDFIX_POLICY_SMALLEST;
-    else if (strcmp(arg, hardFixPolicyStrings[HARDFIX_POLICY_PROBABILITY]) == 0)
-        inst->params.hardFixPolicy = HARDFIX_POLICY_PROBABILITY;
-    else if (strcmp(arg, hardFixPolicyStrings[HARDFIX_POLICY_MIXED]) == 0)
-        inst->params.hardFixPolicy = HARDFIX_POLICY_MIXED;
-    else
-    {
-        LOG(LOG_LVL_ERROR, "hardfix-policy: argument not recognized");
-        return ARGP_ERR_UNKNOWN;
-    }
-    return 0;
-}
-
 static int parseSeed(char *arg, Instance *inst)
 {
     char *endPtr;
@@ -519,33 +415,6 @@ static int parseNThreads(char *arg, Instance *inst)
     return 0;
 }
 
-static int parseLogLevel(char *arg, Instance *inst)
-{
-    if (strcmp(arg, logLevelStrings[LOG_LVL_ERROR]) == 0)
-        inst->params.logLevel = LOG_LVL_ERROR;
-    else if (strcmp(arg, logLevelStrings[LOG_LVL_CRITICAL]) == 0)
-        inst->params.logLevel = LOG_LVL_CRITICAL;
-    else if (strcmp(arg, logLevelStrings[LOG_LVL_WARNING]) == 0)
-        inst->params.logLevel = LOG_LVL_WARNING;
-    else if (strcmp(arg, logLevelStrings[LOG_LVL_NOTICE]) == 0)
-        inst->params.logLevel = LOG_LVL_NOTICE;
-    else if (strcmp(arg, logLevelStrings[LOG_LVL_LOG]) == 0)
-        inst->params.logLevel = LOG_LVL_LOG;
-    else if (strcmp(arg, logLevelStrings[LOG_LVL_DEBUG]) == 0)
-        inst->params.logLevel = LOG_LVL_DEBUG;
-    else if (strcmp(arg, logLevelStrings[LOG_LVL_EVERYTHING]) == 0)
-        inst->params.logLevel = LOG_LVL_EVERYTHING;
-    else
-    {
-        LOG(LOG_LVL_ERROR, "loglvl: argument not recognized");
-        return ARGP_ERR_UNKNOWN;
-    }
-
-    setLogLevel(inst->params.logLevel);
-
-    return 0;
-}
-
 static int checkEssentials(Instance *inst)
 {
     if (inst->params.mode == MODE_NONE)
@@ -575,61 +444,60 @@ static int checkEssentials(Instance *inst)
 }
 
 
+#define BLANK_SPACE "   "
 void printInfo(Instance *inst)
 {
-    const char * blank = "   ";
-
     Parameters *p = &inst->params;
 
     printf("SETTINGS:\n");
 
     // input file
-    printf("%sInput File/Problem: \"%s\"\n", blank, p->inputFile);
+    printf(BLANK_SPACE "Input File/Problem: \"%s\"\n", p->inputFile);
     // mode
-    printf("%sCurrent running mode is %s\n", blank, modeStrings[p->mode]);
+    printf(BLANK_SPACE "Current running mode is %s\n", modeStrings[p->mode]);
 
     // grasp
     if (p->graspType == GRASP_NONE)
-        printf("%sGrasp is off\n", blank);
+        printf(BLANK_SPACE "Grasp is off\n");
     else
-        printf("%sGrasp is on, grasp mode id is %s with chance %lf\n", blank, graspStrings[p->graspType], p->graspChance);
+        printf(BLANK_SPACE "Grasp is on, grasp mode id is %s with chance %lf\n", graspStrings[p->graspType], p->graspChance);
     // 2Opt
     if (p->use2OptFlag || p->mode == MODE_VNS)
-        printf("%sUsing 2Opt\n", blank);
+        printf(BLANK_SPACE "Using 2Opt\n");
     // time limit
     if (p->tlim != -1)
-        printf("%sTime limit of %lf seconds\n", blank, p->tlim);
+        printf(BLANK_SPACE "Time limit of %lf seconds\n", p->tlim);
     else
-        printf("%sTime limit is not set\n", blank);
+        printf(BLANK_SPACE "Time limit is not set\n");
     
     // nn options
     if (p->mode == MODE_NN || (p->mode >= HEURISTICS_MODES_COUNT  && (p->metaheurInitMode == MODE_NN && p->matheurInitMode == MODE_EM)) || 
             (p->mode >= (HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT) && p->matheurInitMode == MODE_NN))
-        printf("%sNearest Neighbor starting node set to: %s\n", blank, nnOptionsStrings[p->nnFirstNodeOption]);
+        printf(BLANK_SPACE "Nearest Neighbor starting node set to: %s\n", nnOptionsStrings[p->nnFirstNodeOption]);
     // em options
     if (p->mode == MODE_EM || (p->mode >= HEURISTICS_MODES_COUNT  && (p->metaheurInitMode == MODE_EM && p->matheurInitMode == MODE_NN)) || 
             (p->mode >= (HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT) && p->matheurInitMode == MODE_EM))
-        printf("%sExtra Mileage initialization set to: %s\n", blank, emOptionsStrings[p->emInitOption]);
+        printf(BLANK_SPACE "Extra Mileage initialization set to: %s\n", emOptionsStrings[p->emInitOption]);
     // metaheuristics modes
     if (p->mode >= HEURISTICS_MODES_COUNT && (p->mode < HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT || p->matheurInitMode >= HEURISTICS_MODES_COUNT))
-        printf("%sMetaheuristics initialization set to: %s\n", blank, modeStrings[p->metaheurInitMode]);
+        printf(BLANK_SPACE "Metaheuristics initialization set to: %s\n", modeStrings[p->metaheurInitMode]);
     // matheuristics modes
     if (p->mode >= HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT)
-        printf("%sMatheuristics initialization set to: %s\n", blank, modeStrings[p->matheurInitMode]);
+        printf(BLANK_SPACE "Matheuristics initialization set to: %s\n", modeStrings[p->matheurInitMode]);
 
     // seed
     if (p->randomSeed != -1)
-        printf("%sRandom Seed = %d\n", blank, p->randomSeed);
+        printf(BLANK_SPACE "Random Seed = %d\n", p->randomSeed);
     // threads
-    printf("%sThreads used = %d\n", blank, p->nThreads);
+    printf(BLANK_SPACE "Threads used = %d\n", p->nThreads);
     // roundcosts
     if (p->roundWeightsFlag)
-        printf("%sEdge Cost is rounded according to tsplib documentation file\n", blank);
+        printf(BLANK_SPACE "Edge Cost is rounded according to tsplib documentation file\n");
     // save
     if (p->saveFlag)
-        printf("%sFinal solution of this run will be saved in a .tour file inside OperationsResearch2/runs\n", blank);
+        printf(BLANK_SPACE "Final solution of this run will be saved in a .tour file inside OperationsResearch2/runs\n");
     // log level
-    printf("%sLog level = %s", blank, logLevelStrings[p->logLevel]);
+    printf(BLANK_SPACE "Log level = %s", logLevelStrings[p->logLevel]);
 
     printf("\n");
 }
