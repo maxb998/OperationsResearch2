@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <string.h>
 
-#define SUBOPT_SPACE "  "
+#define SUBOPT_BLANKSPACE "  "
 
 #define SUBOPT_NN "nn"
 #define SUBOPT_EM "em"
@@ -42,16 +42,16 @@
 #define SUBOPT_LOG_ALL "all"
 
 
-#define DOC_NN SUBOPT_SPACE SUBOPT_NN "          : Use Nearest Neighbor\n"
-#define DOC_EM SUBOPT_SPACE SUBOPT_EM "          : Use Extra Mileage\n"
-#define DOC_TABU SUBOPT_SPACE SUBOPT_TABU "        : Use Tabu Search\n"
-#define DOC_VNS SUBOPT_SPACE SUBOPT_VNS "         : Use Variable Neighborhood Search\n"
-#define DOC_ANNEALING SUBOPT_SPACE SUBOPT_ANNEALING "   : Use Simulated Annealing\n"
-#define DOC_GENETIC SUBOPT_SPACE SUBOPT_GENETIC "     : Use Genetic Heuristic\n"
-#define DOC_BENDERS SUBOPT_SPACE SUBOPT_BENDERS "     : Use Benders method\n"
-#define DOC_BRANCHCUT SUBOPT_SPACE SUBOPT_BRANCHCUT "  : Use cplex generic callback to perform Branch & Cut\n"
-#define DOC_HARDFIX SUBOPT_SPACE SUBOPT_HARDFIX "     : Use Hard Fixing Matheuristic\n"
-#define DOC_LOCALBRANCHING SUBOPT_SPACE SUBOPT_LOCALBRANCHING " : Use Local Branching Matheuristic\n"
+#define DOC_NN SUBOPT_BLANKSPACE SUBOPT_NN "          : Use Nearest Neighbor\n"
+#define DOC_EM SUBOPT_BLANKSPACE SUBOPT_EM "          : Use Extra Mileage\n"
+#define DOC_TABU SUBOPT_BLANKSPACE SUBOPT_TABU "        : Use Tabu Search\n"
+#define DOC_VNS SUBOPT_BLANKSPACE SUBOPT_VNS "         : Use Variable Neighborhood Search\n"
+#define DOC_ANNEALING SUBOPT_BLANKSPACE SUBOPT_ANNEALING "   : Use Simulated Annealing\n"
+#define DOC_GENETIC SUBOPT_BLANKSPACE SUBOPT_GENETIC "     : Use Genetic Heuristic\n"
+#define DOC_BENDERS SUBOPT_BLANKSPACE SUBOPT_BENDERS "     : Use Benders method\n"
+#define DOC_BRANCHCUT SUBOPT_BLANKSPACE SUBOPT_BRANCHCUT "  : Use cplex generic callback to perform Branch & Cut\n"
+#define DOC_HARDFIX SUBOPT_BLANKSPACE SUBOPT_HARDFIX "     : Use Hard Fixing Matheuristic\n"
+#define DOC_LOCALBRANCHING SUBOPT_BLANKSPACE SUBOPT_LOCALBRANCHING " : Use Local Branching Matheuristic\n"
 
 #define ARGP_MODE_DOC "\
 Specify the type of solver to use: \n"\
@@ -78,26 +78,26 @@ static const char *modeStrings[] = {
 
 #define GRASP_DOC "\
 Specify to Grasp mode (DEFAULT=random(0.1))\n" \
-SUBOPT_SPACE SUBOPT_GRASP_ALMOSTBEST " : The Use of grasp will be limited to selecting another good choice with default probability value\n" \
-SUBOPT_SPACE SUBOPT_GRASP_ALMOSTBEST "(<GRASP_CHANCE>) : Same as \"almostbest\" but the selection of the secondary choice happens with probability specified with <GRASP_CHANCE>\n" \
-SUBOPT_SPACE SUBOPT_GRASP_RANDOM "     : At every iteration have a completely random choice with default probability\n" \
-SUBOPT_SPACE SUBOPT_GRASP_RANDOM "(<GRASP_CHANCE>)     : Same as \"random\" but the probability of the random choice is specified with <GRASP_CHANCE>\n"
+SUBOPT_BLANKSPACE SUBOPT_GRASP_ALMOSTBEST " : The Use of grasp will be limited to selecting another good choice with default probability value\n" \
+SUBOPT_BLANKSPACE SUBOPT_GRASP_ALMOSTBEST "(<GRASP_CHANCE>) : Same as \"almostbest\" but the selection of the secondary choice happens with probability specified with <GRASP_CHANCE>\n" \
+SUBOPT_BLANKSPACE SUBOPT_GRASP_RANDOM "     : At every iteration have a completely random choice with default probability\n" \
+SUBOPT_BLANKSPACE SUBOPT_GRASP_RANDOM "(<GRASP_CHANCE>)     : Same as \"random\" but the probability of the random choice is specified with <GRASP_CHANCE>\n"
 
 static const char *graspStrings[] = { SUBOPT_GRASP_ALMOSTBEST, SUBOPT_GRASP_RANDOM };
 
 #define NN_OPTIONS_DOC "\
 Specify the way the first node is selected when using Nearest Neighbor anywhere in the heuristic (DEFAULT=random)\n" \
-SUBOPT_SPACE SUBOPT_NN_RANDOM "     : Select a node at random\n" \
-SUBOPT_SPACE SUBOPT_NN_TRYALL "     : Try starting from each node(if time limit allows)\n"
+SUBOPT_BLANKSPACE SUBOPT_NN_RANDOM "     : Select a node at random\n" \
+SUBOPT_BLANKSPACE SUBOPT_NN_TRYALL "     : Try starting from each node(if time limit allows)\n"
 
 static const char *nnOptionsStrings[] = { SUBOPT_NN_RANDOM, SUBOPT_NN_TRYALL };
 static const int nnOptionsCount = sizeof(nnOptionsStrings)/sizeof(*nnOptionsStrings);
 
 #define EM_OPTIONS_DOC "\
 Specify the way Extra Mileage heuristic is initialized every time it's called (DEFAULT=random)\n" \
-SUBOPT_SPACE SUBOPT_EM_RANDOM "     : Use two random nodes\n" \
-SUBOPT_SPACE SUBOPT_EM_EXTREMES "   : Use a node with maximum x coordinate and one with minimum x coordinate\n" \
-SUBOPT_SPACE SUBOPT_EM_FARTHEST "   : Use farthest nodes\n"
+SUBOPT_BLANKSPACE SUBOPT_EM_RANDOM "     : Use two random nodes\n" \
+SUBOPT_BLANKSPACE SUBOPT_EM_EXTREMES "   : Use a node with maximum x coordinate and one with minimum x coordinate\n" \
+SUBOPT_BLANKSPACE SUBOPT_EM_FARTHEST "   : Use farthest nodes\n"
 //hull                : Compute the hull of the set using quickhull algorthim and use it as initialization.
 
 static const char *emOptionsStrings[] = { SUBOPT_EM_RANDOM, SUBOPT_EM_EXTREMES, SUBOPT_EM_FARTHEST }; // hull
@@ -120,23 +120,23 @@ DOC_NN DOC_EM DOC_TABU DOC_VNS DOC_ANNEALING DOC_GENETIC
 
 #define HARDFIX_POLICY_DOC "\
 Specify the type of policy Hard Fixing should use when fixing edges\n" \
-SUBOPT_SPACE SUBOPT_HARDFIX_RANDOM "   : Fix random edges\n" \
-SUBOPT_SPACE SUBOPT_HARDFIX_SMALL "    : Fix edges with smallest cost in solution\n" \
-SUBOPT_SPACE SUBOPT_HARDFIX_PROB "     : Fix edges with probability inversely proportional to their cost\n" \
-SUBOPT_SPACE SUBOPT_HARDFIX_MIXED "    : Use a mix of the policies above\n"
+SUBOPT_BLANKSPACE SUBOPT_HARDFIX_RANDOM "   : Fix random edges\n" \
+SUBOPT_BLANKSPACE SUBOPT_HARDFIX_SMALL "    : Fix edges with smallest cost in solution\n" \
+SUBOPT_BLANKSPACE SUBOPT_HARDFIX_PROB "     : Fix edges with probability inversely proportional to their cost\n" \
+SUBOPT_BLANKSPACE SUBOPT_HARDFIX_MIXED "    : Use a mix of the policies above\n"
 
 static const char *hardFixPolicyStrings[] = { SUBOPT_HARDFIX_RANDOM, SUBOPT_HARDFIX_SMALL, SUBOPT_HARDFIX_PROB, SUBOPT_HARDFIX_MIXED };
 static const int hardfixOptionsCount = sizeof(hardFixPolicyStrings)/sizeof(*hardFixPolicyStrings);
 
 #define LOG_LEVEL_DOC "\
 Specify the log level (or verbosity level) of for the run. (DEFAULT=log\n" \
-SUBOPT_SPACE SUBOPT_LOG_ERROR "   : Show only error messages\n" \
-SUBOPT_SPACE SUBOPT_LOG_CRITICAL ": Show critical messages and all above\n" \
-SUBOPT_SPACE SUBOPT_LOG_WARNING " : Show warning and all above\n" \
-SUBOPT_SPACE SUBOPT_LOG_NOTICE "  : Show notice messages and all above\n" \
-SUBOPT_SPACE SUBOPT_LOG_LOG "     : Show log messages and all above\n" \
-SUBOPT_SPACE SUBOPT_LOG_DEBUG "   : Show debug messages and all above\n" \
-SUBOPT_SPACE SUBOPT_LOG_ALL "     : Show all messages\n"
+SUBOPT_BLANKSPACE SUBOPT_LOG_ERROR "   : Show only error messages\n" \
+SUBOPT_BLANKSPACE SUBOPT_LOG_CRITICAL ": Show critical messages and all above\n" \
+SUBOPT_BLANKSPACE SUBOPT_LOG_WARNING " : Show warning and all above\n" \
+SUBOPT_BLANKSPACE SUBOPT_LOG_NOTICE "  : Show notice messages and all above\n" \
+SUBOPT_BLANKSPACE SUBOPT_LOG_LOG "     : Show log messages and all above\n" \
+SUBOPT_BLANKSPACE SUBOPT_LOG_DEBUG "   : Show debug messages and all above\n" \
+SUBOPT_BLANKSPACE SUBOPT_LOG_ALL "     : Show all messages\n"
 
 static const char *logLevelStrings[] = { SUBOPT_LOG_ERROR, SUBOPT_LOG_CRITICAL, SUBOPT_LOG_WARNING, SUBOPT_LOG_NOTICE, SUBOPT_LOG_LOG, SUBOPT_LOG_DEBUG, SUBOPT_LOG_ALL };
 static const int loglvlsCount = sizeof(logLevelStrings)/sizeof(*logLevelStrings);
