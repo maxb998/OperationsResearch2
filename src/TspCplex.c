@@ -32,7 +32,7 @@ CplexData initCplexData(Instance *inst)
 
     size_t n = inst->nNodes;
     enum EdgeWeightType ewt = inst->params.edgeWeightType ;
-    int roundFlag = inst->params.roundWeightsFlag;
+    bool roundFlag = inst->params.roundWeights;
 
 	char binary = CPX_BINARY; 
 
@@ -185,7 +185,7 @@ void cvtSolutionToSuccessors(Solution *sol, int* successors)
 		throwError(sol->instance, sol, "cvtSolutionToSuccessors: Converted solution is wrong");	
 }
 
-int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, SubtoursData *subData, int iterNum, Instance *inst, int nCols, int isBenders)
+int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, SubtoursData *subData, int iterNum, Instance *inst, int nCols, bool isBenders)
 {
 	int retVal = 0;
 	size_t n = inst->nNodes;
@@ -240,7 +240,7 @@ double computeSuccessorsSolCost(int *successors, Instance *inst)
 
 	int n = (int)inst->nNodes;
 	enum EdgeWeightType ewt = inst->params.edgeWeightType ;
-	int roundFlag = inst->params.roundWeightsFlag;
+	bool roundFlag = inst->params.roundWeights;
 
 	double cost = 0.0;
 

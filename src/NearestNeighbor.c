@@ -42,7 +42,7 @@ static void updateBestSolutionNN(Solution *bestSol, Solution *newBest);
 static void *nnThread(void *arg);
 
 
-Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, double timeLimit, int useThreads)
+Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, double timeLimit, bool useThreads)
 {
     Solution sol = newSolution(inst);
 
@@ -115,7 +115,7 @@ static inline size_t findSuccessorID(Solution *sol, size_t iterNum, double *path
 {
     Instance *inst = sol->instance;
     enum EdgeWeightType ewt = inst->params.edgeWeightType ;
-    int roundFlag = inst->params.roundWeightsFlag;
+    bool roundFlag = inst->params.roundWeights;
 
     float minVecStore[AVX_VEC_SIZE];
     int minIDsVecStore[AVX_VEC_SIZE];
@@ -157,12 +157,10 @@ static inline size_t findSuccessorID(Solution *sol, size_t iterNum, double *path
         {
             if (minVecStore[j] < minVecStore[i])
             {
-                register float tempf = minVecStore[i];
-                minVecStore[i] = minVecStore[j];
-                minVecStore[j] = tempf;
-                register int tempi = minIDsVecStore[i];
-                minIDsVecStore[i] = minIDsVecStore[j];
-                minIDsVecStore[j] = tempi;
+                register float tempf;
+                swapElems(minVecStore[i], minVecStore[j], tempf);
+                register int tempi;
+                swapElems(minIDsVecStore[i], minIDsVecStore[j], tempi);
             }
         }
     }
@@ -170,37 +168,34 @@ static inline size_t findSuccessorID(Solution *sol, size_t iterNum, double *path
     // choose successor
     int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
     size_t successor = minIDsVecStore[0];
-    switch (inst->params.graspType)
-    {
-    case GRASP_NONE:
-        *pathCost += minVecStore[0];
-        break;
+    float pathCostIncrement = minVecStore[0];
 
-    case GRASP_RANDOM:
-        if (rand_r(state) < graspThreshold) // wastes an iteration (could be placed outside all as a "big" if however that reduces readability)
+    if ((inst->params.graspType != GRASP_NONE) && (rand_r(state) < graspThreshold) && (inst->nNodes - iterNum > 8))
+    {
+        switch (inst->params.graspType)
         {
+        case GRASP_NONE: break; // Prevents warning in compilation
+
+        case GRASP_RANDOM:
             successor = iterNum + (rand_r(state) % (inst->nNodes - iterNum));
-            *pathCost += computeEdgeCost(sol->X[iterNum-1], sol->Y[iterNum-1], sol->X[successor], sol->Y[successor], ewt, roundFlag);
-        }
-        else
-            *pathCost += minVecStore[0];
-        break;
-    
-    case GRASP_ALMOSTBEST:
-        if (rand_r(state) < graspThreshold)
+            pathCostIncrement = computeEdgeCost(sol->X[iterNum - 1], sol->Y[iterNum - 1], sol->X[successor], sol->Y[successor], ewt, roundFlag);
+            break;
+
+        case GRASP_ALMOSTBEST:
         {
-            size_t succID = rand_r(state) % (AVX_VEC_SIZE - 1);
-            if (minIDsVecStore[succID] == -1)
-                succID = 0;
-                
-            successor = minIDsVecStore[succID];
-            *pathCost += minVecStore[succID];
+            size_t rndIdx = 1;
+            for (; rndIdx < AVX_VEC_SIZE-1; rndIdx++)
+                if (rand_r(state) > RAND_MAX / 2)
+                    break;
+
+            successor = (size_t)minIDsVecStore[rndIdx];
+            pathCostIncrement = minVecStore[rndIdx];
+            break;
         }
-        else
-            *pathCost += minVecStore[0];
-        break;
+        }
     }
 
+    *pathCost += pathCostIncrement;
     return successor;
 }
 
@@ -209,7 +204,7 @@ static void applyNearestNeighbor(Solution *sol, size_t startingNodeIndex, unsign
     Instance *inst = sol->instance;
     size_t n = inst->nNodes;
     enum EdgeWeightType ewt = inst->params.edgeWeightType ;
-    int roundFlag = inst->params.roundWeightsFlag;
+    bool roundFlag = inst->params.roundWeights;
 
     // set first node
     swapElementsInSolution(sol, 0, startingNodeIndex);
@@ -265,9 +260,9 @@ static void updateBestSolutionNN(Solution *bestSol, Solution *newBest)
 static void *nnThread(void *arg)
 {
     NNThreadsDataRnd *thSpecific = (NNThreadsDataRnd*)arg;
-    NNThreadsSharedData *th = thSpecific->thShared;
+    NNThreadsSharedData *thShared = thSpecific->thShared;
     unsigned int state = thSpecific->rndState;
-    Solution *sol = th->sol;
+    Solution *sol = thShared->sol;
     Instance *inst = sol->instance;
 
     // Allocate memory to contain the work-in-progress solution
@@ -279,23 +274,23 @@ static void *nnThread(void *arg)
     t = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
 
     // check startingNode even before locking the mutex to avoid useless mutex calls
-    while((th->startingNode < inst->nNodes) && (t < th->tlim))
+    while((thShared->startingNode < inst->nNodes) && (t < thShared->tlim))
     {
         size_t iterNode;
-        if (th->startOption == NN_FIRST_TRYALL)
+        if (thShared->startOption == NN_FIRST_TRYALL)
         {
-            pthread_mutex_lock(&th->getStartNodeMutex);
+            pthread_mutex_lock(&thShared->getStartNodeMutex);
 
-            if (th->startingNode >= inst->nNodes)
+            if (thShared->startingNode >= inst->nNodes)
             {
-                pthread_mutex_unlock(&th->getStartNodeMutex);
+                pthread_mutex_unlock(&thShared->getStartNodeMutex);
                 break;
             }
 
-            iterNode = th->startingNode;
-            th->startingNode++;
+            iterNode = thShared->startingNode;
+            thShared->startingNode++;
 
-            pthread_mutex_unlock(&th->getStartNodeMutex);
+            pthread_mutex_unlock(&thShared->getStartNodeMutex);
         }
         else
             iterNode = (size_t)rand_r(&state) % inst->nNodes;
@@ -312,18 +307,18 @@ static void *nnThread(void *arg)
         // check cost first to avoid excessive amount of mutex calls
         if (sol->cost > tempSol.cost)
         {
-            pthread_mutex_lock(&th->saveSolutionMutex);
+            pthread_mutex_lock(&thShared->saveSolutionMutex);
 
             // recheck while having lock on mutex (for syncronization purposes)
             if (sol->cost > tempSol.cost)
-                updateBestSolutionNN(th->sol, &tempSol);
+                updateBestSolutionNN(thShared->sol, &tempSol);
             
-            pthread_mutex_unlock(&th->saveSolutionMutex);
+            pthread_mutex_unlock(&thShared->saveSolutionMutex);
         }
 
         thSpecific->iterCount++;
 
-        struct timespec currT;
+        //struct timespec currT;
         clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
         t = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
     }
@@ -331,7 +326,7 @@ static void *nnThread(void *arg)
     destroySolution(&tempSol);
 
     // avoid closing thread if working in single thread mode
-    if (th->nThreads == 1)
+    if (thShared->nThreads == 1)
         return NULL;
     
     pthread_exit(NULL);

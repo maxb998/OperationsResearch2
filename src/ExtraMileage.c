@@ -1,18 +1,39 @@
 #include "Tsp.h"
 
 
-#include "pthread.h"
+#include <pthread.h>
 #include <time.h>
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
 // Flag to define at compile time whether to use or not the AVX instruction to move the data
-#define EM_USE_FAST_SOLUTION_UPDATE 0
+#define EM_USE_FAST_SOLUTION_UPDATE 1
 
-// Threshold of the number of elements to move in the solution needed to use AVX to improve update speed
-#define EM_FAST_SOLUTION_ELEMS_THRESHOLD 8*20
+typedef struct
+{
+    Solution *bestSol;
 
+    enum EMInitType emInitType;
+    enum EMOptions emOpt;
 
-static size_t initialization(Solution *sol, enum EMInitType emType);
+    pthread_mutex_t mutex;
+
+    double tlim;
+    bool useThreads;
+} EMThreadsSharedData;
+
+typedef struct
+{
+    EMThreadsSharedData *shared;
+
+    unsigned int *rndState;
+    unsigned long iterCount;
+} EMThreadsData;
+
+static void *threadedExtraMileage(void *arg);
+
+static void updateBestSolutionEM(Solution *bestSol, Solution *newBest);
+
+static size_t initialization(Solution *sol, enum EMInitType emType, unsigned int *rndState);
 
 static void extremeCoordsPointsInit(Solution *sol);
 
@@ -24,38 +45,151 @@ static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos
 
 static inline void updateSolutionEM(Solution *sol, size_t posCovered, size_t bestMileageIndex, size_t anchorInde, float extraCost);
 
-static void extraMileageVectorizedST(Solution *sol, size_t nCovered);
+static void extraMileageVectorized(Solution *sol, size_t nCovered, unsigned int *rndState);
 
-static void extraMileageST(Solution *sol, size_t nCovered);
-
-static void extraMileageCostMatrixST(Solution *sol, size_t nCovered);
+static void extraMileage(Solution *sol, size_t nCovered, int useCostMatrix);
 
 
-Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emInitType)
-{
-    Solution sol = newSolution(inst);
-    sol.cost = 0;
-
-    // Set data for solution (copy coords from distance and create index path as 0,1,2,...,n-1)
-    for (size_t i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
-        sol.X[i] = inst->X[i];
-    for (int i = 0; i < inst->nNodes; i++)
-        sol.indexPath[i] = i;
-
-    // initialize solution as specified by options
-    size_t coveredNodes = initialization(&sol, emInitType);
-
-    // apply extra mileage
-    sol.execTime = applyExtraMileage(&sol, coveredNodes, emOpt);
-
-    return sol;
-}
-
-double applyExtraMileage(Solution *sol, size_t nCovered, enum EMOptions emOpt)
+Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emInitType, double tlim, bool useThreads, unsigned int *rndState)
 {
     struct timespec start, finish;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &start);
 
+    unsigned int autoRndState;
+    if (useThreads && (inst->params.nThreads == 1))
+    {
+        useThreads = false;
+        autoRndState = (unsigned int)rand();
+        rndState = &autoRndState;
+    }
+
+    // apply extra mileage
+    Solution bestSol = newSolution(inst);
+    EMThreadsSharedData shared = { .bestSol=&bestSol, .emInitType=emInitType, .emOpt=emOpt, .tlim=tlim, .useThreads=useThreads };
+    unsigned long iterCount = 0;
+
+    if (useThreads)
+    {
+        pthread_mutex_init(&shared.mutex, NULL);
+        EMThreadsData th[MAX_THREADS];
+        unsigned int states[MAX_THREADS];
+        for (size_t i = 0; i < inst->params.nThreads; i++)
+        {
+            th[i].shared = &shared;
+            states[i] = (unsigned int)rand();
+            th[i].rndState = &states[i];
+            th[i].iterCount = 0;
+        }
+
+        // start threads
+        pthread_t threads[MAX_THREADS];
+        for (size_t i = 0; i < inst->params.nThreads; i++)
+            pthread_create(&threads[i], NULL, threadedExtraMileage, &th[i]);
+
+        for (size_t i = 0; i < inst->params.nThreads; i++)
+        {
+            pthread_join(threads[i], NULL);
+            iterCount += th[i].iterCount;
+        }
+
+        pthread_mutex_destroy(&shared.mutex);
+    }
+    else
+    {
+        EMThreadsData th = { .shared=&shared, .iterCount=0, .rndState=rndState };
+        threadedExtraMileage(&th);
+        iterCount = th.iterCount;
+    }
+
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &finish);
+    bestSol.execTime = ((finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0);
+
+    LOG(LOG_LVL_NOTICE, "Total number of iterations: %ld", iterCount);
+    LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)iterCount/bestSol.execTime);
+
+    return bestSol;
+}
+
+static void *threadedExtraMileage(void * arg)
+{
+    struct timespec currT;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
+    double tStart = currT.tv_sec + currT.tv_nsec / 1000000000.0;
+    double t = tStart;
+
+    EMThreadsData *th = (EMThreadsData*)arg;
+    EMThreadsSharedData *shared = th->shared;
+    Solution *bestSol = shared->bestSol;
+    Instance *inst = bestSol->instance;
+
+    // optimization: save initialization if it is the same for every run (if init mode is random then it must be generated every time so no optimization)
+    Solution init;
+    size_t coveredNodes;
+    if (shared->emInitType != EM_INIT_RANDOM)
+    {
+        init = newSolution(inst);
+        coveredNodes = initialization(&init, shared->emInitType, th->rndState);
+    }
+
+    Solution sol = newSolution(inst);
+
+    while (t < tStart + shared->tlim)
+    {
+        if (inst->params.emInitOption != EM_INIT_RANDOM)
+            cloneSolution(&init, &sol);
+        else
+            coveredNodes = initialization(&sol, EM_INIT_RANDOM, th->rndState);
+        
+        applyExtraMileage(&sol, coveredNodes, shared->emOpt, th->rndState);
+
+        if (sol.cost < bestSol->cost)
+        {
+            if (shared->useThreads)
+            {
+                pthread_mutex_lock(&shared->mutex);
+                if (sol.cost < bestSol->cost)
+                    updateBestSolutionEM(bestSol, &sol);
+                pthread_mutex_unlock(&shared->mutex);
+            }
+            else
+                updateBestSolutionEM(bestSol, &sol);
+        }
+
+        th->iterCount++;
+
+        clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
+        t = currT.tv_sec + currT.tv_nsec / 1000000000.0;
+    }
+
+    if (shared->useThreads)
+        pthread_exit(NULL);
+    
+    return NULL;
+}
+
+static void updateBestSolutionEM(Solution *bestSol, Solution *newBest)
+{
+    // check solution when debugging
+    if (bestSol->instance->params.logLevel >= LOG_LVL_EVERYTHING)
+        checkSolution(newBest);
+
+    LOG(LOG_LVL_LOG, "Found better solution: New cost: %f   Old cost: %f", newBest->cost, bestSol->cost);
+
+    bestSol->cost = newBest->cost;
+
+    { // swap pointers with macro
+        register float *temp;
+        swapElems(bestSol->X, newBest->X, temp);
+        swapElems(bestSol->Y, newBest->Y, temp);
+    }
+    {
+        register int *temp;
+        swapElems(bestSol->indexPath, newBest->indexPath, temp);
+    }
+}
+
+void applyExtraMileage(Solution *sol, size_t nCovered, enum EMOptions emOpt, unsigned int *rndState)
+{
     Instance *inst = sol->instance;
     size_t n = inst->nNodes;
 
@@ -81,31 +215,34 @@ double applyExtraMileage(Solution *sol, size_t nCovered, enum EMOptions emOpt)
     switch (emOpt)
     {
     case EM_OPTION_AVX:
-        extraMileageVectorizedST(sol, nCovered);
+        extraMileageVectorized(sol, nCovered, rndState);
         break;
     case EM_OPTION_BASE:
-        extraMileageST(sol, nCovered);
+        extraMileage(sol, nCovered, 0);
         break;
     case EM_OPTION_USE_COST_MATRIX:
         if (inst->edgeCostMat)
-            extraMileageCostMatrixST(sol, nCovered);
+            extraMileage(sol, nCovered, 1);
         else
         {
             LOG(LOG_LVL_WARNING, "applyExtraMileage: edgeCostMat has not been detected/initialized. Switching to option: EM_OPTION_AVX");
-            extraMileageVectorizedST(sol, nCovered);
+            extraMileageVectorized(sol, nCovered, rndState);
         }
         break;
     }
-    
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &finish);
-    double elapsed = ((finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0);
-    return elapsed;
 }
 
-static size_t initialization(Solution *sol, enum EMInitType emInitType)
+static size_t initialization(Solution *sol, enum EMInitType emInitType, unsigned int *rndState)
 {
     Instance *inst = sol->instance;
     size_t coveredElems = 0;
+    sol->cost = 0;
+
+    // Set data for solution (copy coords from distance and create index path as 0,1,2,...,n-1)
+    for (size_t i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
+        sol->X[i] = inst->X[i];
+    for (int i = 0; i < inst->nNodes; i++)
+        sol->indexPath[i] = i;
 
     int rndIndex0, rndIndex1;
 
@@ -113,16 +250,16 @@ static size_t initialization(Solution *sol, enum EMInitType emInitType)
     {
     case EM_INIT_RANDOM:
         // select two random nodes
-        rndIndex0 = rand() % (int)inst->nNodes; rndIndex1 = rand() % (int)inst->nNodes;
+        rndIndex0 = rand_r(rndState) % (int)inst->nNodes; rndIndex1 = rand_r(rndState) % (int)inst->nNodes;
         while (abs(rndIndex1 - rndIndex0) <= 1)
-            rndIndex1 = rand();
+            rndIndex1 = rand_r(rndState) % (int)inst->nNodes;
 
         // add the two nodes to the solution (order does not matter)
         swapElementsInSolution(sol, 0, rndIndex0);
         swapElementsInSolution(sol, 1, rndIndex1);
 
         // update cost
-        sol->cost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType , inst->params.roundWeightsFlag) * 2.;
+        sol->cost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType , inst->params.roundWeights) * 2.;
 
         LOG(LOG_LVL_DEBUG, "ExtraMileage-InitializationRandom: Randomly chosen edge is edge e = (%d, %d)", rndIndex0, rndIndex1);
 
@@ -132,7 +269,7 @@ static size_t initialization(Solution *sol, enum EMInitType emInitType)
         extremeCoordsPointsInit(sol);
 
         // update cost
-        sol->cost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType , inst->params.roundWeightsFlag) * 2.;
+        sol->cost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType , inst->params.roundWeights) * 2.;
 
         coveredElems = 2;
         break;
@@ -140,7 +277,7 @@ static size_t initialization(Solution *sol, enum EMInitType emInitType)
         farthestPointsInit(sol);
 
         // update cost
-        sol->cost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType , inst->params.roundWeightsFlag) * 2.;
+        sol->cost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType , inst->params.roundWeights) * 2.;
 
         coveredElems = 2;
         break;
@@ -217,20 +354,26 @@ static void extremeCoordsPointsInit(Solution *sol)
     // find and save point one
     _mm256_storeu_ps(xVecStore, maxXVec);
     _mm256_storeu_si256((__m256i*)IDVecStore, maxIDVec);
-    register size_t index = 0;
+    size_t i1 = 0;
     for (size_t i = 1; i < AVX_VEC_SIZE; i++)
-        if (xVecStore[index] < xVecStore[i])
-            index = i;
-    swapElementsInSolution(sol, 0, IDVecStore[index]);
+        if (xVecStore[i1] < xVecStore[i])
+            i1 = i;
+    i1 = (size_t)IDVecStore[i1];
 
     // find and save point two
     _mm256_storeu_ps(xVecStore, minXVec);
     _mm256_storeu_si256((__m256i*)IDVecStore, minIDVec);
-    index = 0;
+    size_t i2 = 0;
     for (size_t i = 1; i < AVX_VEC_SIZE; i++)
-        if (xVecStore[index] > xVecStore[i])
-            index = i;
-    swapElementsInSolution(sol, 1, IDVecStore[index]);
+        if (xVecStore[i2] > xVecStore[i])
+            i2 = i;
+    i2 = (size_t)IDVecStore[i2];
+    
+    LOG(LOG_LVL_DEBUG, "Extra Mileage EM_INIT_EXTREMES: cost found is %f between nodes %d and %d", 
+                computeEdgeCost(inst->X[i1], inst->Y[i1], inst->X[i1], inst->Y[i2], inst->params.edgeWeightType, inst->params.roundWeights), i1, i2);
+
+    swapElementsInSolution(sol, 0, i1);
+    swapElementsInSolution(sol, 1, i2);
 }
 
 static void farthestPointsInit(Solution *sol)
@@ -239,7 +382,7 @@ static void farthestPointsInit(Solution *sol)
     size_t n = inst->nNodes;
 
     __m256 maxCostVec = _mm256_set1_ps(0), rowMaxCostVec = _mm256_set1_ps(0); // cost is always positive
-    __m256i maxColIDsVec = _mm256_set1_epi32(0), maxRowIDsVec = _mm256_set1_epi32(0);
+    __m256i maxIndexVec1 = _mm256_set1_epi32(0), maxIndexVec2 = _mm256_set1_epi32(0);
     __m256i incrementVec = _mm256_set1_epi32(AVX_VEC_SIZE), ones = _mm256_set1_epi32(1);
     
 
@@ -258,62 +401,37 @@ static void farthestPointsInit(Solution *sol)
             }
 
             __m256 x2 = _mm256_loadu_ps(&inst->X[j]), y2 = _mm256_loadu_ps(&inst->Y[j]);
-            __m256 costVec = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType , inst->params.roundWeightsFlag);
+            __m256 costVec = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType , inst->params.roundWeights);
 
             // check if there are costier connections in this iteration and save results
             __m256 mask = _mm256_cmp_ps(costVec, rowMaxCostVec, _CMP_GT_OQ);
             rowMaxCostVec = _mm256_blendv_ps(rowMaxCostVec, costVec, mask);
-            maxColIDsVec = _mm256_blendv_epi8(maxColIDsVec, colIDsVec, _mm256_castps_si256(mask));
+            maxIndexVec1 = _mm256_blendv_epi8(maxIndexVec1, colIDsVec, _mm256_castps_si256(mask));
         }
         
         __m256 mask = _mm256_cmp_ps(rowMaxCostVec, maxCostVec, _CMP_GT_OQ);
         maxCostVec = _mm256_blendv_ps(maxCostVec, rowMaxCostVec, mask);
-        maxRowIDsVec = _mm256_blendv_epi8(maxRowIDsVec, rowIDsVec, _mm256_castps_si256(mask));
-        
+        maxIndexVec2 = _mm256_blendv_epi8(maxIndexVec2, rowIDsVec, _mm256_castps_si256(mask));
     }
 
-    // ####### FIND MAXIMUM COST AND CORRESPONDING INDEX USING AVX PERMUTATIONS AND COMPARISIONS
+    float maxCosts[AVX_VEC_SIZE];
+    _mm256_storeu_ps(maxCosts, maxCostVec);
+    size_t maxIndex = 0;
+    for (size_t i = 1; i < AVX_VEC_SIZE; i++)
+        if (maxCosts[maxIndex] < maxCosts[i])
+            maxIndex = i;
 
-    /* permutation order
-     * 4 5 6 7 3 2 1 0 
-     * 2 3 1 0 6 7 5 4
-     * 1 0 3 2 5 4 7 6
-    */
+    int maxIndexes[AVX_VEC_SIZE];
+    _mm256_storeu_si256((__m256i_u*)maxIndexes, maxIndexVec1);
+    int maxIndex1 = maxIndexes[maxIndex];
+    _mm256_storeu_si256((__m256i_u*)maxIndexes, maxIndexVec2);
+    int maxIndex2 = maxIndexes[maxIndex];
 
-    {   // FIRST PERMUTATION
-        __m256i permuteMask = _mm256_set_epi32( 0, 1, 2, 3, 7, 6, 5, 4 );
-        __m256 maxCostVecPerm = _mm256_permutevar8x32_ps(maxCostVec, permuteMask);
-        __m256 mask = _mm256_cmp_ps(maxCostVecPerm, maxCostVec, _CMP_GT_OQ);
-        maxCostVec = _mm256_blendv_ps(maxCostVec, maxCostVecPerm, mask);
-        maxRowIDsVec = _mm256_blendv_epi8(maxRowIDsVec, _mm256_permutevar8x32_epi32(maxRowIDsVec, permuteMask), _mm256_castps_si256(mask));
-        maxColIDsVec = _mm256_blendv_epi8(maxColIDsVec, _mm256_permutevar8x32_epi32(maxColIDsVec, permuteMask), _mm256_castps_si256(mask));
-    }
-    {   // SECOND PERMUTATION (faster instruction)
-        __m256 maxCostVecPerm = _mm256_permute_ps(maxCostVec, 30); // 30 in binary 8 bits is 00011110
-        __m256 mask = _mm256_cmp_ps(maxCostVecPerm, maxCostVec, _CMP_GT_OQ);
-        maxCostVec = _mm256_blendv_ps(maxCostVec, maxCostVecPerm, mask);
-        maxRowIDsVec = _mm256_blendv_epi8(maxRowIDsVec, _mm256_castps_si256(_mm256_permute_ps(_mm256_castsi256_ps(maxRowIDsVec), 30)), _mm256_castps_si256(mask));
-        maxColIDsVec = _mm256_blendv_epi8(maxColIDsVec, _mm256_castps_si256(_mm256_permute_ps(_mm256_castsi256_ps(maxColIDsVec), 30)), _mm256_castps_si256(mask));
-    }
-    {
-        // SECOND PERMUTATION (faster instruction)
-        __m256 maxCostVecPerm = _mm256_permute_ps(maxCostVec, 177); // 177 in binary 8 bits is 10110001
-        __m256 mask = _mm256_cmp_ps(maxCostVecPerm, maxCostVec, _CMP_GT_OQ);
-        maxCostVec = _mm256_blendv_ps(maxCostVec, maxCostVecPerm, mask);
-        maxRowIDsVec = _mm256_blendv_epi8(maxRowIDsVec, _mm256_castps_si256(_mm256_permute_ps(_mm256_castsi256_ps(maxRowIDsVec), 177)), _mm256_castps_si256(mask));
-        maxColIDsVec = _mm256_blendv_epi8(maxColIDsVec, _mm256_castps_si256(_mm256_permute_ps(_mm256_castsi256_ps(maxColIDsVec), 177)), _mm256_castps_si256(mask));
-    }
-
-    // now maxCost, maxRowIDsVec, maxColIDsVec should contain only the value corresponding to the element with maximum cost so we can extract such values
-    // from any position in the vector
-    int maxCost = _mm_extract_ps(_mm256_castps256_ps128(maxCostVec), 0);
-    LOG(LOG_LVL_DEBUG, "Extra Mileage EM_INIT_FARTHEST_POINTS: maximum cost found is %f", *(float*)&maxCost);
-    int maxIndex0 = _mm_extract_epi32(_mm256_castsi256_si128(maxRowIDsVec), 0);
-    int maxIndex1 = _mm_extract_epi32(_mm256_castsi256_si128(maxColIDsVec), 0);
+    LOG(LOG_LVL_DEBUG, "Extra Mileage EM_INIT_FARTHEST_POINTS: maximum cost found is %f between nodes %d and %d", *(float*)&maxCosts[maxIndex], maxIndex1, maxIndex2);
 
     // initialize solution
-    swapElementsInSolution(sol, 0, maxIndex0);
-    swapElementsInSolution(sol, 1, maxIndex1);
+    swapElementsInSolution(sol, 0, maxIndex1);
+    swapElementsInSolution(sol, 1, maxIndex2);
 }
 
 static int checkSolutionIntegrity(Solution *sol)
@@ -363,19 +481,19 @@ static inline void updateSolutionEM(Solution *sol, size_t posCovered, size_t bes
     sol->Y[bestMileageIndex] = sol->Y[posCovered];
     sol->indexPath[bestMileageIndex] = sol->indexPath[posCovered];
 
-    size_t i = posCovered;
+    int i = posCovered;
 
-    if (EM_USE_FAST_SOLUTION_UPDATE && (posCovered - anchorIndex > EM_FAST_SOLUTION_ELEMS_THRESHOLD))
+    if (EM_USE_FAST_SOLUTION_UPDATE)
     {
         // shift elements forward of 1 position iteratively with avx until vector is too big for the amount of elements to shift (do AVX_VEC_SIZE elements per iteration)
-        for (i -= AVX_VEC_SIZE; i > anchorIndex; i -= AVX_VEC_SIZE)
+        for (i -= AVX_VEC_SIZE; i > (int)anchorIndex; i -= AVX_VEC_SIZE)
         {
-            __m256 xVec = _mm256_loadu_ps(&sol->X[i - AVX_VEC_SIZE]);
-            __m256 yVec = _mm256_loadu_ps(&sol->Y[i - AVX_VEC_SIZE]);
-            __m256i indexVec = _mm256_loadu_si256((__m256i_u*)&sol->indexPath[i - AVX_VEC_SIZE]);
-            _mm256_storeu_ps(&sol->X[i - AVX_VEC_SIZE + 1], xVec);
-            _mm256_storeu_ps(&sol->Y[i - AVX_VEC_SIZE + 1], yVec);
-            _mm256_storeu_si256((__m256i_u*)&sol->indexPath[i - AVX_VEC_SIZE + 1], indexVec);
+            __m256 xVec = _mm256_loadu_ps(&sol->X[i]);
+            __m256 yVec = _mm256_loadu_ps(&sol->Y[i]);
+            __m256i indexVec = _mm256_loadu_si256((__m256i_u*)&sol->indexPath[i]);
+            _mm256_storeu_ps(&sol->X[i + 1], xVec);
+            _mm256_storeu_ps(&sol->Y[i + 1], yVec);
+            _mm256_storeu_si256((__m256i_u*)&sol->indexPath[i + 1], indexVec);
         }
         i += AVX_VEC_SIZE;
     }
@@ -397,27 +515,27 @@ static inline void updateSolutionEM(Solution *sol, size_t posCovered, size_t bes
     LOG(LOG_LVL_EVERYTHING, "Extra Mileage Solution Update: Node %d added to solution between nodes %d and %d", sol->indexPath[i], sol->indexPath[i-1], sol->indexPath[i+1]);
 }
 
-static void extraMileageVectorizedST(Solution *sol, size_t nCovered)
+static void extraMileageVectorized(Solution *sol, size_t nCovered, unsigned int *rndState)
 {
     // shortcuts/decluttering
     Instance *inst = sol->instance;
     size_t n = inst->nNodes;
     enum EdgeWeightType ewt = inst->params.edgeWeightType ;
-    int roundW = inst->params.roundWeightsFlag;
+    bool roundW = inst->params.roundWeights;
+    int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
 
-    float bestCostVecStore[8] = { 0 };
-    size_t bestCostSortedIndexes[8] = { 0 };
+    float bestExtraMileage[AVX_VEC_SIZE] = { 0 };
+    int bestNodes[AVX_VEC_SIZE] = { 0 }, bestAnchors[AVX_VEC_SIZE] = { 0 };
 
     for (size_t posCovered = nCovered + 1; posCovered <= n; posCovered++) // until there are uncored nodes (each iteration adds one to posCovered)
     {
         // Contains best mileage values
         __m256 bestExtraMileageVec = _mm256_set1_ps(INFINITY);
         // Contains the indexes of the nodes from which the best (chosen according to bestMileageVec) one will be added to the solution at the end of the iteration
-        __m256i bestExtraMileageNodeIDVec = _mm256_set1_epi32(-1);
+        __m256i bestNodesVec = _mm256_set1_epi32(-1);
         // Contains the indexes corresponding to the edge that will be removed/ splitted to accomodate the new node
-        __m256i bestExtraMileageAnchorIDVec = _mm256_set1_epi32(-1);
+        __m256i bestAnchorsVec = _mm256_set1_epi32(-1);
 
-        // approach is opposite compared to the non-vectorized approach: check for each edge (i) in the tour all uncovered nodes
         // we do this to avoid the need of checking the last elements loaded by _mm256_loadu -> exploit the "INFINITY" placed at the end of the last elements in sol.X and sol.Y
         for (size_t i = 0; i < posCovered-1; i++)
         {
@@ -439,169 +557,121 @@ static void extraMileageVectorizedST(Solution *sol, size_t nCovered)
             for (size_t u = posCovered; u <= n; u += AVX_VEC_SIZE, idsVec = _mm256_add_epi32(idsVec, incrementVec))
             {
                 __m256 curExtraMileageVec;
-                //{
+                {
                     __m256 xuVec = _mm256_loadu_ps(&sol->X[u]), yuVec = _mm256_loadu_ps(&sol->Y[u]);
                     __m256 altEdge1CostVec = computeEdgeCost_VEC(xuVec, yuVec, x1Vec, y1Vec, ewt, roundW);
                     __m256 altEdge2CostVec = computeEdgeCost_VEC(xuVec, yuVec, x2Vec, y2Vec, ewt, roundW);
                     __m256 altEdgeCostVec = _mm256_add_ps(altEdge1CostVec, altEdge2CostVec);
                     curExtraMileageVec = _mm256_sub_ps(altEdgeCostVec, curEdgeCostVec);
-                //}
+                }
 
                 // Compare curExtraMileageCostVec with bestExtraMileageVec
                 __m256 cmpMask = _mm256_cmp_ps(curExtraMileageVec, bestExtraMileageVec, _CMP_LT_OQ);
 
                 // Set new best according to comparison result
                 bestExtraMileageVec = _mm256_blendv_ps(bestExtraMileageVec, curExtraMileageVec, cmpMask);
-                bestExtraMileageAnchorIDVec = _mm256_blendv_epi8(bestExtraMileageAnchorIDVec, curEdgeID, _mm256_castps_si256(cmpMask));
-                bestExtraMileageNodeIDVec = _mm256_blendv_epi8(bestExtraMileageNodeIDVec, idsVec, _mm256_castps_si256(cmpMask));
+                bestAnchorsVec = _mm256_blendv_epi8(bestAnchorsVec, curEdgeID, _mm256_castps_si256(cmpMask));
+                bestNodesVec = _mm256_blendv_epi8(bestNodesVec, idsVec, _mm256_castps_si256(cmpMask));
             }
         }
-        // at this point we must select the best canditate(the one with minimum cost) in bestExtraMileageVec
+        // at this point we must select a candidate(best or almost-best(grasp))
 
-        _mm256_storeu_ps(bestCostVecStore, bestExtraMileageVec);
-        for (size_t sortedElemsCount = 0; sortedElemsCount < AVX_VEC_SIZE; sortedElemsCount++)
+        _mm256_storeu_ps(bestExtraMileage, bestExtraMileageVec);
+        _mm256_storeu_si256((__m256i_u*)bestNodes, bestNodesVec);
+        _mm256_storeu_si256((__m256i_u*)bestAnchors, bestAnchorsVec);
+
+        // sort bestExtraMileage while matching the sorting moves on both bestNodes and bestAnchors
+        for (size_t i = 0; i < AVX_VEC_SIZE; i++) {
+            for (size_t j = i+1; j < AVX_VEC_SIZE; j++) {
+                if (bestExtraMileage[i] > bestExtraMileage[j]) {
+                    register float tempf;
+                    swapElems(bestExtraMileage[i], bestExtraMileage[j], tempf);
+                    register int tempi;
+                    swapElems(bestNodes[i], bestNodes[j], tempi);
+                    swapElems(bestAnchors[i], bestAnchors[j], tempi);
+        } } }
+
+        if ((inst->params.graspType != GRASP_NONE) && (rand_r(rndState) < graspThreshold) && (n - posCovered > AVX_VEC_SIZE))
         {
-            float min = INFINITY;
-            for (size_t i = 0; i < AVX_VEC_SIZE; i++)
+            switch (inst->params.graspType)
             {
-                int flag = 1;
-                for (size_t j = 0; j < sortedElemsCount; j++)
-                    if (bestCostSortedIndexes[j] == i)
-                        flag = 0;
+            case GRASP_NONE: break;// Prevents warning in compilation
 
-                if (flag && min > bestCostVecStore[i])
-                {
-                    min = bestCostVecStore[i];
-                    bestCostSortedIndexes[sortedElemsCount] = i;
-                }
+            case GRASP_ALMOSTBEST:
+            {
+                size_t rndIdx = 1;
+                for (; rndIdx < AVX_VEC_SIZE-1; rndIdx++)
+                    if (rand_r(rndState) > RAND_MAX / 2)
+                        break;
+                updateSolutionEM(sol, posCovered, bestNodes[rndIdx], bestAnchors[rndIdx], bestExtraMileage[rndIdx]);
+                break;
+            }
+
+            case GRASP_RANDOM:
+            {
+                size_t node = posCovered + (size_t)rand_r(rndState) % (n+1-posCovered);
+                size_t anchor = (size_t)rand_r(rndState) % (posCovered-1);
+                float extraMileage = computeEdgeCost(sol->X[anchor], sol->Y[anchor], sol->X[node], sol->Y[node], ewt, roundW) +
+                                     computeEdgeCost(sol->X[node], sol->Y[node], sol->X[anchor+1], sol->Y[anchor+1], ewt, roundW) -
+                                     computeEdgeCost(sol->X[anchor], sol->Y[anchor], sol->X[anchor+1], sol->Y[anchor+1], ewt, roundW);
+                updateSolutionEM(sol, posCovered, node, anchor, extraMileage);
+                break;
+            }
             }
         }
-        
-
-
-        // we do this by comparing the vector with its permutation multiple times, until all the elements in the vec are equal to the best one
-
-        { // FIRST PERMUTATION
-            __m256i permuteMask = _mm256_set_epi32( 0, 1, 2, 3, 7, 6, 5, 4 );
-            __m256 permutedBestExtraMilageVec = _mm256_permutevar8x32_ps(bestExtraMileageVec, permuteMask);
-            __m256 mask = _mm256_cmp_ps(permutedBestExtraMilageVec, bestExtraMileageVec, _CMP_LT_OQ);
-            bestExtraMileageVec = _mm256_blendv_ps(bestExtraMileageVec, permutedBestExtraMilageVec, mask);
-            bestExtraMileageNodeIDVec = _mm256_blendv_epi8(bestExtraMileageNodeIDVec, _mm256_permutevar8x32_epi32(bestExtraMileageNodeIDVec, permuteMask), _mm256_castps_si256(mask));
-            bestExtraMileageAnchorIDVec = _mm256_blendv_epi8(bestExtraMileageAnchorIDVec, _mm256_permutevar8x32_epi32(bestExtraMileageAnchorIDVec, permuteMask), _mm256_castps_si256(mask));
-        }
-        { // SECOND PERMUTATION
-            __m256 permutedBestExtraMilageVec = _mm256_permute_ps(bestExtraMileageVec, 30); // 30 in binary 8 bits is 00011110
-            __m256 mask = _mm256_cmp_ps(permutedBestExtraMilageVec, bestExtraMileageVec, _CMP_LT_OQ);
-            bestExtraMileageVec = _mm256_blendv_ps(bestExtraMileageVec, permutedBestExtraMilageVec, mask);
-            bestExtraMileageNodeIDVec = _mm256_blendv_epi8(bestExtraMileageNodeIDVec, _mm256_castps_si256(_mm256_permute_ps(_mm256_castsi256_ps(bestExtraMileageNodeIDVec), 30)), _mm256_castps_si256(mask));
-            bestExtraMileageAnchorIDVec = _mm256_blendv_epi8(bestExtraMileageAnchorIDVec, _mm256_castps_si256(_mm256_permute_ps(_mm256_castsi256_ps(bestExtraMileageAnchorIDVec), 30)), _mm256_castps_si256(mask));
-        }
-        { // THIRD PERMUTATION
-            __m256 permutedBestExtraMilageVec = _mm256_permute_ps(bestExtraMileageVec, 177); // 177 in binary 8 bits is 10110001
-            __m256 mask = _mm256_cmp_ps(permutedBestExtraMilageVec, bestExtraMileageVec, _CMP_LT_OQ);
-            bestExtraMileageVec = _mm256_blendv_ps(bestExtraMileageVec, permutedBestExtraMilageVec, mask);
-            bestExtraMileageNodeIDVec = _mm256_blendv_epi8(bestExtraMileageNodeIDVec, _mm256_castps_si256(_mm256_permute_ps(_mm256_castsi256_ps(bestExtraMileageNodeIDVec), 177)), _mm256_castps_si256(mask));
-            bestExtraMileageAnchorIDVec = _mm256_blendv_epi8(bestExtraMileageAnchorIDVec, _mm256_castps_si256(_mm256_permute_ps(_mm256_castsi256_ps(bestExtraMileageAnchorIDVec), 177)), _mm256_castps_si256(mask));
-        }
-
-        int bestCostInt = _mm_extract_epi32(_mm256_castsi256_si128(_mm256_castps_si256(bestExtraMileageVec)), 0);
-        float bestCost = *(float*)&bestCostInt;
-        size_t bestExtraMileageNodeID = (size_t)_mm_extract_epi32(_mm256_castsi256_si128(bestExtraMileageNodeIDVec), 0);
-        size_t bestExtraMileageAnchorID = (size_t)_mm_extract_epi32(_mm256_castsi256_si128(bestExtraMileageAnchorIDVec), 0);
-
-        // reached this point we found the absolute best combination of anchors and u possible for this iteration
-        // we must update the solution now
-        updateSolutionEM(sol, posCovered, bestExtraMileageNodeID, bestExtraMileageAnchorID, bestCost);
+        else
+            // best update
+            updateSolutionEM(sol, posCovered, bestNodes[0], bestAnchors[0], bestExtraMileage[0]);
     }
 }
 
-static void extraMileageST(Solution *sol, size_t nCovered)
+static void extraMileage(Solution *sol, size_t nCovered, int useCostMatrix)
 {
     // shortcuts/decluttering
     Instance *inst = sol->instance;
     size_t n = inst->nNodes;
     enum EdgeWeightType ewt = inst->params.edgeWeightType ;
-    int roundW = inst->params.roundWeightsFlag;
+    bool roundW = inst->params.roundWeights;
 
     for (size_t posCovered = nCovered + 1; posCovered <= n; posCovered++) // until there are uncored nodes (each iteration adds one to posCovered)
     {
         float bestMileage = INFINITY; // saves best mileage value
-        size_t bestMileageNodeID = 0xFFFFFFFFFFFFFFFF; // saves the index of the node that will be added at the end of the iteration
+        size_t bestNode = 0xFFFFFFFFFFFFFFFF; // saves the index of the node that will be added at the end of the iteration
 
         // index of the covered nodes that represent the edge that will be splitted to integrate u at solution update
-        size_t bestMileageAnchor = 0xFFFFFFFFFFFFFFFF;
+        size_t bestAnchor = 0xFFFFFFFFFFFFFFFF;
 
         for (size_t i = 0; i < posCovered-1; i++) // u stands for uncovered
         {
             // cost of edge already in solution [i,j]
-            float currEdgeCost = computeEdgeCost(sol->X[i], sol->Y[i], sol->X[i+1], sol->Y[i+1], ewt, roundW);
+            float currEdgeCost;
+            if (useCostMatrix == 1)
+                currEdgeCost = inst->edgeCostMat[sol->indexPath[i] * n + sol->indexPath[i + 1]];
+            else
+                currEdgeCost = computeEdgeCost(sol->X[i], sol->Y[i], sol->X[i+1], sol->Y[i+1], ewt, roundW);
 
             for (size_t u = posCovered; u < n+1; u++) // covered node i from 0 to posCovered
             {
-                // cost of edge [i,u]
-                float cost1 = computeEdgeCost(sol->X[u], sol->Y[u], sol->X[i], sol->Y[i], ewt, roundW);
                 // sum of cost of edge [i,u] and edge [u,j]
-                float altEdgeCost = cost1 + computeEdgeCost(sol->X[u], sol->Y[u], sol->X[i+1], sol->Y[i+1], ewt, roundW);
+                float altEdgeCost;
+                if (useCostMatrix == 1)
+                    altEdgeCost = computeEdgeCost(sol->X[u], sol->Y[u], sol->X[i], sol->Y[i], ewt, roundW) + computeEdgeCost(sol->X[u], sol->Y[u], sol->X[i+1], sol->Y[i+1], ewt, roundW);
+                else
+                    altEdgeCost = inst->edgeCostMat[sol->indexPath[u] * n + sol->indexPath[i]] + inst->edgeCostMat[sol->indexPath[u] * n + sol->indexPath[i+1]];
 
-                float extraCost = altEdgeCost - currEdgeCost;
+                float extraMileage = altEdgeCost - currEdgeCost;
 
-                if (bestMileage > extraCost)
+                if (bestMileage > extraMileage)
                 {
-                    bestMileage = extraCost;
-                    bestMileageNodeID = u;
-                    bestMileageAnchor = i;
+                    bestMileage = extraMileage;
+                    bestNode = u;
+                    bestAnchor = i;
                 }
             }
             // reached this point we found the best anchors combination for the uncovered node at index u in sol.X-Y
         }
         // reached this point we found the absolute best combination of anchors and u possible for this iteration
         // we must update the solution now
-        updateSolutionEM(sol, posCovered, bestMileageNodeID, bestMileageAnchor, bestMileage);
+        updateSolutionEM(sol, posCovered, bestNode, bestAnchor, bestMileage);
     }
 }
-
-
-static void extraMileageCostMatrixST(Solution *sol, size_t nCovered)
-{
-    // shortcuts/decluttering
-    Instance *inst = sol->instance;
-    size_t n = inst->nNodes;
-    float *edgeCostMat = inst->edgeCostMat;
-
-    for (size_t posCovered = nCovered + 1; posCovered <= n; posCovered++) // until there are uncored nodes (each iteration adds one to posCovered)
-    {
-        float bestMileage = INFINITY; // saves best mileage value
-        size_t bestMileageNodeID = 0xFFFFFFFFFFFFFFFF; // saves the index of the node that will be added at the end of the iteration
-
-        // index of the covered nodes that represent the edge that will be splitted to integrate u at solution update
-        size_t bestMileageAnchor = 0xFFFFFFFFFFFFFFFF;
-
-        for (size_t i = 0; i < posCovered-1; i++) // u stands for uncovered
-        {
-            // cost of edge already in solution [i,j]
-            float currEdgeCost = edgeCostMat[sol->indexPath[i] * n + sol->indexPath[i + 1]];
-
-            for (size_t u = posCovered; u <= n; u++) // covered node i from 0 to posCovered
-            {
-                // cost of edge [i,u]
-                float cost1 = edgeCostMat[sol->indexPath[u] * n + sol->indexPath[i]];
-                // sum of cost of edge [i,u] and edge [u,j]
-                float altEdgeCost = cost1 + edgeCostMat[sol->indexPath[u] * n + sol->indexPath[i+1]];
-
-                float extraCost = altEdgeCost - currEdgeCost;
-
-                if (bestMileage > extraCost)
-                {
-                    bestMileage = extraCost;
-                    bestMileageNodeID = u;
-                    bestMileageAnchor = i;
-                }
-            }
-            // reached this point we found the best anchors combination for the uncovered node at index u in sol.X-Y
-        }
-        // reached this point we found the absolute best combination of anchors and u possible for this iteration
-        // we must update the solution now
-        updateSolutionEM(sol, posCovered, bestMileageNodeID, bestMileageAnchor, bestMileage);
-    }
-}
-

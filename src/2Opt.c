@@ -195,7 +195,7 @@ static inline unsigned long _2optBestFixBase(Solution *sol)
     // setup "shortcuts" variables to declutter the code
     size_t n = inst->nNodes;
     enum EdgeWeightType edgeWgtType = inst->params.edgeWeightType;
-    int roundFlag = inst->params.roundWeightsFlag;
+    bool roundFlag = inst->params.roundWeights;
 
     struct timespec currT;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
@@ -322,7 +322,7 @@ static inline unsigned long _2OptBestFixAVX(Solution *sol)
     // setup "shortcuts" variables to declutter the code
     size_t n = inst->nNodes;
     enum EdgeWeightType edgeWgtType = inst->params.edgeWeightType;
-    int roundFlag = inst->params.roundWeightsFlag;
+    bool roundFlag = inst->params.roundWeights;
 
     float vecStore[AVX_VEC_SIZE];
     int idsVecStore[AVX_VEC_SIZE];
@@ -507,7 +507,7 @@ static void *_2OptBestFixAVXThread(void *arg)
     // setup "shortcuts" variables to declutter the code
     size_t n = inst->nNodes;
     enum EdgeWeightType edgeWgtType = inst->params.edgeWeightType;
-    int roundFlag = inst->params.roundWeightsFlag;
+    bool roundFlag = inst->params.roundWeights;
 
     float vecStore[AVX_VEC_SIZE];
     int idsVecStore[AVX_VEC_SIZE];

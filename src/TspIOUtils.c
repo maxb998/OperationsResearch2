@@ -408,7 +408,7 @@ void saveSolution(Solution *sol, int argc, char *argv[])
     fclose(solutionFile);
 }
 
-void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize, const int printIndex)
+void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize, const bool printIndex)
 {
     // creating the pipeline for gnuplot
     FILE *gnuplotPipe = popen("gnuplot -persistent", "w");

@@ -47,7 +47,7 @@ void saveSolution(Solution *sol, int argc, char *argv[]);
 * @param pointSize Size of the points
 * @param printIndex Set to 1 to print index of each point as label on plot
 */
-void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize, const int printIndex);
+void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize, const bool printIndex);
 
 //###################################################################################################################################
 // UTILITIES
@@ -83,10 +83,11 @@ void destroySolution (Solution *sol);
 
 /*!
 * @brief Fully clones the passed Solution. Pointers are not just copied over, they point to new memory allocation that will contain a copy of the memory pointed by the pointers in sol.
-* @param sol Solution to clone
+* @param src Solution to clone
+* @param dst Destination solution (the size of the instance must be the same)
 * @result Cloned Solution
 */
-Solution cloneSolution(Solution *sol);
+void cloneSolution(Solution *src, Solution *dst);
 
 /*!
 * @brief Set the log level value which indicates how many information shall be printed as output on the console.
@@ -161,7 +162,7 @@ void printCostMatrix(Instance *inst);
 * @param useThread Set to 1 to use multithreading. Set to 0 for single thread.
 * @result Solution obtained using Nearest Neighbor.
 */
-Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, double tlim, int useThreads);
+Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, double tlim, bool useThreads);
 
 
 //###################################################################################################################################
@@ -174,9 +175,11 @@ Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, do
 * @param emOpt Defines the way in which the first point has to be chosen.
 * @param emInitType Defines the way in which the Solution is initialized.
 * @param tlim Time limit.
+* @param useThreads If true uses inst.params.nThreads. If false runs on single thread and uses rndState parameter
+* @param rndState Seed state for pseudo-random generator. Specify value when calling this function from multiple threads(useThreads=true)
 * @result Solution obtained using Extra Mileage.
 */
-Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emInitType);
+Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emInitType, double tlim, bool useThreads, unsigned int *rndState);
 
 /*!
 * @brief Applies Extra Mileage heuristic on a solution that is already not empty.
@@ -185,7 +188,7 @@ Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emIn
 * @param emOpt Defines the way in which the first point has to be chosen.
 * @result Number in seconds representing execution time
 */
-double applyExtraMileage(Solution *sol, size_t nCovered, enum EMOptions emOpt);
+void applyExtraMileage(Solution *sol, size_t nCovered, enum EMOptions emOpt, unsigned int *rndState);
 
 
 //###################################################################################################################################

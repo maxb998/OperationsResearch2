@@ -2,6 +2,7 @@
 #define TSP_BASE
 
 #include <stdlib.h>
+#include <stdbool.h>
 
 #define MAX_THREADS 256
 #define USE_APPROXIMATED_DISTANCES 1
@@ -98,7 +99,7 @@ typedef struct
 	enum Mode mode;
 
 	enum GraspOption graspType;
-	int use2OptFlag;
+	bool use2Opt;
 	double tlim;
 
 	enum NNFirstNodeOptions nnFirstNodeOption;
@@ -112,9 +113,9 @@ typedef struct
     
     int randomSeed;
 	int nThreads; // if no value has been specified as argument its default value is the number of processors in the machine
-	int roundWeightsFlag;
-	int showPlotFlag;
-	int saveFlag;
+	bool roundWeights;
+	bool showPlot;
+	bool saveSolution;
 	enum LogLevel logLevel;
 
 	enum EdgeWeightType edgeWeightType;

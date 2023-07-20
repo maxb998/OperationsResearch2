@@ -29,7 +29,7 @@ Instance newInstance ()
             .mode=MODE_NONE,
             
             .graspType=GRASP_NONE,
-            .use2OptFlag=0,
+            .use2Opt=false,
             .tlim=-1.,
 
             .nnFirstNodeOption = NN_FIRST_RANDOM,
@@ -43,9 +43,9 @@ Instance newInstance ()
 
             .randomSeed = -1,
             .nThreads = nProcessors(),
-            .roundWeightsFlag = 0,
-            .showPlotFlag=0,
-            .saveFlag=0,
+            .roundWeights = false,
+            .showPlot = false,
+            .saveSolution = false,
             .logLevel=LOG_LVL_LOG,
 
             .edgeWeightType  = -1,
@@ -102,18 +102,22 @@ void destroySolution (Solution *sol)
     sol->indexPath = NULL;
 }
 
-Solution cloneSolution(Solution *sol)
+void cloneSolution(Solution *src, Solution *dst)
 {
-    Solution s = newSolution(sol->instance);
-    s.cost = sol->cost;
+    if (src->instance->nNodes != dst->instance->nNodes)
+    {
+        destroySolution(dst);
+        throwError(src->instance, src, "cloneSolution: Size of src and dst does not match");
+    }
+    dst->cost = src->cost;
+    dst->instance = src->instance;
+    dst->execTime = src->execTime;
 
-    for (size_t i = 0; i < (s.instance->nNodes + AVX_VEC_SIZE * 2); i++)
-        s.X[i] = sol->X[i];
+    for (size_t i = 0; i < ((dst->instance->nNodes + AVX_VEC_SIZE) * 2); i++)
+        dst->X[i] = src->X[i];
     
-    for (size_t i = 0; i < s.instance->nNodes + 1; i++)
-        s.indexPath[i] = sol->indexPath[i];
-    
-    return s;
+    for (size_t i = 0; i < dst->instance->nNodes + 1; i++)
+        dst->indexPath[i] = src->indexPath[i];
 }
 
 static enum LogLevel LOG_LEVEL = LOG_LVL_LOG;
@@ -223,7 +227,7 @@ double computeSolutionCostVectorized(Solution *sol)
 {
     size_t n = sol->instance->nNodes;
     enum EdgeWeightType ewt = sol->instance->params.edgeWeightType ;
-    int roundFlag = sol->instance->params.roundWeightsFlag;
+    bool roundFlag = sol->instance->params.roundWeights;
 
     __m256d costVec = _mm256_setzero_pd();
     size_t i = 0;
@@ -277,7 +281,7 @@ double computeSolutionCostVectorized(Solution *sol)
 double computeSolutionCost(Solution *sol)
 {
     enum EdgeWeightType ewt = sol->instance->params.edgeWeightType ;
-    int roundFlag = sol->instance->params.roundWeightsFlag;
+    bool roundFlag = sol->instance->params.roundWeights;
 
     double cost = 0.0;
     for (size_t i = 0; i < sol->instance->nNodes; i++)

@@ -12,26 +12,26 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
-                "--file", "data/a280.tsp",
+                "--file", "data/att48.tsp",
                 "--mode", "nn",
 
-                "--grasp", "random(0.05)",
-                "--2opt",
-                "--tlim", "2",
+                "--grasp", "almostbest(0.05)",
+                //"--2opt",
+                "--tlim", "1000",
 
                 //"--nn-opt", "tryall",
-                //"--em-opt", "farthest",
+                "--em-opt", "extremes",
 
                 //"--metaheur-init-mode", "em",
                 //"--matheur-init-mode", "vns",
                 //"--warm-start-mode", "tabu",
 
                 //"--seed", "2023",
-                "--threads", "4",
+                "--threads", "1",
                 "--roundcosts",
                 "--plot", 
                 //"--save",
-                "--loglvl", "all"
+                "--loglvl", "debug"
             ],
             "cwd": "${workspaceFolder}"
        },
@@ -42,20 +42,23 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/x64/main",
             "args": [
-                "--file", "data/a280.tsp",
+                "--file", "data/rl5915.tsp",
                 "--mode", "nn",
 
-                "--grasp", "random(0.01)",
+                //"--grasp", "almostbest(0.1)",
                 "--2opt",
-                "--tlim", "5",
+                "--tlim", "20",
 
-                //"--nnOpt", "random",
-                //"--emOpt", "random",
-                //"--vnsOpt", "nn",
+                //"--nn-opt", "tryall",
+                "--em-opt", "random",
 
-                "--seed", "2023",
-                //"--threads", "1",
-                //"--roundcosts",
+                //"--metaheur-init-mode", "em",
+                //"--matheur-init-mode", "vns",
+                //"--warm-start-mode", "tabu",
+
+                //"--seed", "2023",
+                "--threads", "8",
+                "--roundcosts",
                 "--plot", 
                 //"--save",
                 "--loglvl", "log"

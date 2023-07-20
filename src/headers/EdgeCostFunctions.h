@@ -111,7 +111,7 @@ static inline float roundEdgeCost(float edgeCost, enum EdgeWeightType edgeWgtTyp
 		return floorf(edgeCost);
 }
 
-static inline float computeEdgeCost (float x1, float y1, float x2, float y2, enum EdgeWeightType edgeWgtType, int roundFlag)
+static inline float computeEdgeCost (float x1, float y1, float x2, float y2, enum EdgeWeightType edgeWgtType, bool roundFlag)
 {
 	register float cost;
 	switch (COMPUTATION_TYPE)
@@ -129,7 +129,7 @@ static inline float computeEdgeCost (float x1, float y1, float x2, float y2, enu
 		break;
 	}
 
-	if (roundFlag == 1)
+	if (roundFlag)
 		cost = roundEdgeCost (cost, edgeWgtType);
 	
 	return cost;
@@ -292,7 +292,7 @@ static inline __m256 roundEdgeCost_VEC (__m256 costs, enum EdgeWeightType edgeWg
 		return _mm256_floor_ps(costs);
 }
 
-static inline __m256 computeEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2, __m256 y2, enum EdgeWeightType edgeWgtType, int roundFlag)
+static inline __m256 computeEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2, __m256 y2, enum EdgeWeightType edgeWgtType, bool roundFlag)
 {
 	register __m256 costVec;
 	switch (COMPUTATION_TYPE)
@@ -310,7 +310,7 @@ static inline __m256 computeEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2, __m2
 		break;
 	}
 
-	if (roundFlag == 1)
+	if (roundFlag)
 		costVec = roundEdgeCost_VEC(costVec, edgeWgtType);
 	
 	return costVec;

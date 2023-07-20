@@ -46,7 +46,7 @@ Solution VariableNeighborhood(Instance *inst, enum Mode config)
         }else // (config == VNS_INIT_EM)
         {   
             // Compute a solution with Extra Mileage and optimize it with 2-opt
-            sol = ExtraMileage(inst, EM_OPTION_AVX, EM_INIT_RANDOM);
+            sol = ExtraMileage(inst, EM_OPTION_AVX, EM_INIT_RANDOM, inst->params.tlim/50, false, 0);
             apply2OptBestFix(&sol, _2OPT_AVX_ST);
             while(checkTime(start, inst->params.tlim) == 0)
             {

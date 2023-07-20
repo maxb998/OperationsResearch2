@@ -47,13 +47,13 @@ int main (int argc, char *argv[])
 
     case MODE_NN:
         sol = runNearestNeighbor(&inst);
-        if (inst.params.use2OptFlag)
+        if (inst.params.use2Opt)
             run2Opt(&sol);
         break;
 
     case MODE_EM:
         sol = runExtraMileage(&inst);
-        if (inst.params.use2OptFlag)
+        if (inst.params.use2Opt)
             run2Opt(&sol);
         break;
     
@@ -87,10 +87,10 @@ int main (int argc, char *argv[])
     }
 
 
-    if (inst.params.showPlotFlag)
+    if (inst.params.showPlot)
         plotSolution(&sol, "800,600", "green", "black", 1, 0);
     
-    if (inst.params.saveFlag)
+    if (inst.params.saveSolution)
         saveSolution(&sol, argc, argv);
 
     destroySolution(&sol);
@@ -118,7 +118,7 @@ static Solution runExtraMileage(Instance *inst)
 {
     printf("\nExtra Mileage starting...\n");
 
-    Solution em = ExtraMileage(inst, 0, inst->params.emInitOption);
+    Solution em = ExtraMileage(inst, 0, inst->params.emInitOption, inst->params.tlim, true, 0);
 
     printf("Extra Mileage finished in %lf seconds\n", em.execTime);
     printf("Cost = %lf\n", em.cost);
@@ -151,7 +151,7 @@ static Solution runBenders(Instance *inst)
 static Solution runBranchAndCut(Instance *inst)
 {
     printf("Running TEMPORARELY extra mileage to get a warm start solution\n");
-    Solution warmStart = ExtraMileage(inst, 0, EM_INIT_EXTREMES);
+    Solution warmStart = ExtraMileage(inst, 0, EM_INIT_EXTREMES, inst->params.tlim/50, true, 0);
     apply2OptBestFix(&warmStart, 0);
 
     printf("##############################################################################################################################\n");
@@ -173,7 +173,7 @@ static Solution runBranchAndCut(Instance *inst)
 static Solution runHardFixing(Instance *inst)
 {
     printf("Running TEMPORARELY extra mileage to get a warm start solution\n");
-    Solution sol = ExtraMileage(inst, 0, EM_INIT_EXTREMES);
+    Solution sol = ExtraMileage(inst, 0, EM_INIT_EXTREMES, inst->params.tlim/50, true, 0);
     apply2OptBestFix(&sol, 0);
 
     printf("##############################################################################################################################\n");

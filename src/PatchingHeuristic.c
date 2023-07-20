@@ -61,7 +61,7 @@ static inline void findBestSubtourMerge(SubtoursData *sub, int subtoursCount, In
 {
 	float *X = inst->X, *Y =inst->Y;
 	enum EdgeWeightType ewt = inst->params.edgeWeightType ;
-	int roundFlag = inst->params.roundWeightsFlag;
+	bool roundFlag = inst->params.roundWeights;
 
 	float min = INFINITY;
 

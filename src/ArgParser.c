@@ -238,7 +238,7 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
         return parseGrasp(arg, inst);
 
     case ARGP_2OPT:
-        inst->params.use2OptFlag = 1;
+        inst->params.use2Opt = true;
         break;
     
     case ARGP_TLIM:
@@ -269,15 +269,15 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
         return parseNThreads(arg, inst);
 
     case ARGP_ROUND:
-        inst->params.roundWeightsFlag = 1;
+        inst->params.roundWeights = true;
         break;
 
     case ARGP_PLOT:
-        inst->params.showPlotFlag = 1;
+        inst->params.showPlot = true;
         break;
     
     case ARGP_SAVE:
-        inst->params.saveFlag = 1;
+        inst->params.saveSolution = true;
         break;
     
     case ARGP_LOG_LEVEL:
@@ -462,7 +462,7 @@ void printInfo(Instance *inst)
     else
         printf(BLANK_SPACE "Grasp is on, grasp mode id is %s with chance %lf\n", graspStrings[p->graspType], p->graspChance);
     // 2Opt
-    if (p->use2OptFlag || p->mode == MODE_VNS)
+    if (p->use2Opt || p->mode == MODE_VNS)
         printf(BLANK_SPACE "Using 2Opt\n");
     // time limit
     if (p->tlim != -1)
@@ -491,10 +491,10 @@ void printInfo(Instance *inst)
     // threads
     printf(BLANK_SPACE "Threads used = %d\n", p->nThreads);
     // roundcosts
-    if (p->roundWeightsFlag)
+    if (p->roundWeights)
         printf(BLANK_SPACE "Edge Cost is rounded according to tsplib documentation file\n");
     // save
-    if (p->saveFlag)
+    if (p->saveSolution)
         printf(BLANK_SPACE "Final solution of this run will be saved in a .tour file inside OperationsResearch2/runs\n");
     // log level
     printf(BLANK_SPACE "Log level = %s", logLevelStrings[p->logLevel]);

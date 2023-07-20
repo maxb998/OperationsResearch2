@@ -105,7 +105,7 @@ void cvtSolutionToSuccessors(Solution *sol, int* successors);
 * @param isBenders Flag to decide which function to use to add constraints to the problem
 * @result 0 if everything run smoothly, Cplex Error code is returned otherwise
 */
-int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, SubtoursData *subData, int iterNum, Instance *inst, int nCols, int isBenders);
+int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, SubtoursData *subData, int iterNum, Instance *inst, int nCols, bool isBenders);
 
 /*!
 * @brief "Fix" a successors-based solution that presents subtours by merging them in the best possible way.
