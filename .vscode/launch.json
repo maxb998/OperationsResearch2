@@ -13,14 +13,14 @@
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
                 "--file", "data/att48.tsp",
-                "--mode", "nn",
+                "--mode", "em",
 
-                "--grasp", "almostbest(0.05)",
-                //"--2opt",
-                "--tlim", "1000",
+                "--grasp", "random(0.05)",
+                "--2opt",
+                "--tlim", "10",
 
                 //"--nn-opt", "tryall",
-                "--em-opt", "extremes",
+                "--em-opt", "random",
 
                 //"--metaheur-init-mode", "em",
                 //"--matheur-init-mode", "vns",
@@ -42,11 +42,11 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/x64/main",
             "args": [
-                "--file", "data/rl5915.tsp",
-                "--mode", "nn",
+                "--file", "data/att48.tsp",
+                "--mode", "em",
 
                 //"--grasp", "almostbest(0.1)",
-                "--2opt",
+                //"--2opt",
                 "--tlim", "20",
 
                 //"--nn-opt", "tryall",

@@ -29,7 +29,7 @@ typedef struct
     unsigned long iterCount;
 } EMThreadsData;
 
-static void *threadedExtraMileage(void *arg);
+static void *runExtraMileage(void *arg);
 
 static void updateBestSolutionEM(Solution *bestSol, Solution *newBest);
 
@@ -39,15 +39,15 @@ static void extremeCoordsPointsInit(Solution *sol);
 
 static void farthestPointsInit(Solution *sol);
 
-static int checkSolutionIntegrity(Solution *sol);
+static bool checkSolutionIntegrity(Solution *sol);
 
 static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos2);
 
-static inline void updateSolutionEM(Solution *sol, size_t posCovered, size_t bestMileageIndex, size_t anchorInde, float extraCost);
+static inline void updateSolutionEM(Solution *sol, size_t posCovered, size_t bestMileageIndex, size_t anchorIndex, float extraCost);
 
 static void extraMileageVectorized(Solution *sol, size_t nCovered, unsigned int *rndState);
 
-static void extraMileage(Solution *sol, size_t nCovered, int useCostMatrix);
+static void extraMileageBase(Solution *sol, size_t nCovered, unsigned int *rndState, bool useCostMatrix);
 
 
 Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emInitType, double tlim, bool useThreads, unsigned int *rndState)
@@ -84,7 +84,7 @@ Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emIn
         // start threads
         pthread_t threads[MAX_THREADS];
         for (size_t i = 0; i < inst->params.nThreads; i++)
-            pthread_create(&threads[i], NULL, threadedExtraMileage, &th[i]);
+            pthread_create(&threads[i], NULL, runExtraMileage, &th[i]);
 
         for (size_t i = 0; i < inst->params.nThreads; i++)
         {
@@ -97,7 +97,7 @@ Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emIn
     else
     {
         EMThreadsData th = { .shared=&shared, .iterCount=0, .rndState=rndState };
-        threadedExtraMileage(&th);
+        runExtraMileage(&th);
         iterCount = th.iterCount;
     }
 
@@ -110,7 +110,7 @@ Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emIn
     return bestSol;
 }
 
-static void *threadedExtraMileage(void * arg)
+static void *runExtraMileage(void * arg)
 {
     struct timespec currT;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
@@ -177,15 +177,11 @@ static void updateBestSolutionEM(Solution *bestSol, Solution *newBest)
 
     bestSol->cost = newBest->cost;
 
-    { // swap pointers with macro
-        register float *temp;
-        swapElems(bestSol->X, newBest->X, temp);
-        swapElems(bestSol->Y, newBest->Y, temp);
-    }
-    {
-        register int *temp;
-        swapElems(bestSol->indexPath, newBest->indexPath, temp);
-    }
+    register float *tempf;
+    swapElems(bestSol->X, newBest->X, tempf);
+    swapElems(bestSol->Y, newBest->Y, tempf);
+    register int *tempi;
+    swapElems(bestSol->indexPath, newBest->indexPath, tempi);
 }
 
 void applyExtraMileage(Solution *sol, size_t nCovered, enum EMOptions emOpt, unsigned int *rndState)
@@ -198,7 +194,7 @@ void applyExtraMileage(Solution *sol, size_t nCovered, enum EMOptions emOpt, uns
     {
         // check solution integrity when debugging
         if (inst->params.logLevel >= LOG_LVL_DEBUG || !(sol->X[n] == INFINITY && sol->Y[n] == INFINITY) || !(sol->X[n] == sol->X[0] && sol->Y[n] == sol->Y[0]))
-            if (checkSolutionIntegrity(sol) != 0)
+            if (!checkSolutionIntegrity(sol))
                 throwError(inst, sol, "applyExtraMileage: Error when checking input solution");
 
         // save element to last position
@@ -218,11 +214,11 @@ void applyExtraMileage(Solution *sol, size_t nCovered, enum EMOptions emOpt, uns
         extraMileageVectorized(sol, nCovered, rndState);
         break;
     case EM_OPTION_BASE:
-        extraMileage(sol, nCovered, 0);
+        extraMileageBase(sol, nCovered, rndState, false);
         break;
     case EM_OPTION_USE_COST_MATRIX:
         if (inst->edgeCostMat)
-            extraMileage(sol, nCovered, 1);
+            extraMileageBase(sol, nCovered, rndState, true);
         else
         {
             LOG(LOG_LVL_WARNING, "applyExtraMileage: edgeCostMat has not been detected/initialized. Switching to option: EM_OPTION_AVX");
@@ -244,13 +240,12 @@ static size_t initialization(Solution *sol, enum EMInitType emInitType, unsigned
     for (int i = 0; i < inst->nNodes; i++)
         sol->indexPath[i] = i;
 
-    int rndIndex0, rndIndex1;
-
     switch (emInitType)
     {
     case EM_INIT_RANDOM:
+        {
         // select two random nodes
-        rndIndex0 = rand_r(rndState) % (int)inst->nNodes; rndIndex1 = rand_r(rndState) % (int)inst->nNodes;
+        int rndIndex0 = rand_r(rndState) % (int)inst->nNodes, rndIndex1 = rand_r(rndState) % (int)inst->nNodes;
         while (abs(rndIndex1 - rndIndex0) <= 1)
             rndIndex1 = rand_r(rndState) % (int)inst->nNodes;
 
@@ -261,9 +256,10 @@ static size_t initialization(Solution *sol, enum EMInitType emInitType, unsigned
         // update cost
         sol->cost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType , inst->params.roundWeights) * 2.;
 
-        LOG(LOG_LVL_DEBUG, "ExtraMileage-InitializationRandom: Randomly chosen edge is edge e = (%d, %d)", rndIndex0, rndIndex1);
+        //LOG(LOG_LVL_DEBUG, "ExtraMileage-InitializationRandom: Randomly chosen edge is edge e = (%d, %d)", rndIndex0, rndIndex1);
 
         coveredElems = 2;
+        }
         break;
     case EM_INIT_EXTREMES:
         extremeCoordsPointsInit(sol);
@@ -434,7 +430,7 @@ static void farthestPointsInit(Solution *sol)
     swapElementsInSolution(sol, 1, maxIndex2);
 }
 
-static int checkSolutionIntegrity(Solution *sol)
+static bool checkSolutionIntegrity(Solution *sol)
 {
     Instance *inst = sol->instance;
     size_t n = inst->nNodes;
@@ -445,17 +441,17 @@ static int checkSolutionIntegrity(Solution *sol)
         if (index < 0 || index > n)
         {
             LOG(LOG_LVL_CRITICAL, "checkSolutionIntegrity: sol.indexPath[%lu] = %d which is not within the limits", i, index);
-            return 1;
+            return false;
         }
         if (sol->X[i] != inst->X[index] || sol->Y[i] != inst->Y[index])
         {
             LOG(LOG_LVL_CRITICAL, "checkSolutionIntegrity: Mismatch at index %lu in solution", i);
-            return 1;
+            return false;
         }
     }
 
     // everything checks out
-    return 0;
+    return true;
 }
 
 static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos2)
@@ -524,8 +520,8 @@ static void extraMileageVectorized(Solution *sol, size_t nCovered, unsigned int 
     bool roundW = inst->params.roundWeights;
     int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
 
-    float bestExtraMileage[AVX_VEC_SIZE] = { 0 };
-    int bestNodes[AVX_VEC_SIZE] = { 0 }, bestAnchors[AVX_VEC_SIZE] = { 0 };
+    float bestExtraMileage[AVX_VEC_SIZE];
+    int bestNodes[AVX_VEC_SIZE], bestAnchors[AVX_VEC_SIZE];
 
     for (size_t posCovered = nCovered + 1; posCovered <= n; posCovered++) // until there are uncored nodes (each iteration adds one to posCovered)
     {
@@ -625,13 +621,14 @@ static void extraMileageVectorized(Solution *sol, size_t nCovered, unsigned int 
     }
 }
 
-static void extraMileage(Solution *sol, size_t nCovered, int useCostMatrix)
+static void extraMileageBase(Solution *sol, size_t nCovered, unsigned int *rndState, bool useCostMatrix)
 {
     // shortcuts/decluttering
     Instance *inst = sol->instance;
     size_t n = inst->nNodes;
     enum EdgeWeightType ewt = inst->params.edgeWeightType ;
     bool roundW = inst->params.roundWeights;
+    int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
 
     for (size_t posCovered = nCovered + 1; posCovered <= n; posCovered++) // until there are uncored nodes (each iteration adds one to posCovered)
     {
@@ -672,6 +669,25 @@ static void extraMileage(Solution *sol, size_t nCovered, int useCostMatrix)
         }
         // reached this point we found the absolute best combination of anchors and u possible for this iteration
         // we must update the solution now
-        updateSolutionEM(sol, posCovered, bestNode, bestAnchor, bestMileage);
+        if ((inst->params.graspType != GRASP_NONE) && (rand_r(rndState) < graspThreshold) && (n - posCovered > AVX_VEC_SIZE))
+        {
+            switch (inst->params.graspType)
+            {
+            case GRASP_NONE: break; // Prevents warning in compilation
+            case GRASP_ALMOSTBEST: break; // not supported in this mode
+            case GRASP_RANDOM:
+            {
+                size_t node = posCovered + (size_t)rand_r(rndState) % (n+1-posCovered);
+                size_t anchor = (size_t)rand_r(rndState) % (posCovered-1);
+                float extraMileage = computeEdgeCost(sol->X[anchor], sol->Y[anchor], sol->X[node], sol->Y[node], ewt, roundW) +
+                                     computeEdgeCost(sol->X[node], sol->Y[node], sol->X[anchor+1], sol->Y[anchor+1], ewt, roundW) -
+                                     computeEdgeCost(sol->X[anchor], sol->Y[anchor], sol->X[anchor+1], sol->Y[anchor+1], ewt, roundW);
+                updateSolutionEM(sol, posCovered, node, anchor, extraMileage);
+                break;
+            }
+            }
+        }
+        else
+            updateSolutionEM(sol, posCovered, bestNode, bestAnchor, bestMileage);
     }
 }
