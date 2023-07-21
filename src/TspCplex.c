@@ -181,7 +181,7 @@ void cvtSolutionToSuccessors(Solution *sol, int* successors)
 	for (size_t i = 0; i < n; i++)
 		successors[sol->indexPath[i]] = sol->indexPath[i+1];
 
-	if ((sol->instance->params.logLevel >= LOG_LVL_EVERYTHING) && (checkSuccessorSolution(sol->instance, successors) != 0))
+	if ((sol->instance->params.logLevel >= LOG_LVL_EVERYTHING) && (!checkSuccessorSolution(sol->instance, successors) != 0))
 		throwError(sol->instance, sol, "cvtSolutionToSuccessors: Converted solution is wrong");	
 }
 
@@ -235,7 +235,7 @@ int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr c
 
 double computeSuccessorsSolCost(int *successors, Instance *inst)
 {
-	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (checkSuccessorSolution(inst, successors) != 0))
+	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (!checkSuccessorSolution(inst, successors) != 0))
 		return -1.0;
 
 	int n = (int)inst->nNodes;
@@ -260,7 +260,7 @@ double computeSuccessorsSolCost(int *successors, Instance *inst)
 	return cost;
 }
 
-int checkSuccessorSolution(Instance *inst, int *successors)
+bool checkSuccessorSolution(Instance *inst, int *successors)
 {
 	size_t n = inst->nNodes;
 
@@ -273,13 +273,13 @@ int checkSuccessorSolution(Instance *inst, int *successors)
 	do
 	{
 		if (indexChecked[i] == 1)
-			return 1;
+			return false;
 		indexChecked[i]++;
 		i = successors[i];
 		count++;
 	} while (count <= n);
 	
-	return 0;
+	return true;
 }
 
 int WarmStart(CplexData *cpx, int *successors)
@@ -287,7 +287,7 @@ int WarmStart(CplexData *cpx, int *successors)
 	Instance *inst = cpx->inst;
 	size_t n = inst->nNodes;
 
-	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (checkSuccessorSolution(inst, successors) != 0))
+	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (!checkSuccessorSolution(inst, successors) != 0))
 	{
 		LOG(LOG_LVL_ERROR, "WarStartSuccessors: successor solution is incorrect");
 		return 1;

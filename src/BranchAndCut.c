@@ -159,7 +159,7 @@ int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG co
 
 static int PostSolution(CPXCALLBACKCONTEXTptr context, Instance *inst, int ncols, int *successors, double cost, double *vals, int *indexes)
 {
-	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (checkSuccessorSolution(inst, successors) != 0))
+	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (!checkSuccessorSolution(inst, successors) != 0))
 		return 1;
 
 	for (size_t i = 0; i < ncols; i++)

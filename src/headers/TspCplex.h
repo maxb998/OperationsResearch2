@@ -122,7 +122,7 @@ double PatchingHeuristic(SubtoursData *sub, Instance *inst);
 * @param successors Successors array
 * @result 0 if everything is correct. 1 if successors is not correct
 */
-int checkSuccessorSolution(Instance *inst, int *successors);
+bool checkSuccessorSolution(Instance *inst, int *successors);
 
 /*!
 * @brief Add feasible solution in successors form to cplex warm start set

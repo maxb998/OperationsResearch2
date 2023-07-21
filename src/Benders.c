@@ -78,7 +78,7 @@ Solution benders(Instance *inst, double tlim)
 		// generate a solution using Repair Heuristic and check if it is better than the previous solutions
 		double cost = PatchingHeuristic(&sub, inst);
 
-		if (checkSuccessorSolution(inst, sub.successors))
+		if (!checkSuccessorSolution(inst, sub.successors))
 		{
 			free(xstar); free(sub.subtoursMap); free(sub.successors); free(bestSuccessorsSol); free(indexes);
 			destroyCplexData(&cpx);
