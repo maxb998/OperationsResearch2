@@ -115,7 +115,7 @@ int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG co
 	cvtCPXtoSuccessors(xstar, cbData->ncols, nNodes, &sub);
 
 	pthread_mutex_lock(&cbData->mutex);
-	LOG(LOG_LVL_LOG, "Iteration %d subtours detected %d", cbData->iterNum, sub.subtoursCount);
+	if (inst->params.mode == MODE_BRANCH_CUT) LOG(LOG_LVL_LOG, "Iteration %d subtours detected %d", cbData->iterNum, sub.subtoursCount);
 	cbData->iterNum++;
 	pthread_mutex_unlock(&cbData->mutex);
 
@@ -150,7 +150,6 @@ int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG co
 			LOG(LOG_LVL_ERROR,"BranchAndCut callback: postSolution failed with code %d", errCode);
 			return 1;
 		}
-
 	}
 
 	free(xstar); free(sub.successors); free(sub.subtoursMap); free(indexes);

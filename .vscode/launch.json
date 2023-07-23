@@ -12,12 +12,12 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
-                "--file", "data/att48.tsp",
-                "--mode", "em",
+                "--file", "data/a280.tsp",
+                "--mode", "hardfix",
 
                 "--grasp", "random(0.05)",
                 "--2opt",
-                "--tlim", "10",
+                "--tlim", "100",
 
                 //"--nn-opt", "tryall",
                 "--em-opt", "random",
@@ -27,7 +27,7 @@
                 //"--warm-start-mode", "tabu",
 
                 //"--seed", "2023",
-                "--threads", "1",
+                "--threads", "8",
                 "--roundcosts",
                 "--plot", 
                 //"--save",
@@ -42,12 +42,12 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/x64/main",
             "args": [
-                "--file", "data/att48.tsp",
-                "--mode", "em",
+                "--file", "data/rl5915.tsp",
+                "--mode", "hardfix",
 
                 //"--grasp", "almostbest(0.1)",
-                //"--2opt",
-                "--tlim", "20",
+                "--2opt",
+                "--tlim", "120",
 
                 //"--nn-opt", "tryall",
                 "--em-opt", "random",
@@ -56,12 +56,12 @@
                 //"--matheur-init-mode", "vns",
                 //"--warm-start-mode", "tabu",
 
-                //"--seed", "2023",
+                "--seed", "102563",
                 "--threads", "8",
                 "--roundcosts",
                 "--plot", 
                 //"--save",
-                "--loglvl", "log"
+                "--loglvl", "debug"
             ],
             "cwd": "${workspaceFolder}"
         }
