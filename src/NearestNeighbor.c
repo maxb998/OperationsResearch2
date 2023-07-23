@@ -42,12 +42,17 @@ static void updateBestSolutionNN(Solution *bestSol, Solution *newBest);
 static void *nnThread(void *arg);
 
 
-Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, double timeLimit, bool useThreads)
+Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, double timeLimit, int nThreads)
 {
-    Solution sol = newSolution(inst);
-
     struct timespec start, finish;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &start);
+
+    if ((nThreads < 0) || (nThreads > MAX_THREADS))
+        throwError(inst, NULL, "NearestNeighbor: nThreads value is not valid: %d", nThreads);
+    else if (nThreads == 0)
+        nThreads = inst->params.nThreads;
+
+    Solution sol = newSolution(inst);
 
     NNThreadsSharedData th = {
         .sol = &sol,
@@ -57,41 +62,31 @@ Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, do
         .nThreads = inst->params.nThreads
     };
 
-    if (!useThreads)
-        th.nThreads = 1;
-
     unsigned long iterCount = 0;
 
-    if (th.nThreads > 1)
+    pthread_mutex_init(&th.getStartNodeMutex, NULL);
+    pthread_mutex_init(&th.saveSolutionMutex, NULL);
+
+    NNThreadsDataRnd data[MAX_THREADS];
+    pthread_t threads[MAX_THREADS];
+    for (int i = 0; i < th.nThreads; i++)
     {
-        pthread_mutex_init(&th.getStartNodeMutex, NULL);
-        pthread_mutex_init(&th.saveSolutionMutex, NULL);
-
-        NNThreadsDataRnd data[MAX_THREADS];
-        pthread_t threads[MAX_THREADS];
-        for (int i = 0; i < th.nThreads; i++)
-        {
-            data[i].thShared = &th; data[i].rndState = rand(); data[i].iterCount = 0;
-            pthread_create(&threads[i], NULL, nnThread, (void *)&data);
-            LOG(LOG_LVL_DEBUG, "Nearest Neighbour : Thread %d CREATED", i);
-        }
-
-        for (int i = 0; i < inst->params.nThreads; i++)
-        {
-            pthread_join(threads[i], NULL);
-            LOG(LOG_LVL_DEBUG, "Nearest Neighbour : Thread %d finished", i);
-            iterCount += data[i].iterCount;
-        }
-
-        pthread_mutex_destroy(&th.getStartNodeMutex);
-        pthread_mutex_destroy(&th.saveSolutionMutex);
+        data[i].thShared = &th;
+        data[i].rndState = rand();
+        data[i].iterCount = 0;
+        pthread_create(&threads[i], NULL, nnThread, (void *)&data);
+        LOG(LOG_LVL_DEBUG, "Nearest Neighbour : Thread %d CREATED", i);
     }
-    else
+
+    for (int i = 0; i < inst->params.nThreads; i++)
     {
-        NNThreadsDataRnd data = { .thShared = &th, .rndState = rand(), .iterCount = 0 };
-        nnThread(&data);
-        iterCount += data.iterCount;
+        pthread_join(threads[i], NULL);
+        LOG(LOG_LVL_DEBUG, "Nearest Neighbour : Thread %d finished", i);
+        iterCount += data[i].iterCount;
     }
+
+    pthread_mutex_destroy(&th.getStartNodeMutex);
+    pthread_mutex_destroy(&th.saveSolutionMutex);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &finish);
     sol.execTime = ((finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0);
@@ -237,7 +232,11 @@ static void updateBestSolutionNN(Solution *bestSol, Solution *newBest)
 {
     // check solution when debugging
     if (bestSol->instance->params.logLevel >= LOG_LVL_EVERYTHING)
-        checkSolution(newBest);
+        if (!checkSolution(newBest))
+        {
+            destroySolution(bestSol);
+		    throwError(newBest->instance, newBest, "updateBestSolutionNN: newBest Solution is not valid");
+        }
 
     LOG(LOG_LVL_LOG, "Found better solution: New cost: %f   Old cost: %f", newBest->cost, bestSol->cost);
 

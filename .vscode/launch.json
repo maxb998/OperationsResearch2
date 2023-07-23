@@ -42,26 +42,26 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/x64/main",
             "args": [
-                "--file", "data/rl5915.tsp",
-                "--mode", "hardfix",
+                "--file", "data/a280.tsp",
+                "--mode", "benders",
 
                 //"--grasp", "almostbest(0.1)",
                 "--2opt",
                 "--tlim", "120",
 
                 //"--nn-opt", "tryall",
-                "--em-opt", "random",
+                //"--em-opt", "random",
 
                 //"--metaheur-init-mode", "em",
                 //"--matheur-init-mode", "vns",
                 //"--warm-start-mode", "tabu",
 
-                "--seed", "102563",
+                //"--seed", "102563",
                 "--threads", "8",
                 "--roundcosts",
                 "--plot", 
                 //"--save",
-                "--loglvl", "debug"
+                "--loglvl", "log"
             ],
             "cwd": "${workspaceFolder}"
         }

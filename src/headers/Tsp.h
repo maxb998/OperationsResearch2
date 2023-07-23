@@ -113,9 +113,9 @@ void throwError (Instance *inst, Solution *sol, char * line, ...);
 /*!
 * @brief Checks if a solution is feasible both in the sequences of sol.{x,y,indexPath} and in the value of the cost.
 * @param sol Solution to check.
-* @throw calls throwError(sol, sol.instance, ...) in case of failure
+* @returns true if solution is correct, false otherwise
 */
-void checkSolution(Solution *sol);
+bool checkSolution(Solution *sol);
 
 /*!
 * @brief Compute/Recompite the cost of the solution given.
@@ -162,7 +162,7 @@ void printCostMatrix(Instance *inst);
 * @param useThread Set to 1 to use multithreading. Set to 0 for single thread.
 * @result Solution obtained using Nearest Neighbor.
 */
-Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, double tlim, bool useThreads);
+Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, double timeLimit, int nThreads);
 
 
 //###################################################################################################################################
@@ -175,11 +175,9 @@ Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, do
 * @param emOpt Defines the way in which the first point has to be chosen.
 * @param emInitType Defines the way in which the Solution is initialized.
 * @param tlim Time limit.
-* @param useThreads If true uses inst.params.nThreads. If false runs on single thread and uses rndState parameter
-* @param rndState Seed state for pseudo-random generator. Specify value when calling this function from multiple threads(useThreads=true)
 * @result Solution obtained using Extra Mileage.
 */
-Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emInitType, double tlim, bool useThreads, unsigned int *rndState);
+Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emInitType, double timeLimit, int nThreads);
 
 /*!
 * @brief Applies Extra Mileage heuristic on a solution that is already not empty.
@@ -210,11 +208,10 @@ double apply2OptBestFix(Solution *sol, enum _2OptOptions option);
 
 /*!
 * @brief  Run Variable Neighborhood Search on inst and return the best solution found.
-* @param inst Instance to solve.
-* @param config Type of Solver to use for the first solution. Choose between Nearest Neighbor and Extra Mileage.
-* @result Best solution found with VNS.
+* @param sol Starting point solution for the VNS algorithm.
+* @param timeLimit Time limit.
 */
-Solution VariableNeighborhood(Instance *inst, enum Mode config);
+void VariableNeighborhood(Solution *sol, double timeLimit, int nThreads);
 
 
 #endif //TSP_FUNCTIONS_H

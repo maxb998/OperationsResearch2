@@ -24,7 +24,6 @@
 #define SUBOPT_NN_TRYALL "tryall"
 
 #define SUBOPT_EM_RANDOM "random"
-#define SUBOPT_EM_EXTREMES "extremes"
 #define SUBOPT_EM_FARTHEST "farthest"
 //#define SUBOPT_EM_HULL "hull"
 
@@ -96,11 +95,10 @@ static const int nnOptionsCount = sizeof(nnOptionsStrings)/sizeof(*nnOptionsStri
 #define EM_OPTIONS_DOC "\
 Specify the way Extra Mileage heuristic is initialized every time it's called (DEFAULT=random)\n" \
 SUBOPT_BLANKSPACE SUBOPT_EM_RANDOM "     : Use two random nodes\n" \
-SUBOPT_BLANKSPACE SUBOPT_EM_EXTREMES "   : Use a node with maximum x coordinate and one with minimum x coordinate\n" \
 SUBOPT_BLANKSPACE SUBOPT_EM_FARTHEST "   : Use farthest nodes\n"
 //hull                : Compute the hull of the set using quickhull algorthim and use it as initialization.
 
-static const char *emOptionsStrings[] = { SUBOPT_EM_RANDOM, SUBOPT_EM_EXTREMES, SUBOPT_EM_FARTHEST }; // hull
+static const char *emOptionsStrings[] = { SUBOPT_EM_RANDOM, SUBOPT_EM_FARTHEST }; // hull
 static const int emOptionsCount = sizeof(emOptionsStrings)/sizeof(*emOptionsStrings);
 
 #define METAHEURISTICS_INIT_MODE_DOC "\

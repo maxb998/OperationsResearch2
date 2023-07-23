@@ -7,8 +7,6 @@
 #define USE_FAST_SOLUTION_UPDATE 1
 #define LOG_INTERVAL 5
 
-static inline void checkInput(Solution *sol, enum _2OptOptions *option);
-
 static inline void updateSolutionNN(Solution *sol, size_t bestOffsetEdges[2], float bestOffset);
 
 // Loads inverts and stores two vectors of floats according to update solution procedure. Speeds Up update procedure
@@ -34,7 +32,31 @@ double apply2OptBestFix(Solution *sol, enum _2OptOptions option)
     struct timespec start, finish;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &start);
 
-    checkInput(sol, &option);
+    Instance *inst = sol->instance;
+
+    // check if option is valid
+    if (option < 0 || option > sizeof(enum _2OptOptions))
+    {
+        LOG(LOG_LVL_WARNING, "Option given to 2Opt (%d) is not valid. Using _2OPT_AVX_ST as default", option);
+        option = _2OPT_AVX_ST;
+    }
+
+    // check integrity if debugging
+    if (inst->params.logLevel >= LOG_LVL_DEBUG)
+    {
+        // always check solution
+        if (!checkSolution(sol))
+            throwError(inst, sol, "apply2OptBestFix: Input solution is not valid");
+
+        if (option == _2OPT_PRECOMPUTED_COSTS)
+        {
+            if (inst->edgeCostMat == NULL)
+            {
+                LOG(LOG_LVL_WARNING, "2Opt: Required cost matrix, as specified in option parameter, is not available/not been computed.\n Switching to _2OPT_AVX");
+                option = _2OPT_AVX_ST;
+            }
+        }
+    }
 
     unsigned long iterNum = 0;
 
@@ -64,36 +86,6 @@ double apply2OptBestFix(Solution *sol, enum _2OptOptions option)
     LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)iterNum/elapsed);
 
     return elapsed;
-}
-
-static inline void checkInput(Solution *sol, enum _2OptOptions *option)
-{
-    Instance *inst = sol->instance;
-
-    // check if option is valid
-    if (*option < 0 || *option > sizeof(enum _2OptOptions))
-    {
-        LOG(LOG_LVL_WARNING, "Option given to 2Opt (%d) is not valid. Using _2OPT_AVX_ST as default", *option);
-        *option = _2OPT_AVX_ST;
-    }
-
-    // check integrity if debugging
-    if (inst->params.logLevel >= LOG_LVL_DEBUG)
-    {
-        // always check solution
-        checkSolution(sol);
-
-        if (*option == _2OPT_PRECOMPUTED_COSTS)
-        {
-            if (inst->edgeCostMat == NULL)
-            {
-                LOG(LOG_LVL_WARNING, "2Opt: Required cost matrix, as specified in option parameter, is not available/not been computed.\n Switching to _2OPT_AVX");
-                *option = _2OPT_AVX_ST;
-            }
-        }
-    }
-
-    LOG(LOG_LVL_DEBUG, "2Opt: Input check completed: All ok");
 }
 
 static inline void updateSolutionNN(Solution *sol, size_t bestOffsetEdges[2], float bestOffset)

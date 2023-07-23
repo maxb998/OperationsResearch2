@@ -4,15 +4,17 @@
 #include <stdio.h>
 #include <time.h>
 
+#define SEPARATOR_STR "##############################################################################################################################\n"
 
-static Solution runNearestNeighbor(Instance *inst);
-static Solution runExtraMileage(Instance *inst);
-static Solution runVariableNeighborhoodSearch(Instance *inst);
+#define METAHEUR_INIT_RATIO 1/10
+#define MATHEUR_INIT_RATIO 1/10
 
-static Solution runBenders(Instance *inst);
-static Solution runBranchAndCut(Instance *inst);
-static Solution runHardFixing(Instance *inst);
+#define MATH
 
+static Solution runHeuristic(Instance *inst, enum Mode mode, double tlim);
+static void runMetaheuristic(Solution *sol, enum Mode mode, double tlim);
+static void runExactSolver(Solution *sol, enum Mode mode, double tlim);
+static void runMatheuristic (Solution *sol, enum Mode mode, double tlim);
 
 static void run2Opt(Solution *sol);
 
@@ -31,64 +33,63 @@ int main (int argc, char *argv[])
 
     double fileReadTime = readFile(&inst);
     LOG (LOG_LVL_NOTICE, "file %s has been loaded succesfully in %lf milliseconds", inst.params.inputFile, fileReadTime * 1000.);
+    printf("\n");
     
-    //double computeMatrixTime = computeCostMatrix(&inst);
-    //LOG(LOG_LVL_NOTICE, "Distance Matrix done in %lf seconds", computeMatrixTime);
-    
+    /*
+    double computeMatrixTime = computeCostMatrix(&inst);
+    LOG(LOG_LVL_NOTICE, "Distance Matrix done in %lf seconds", computeMatrixTime);
+    */
+
     // initializing pointers to null to avoid possible errors on destruction of sol at the end of main
     Solution sol = { .indexPath = NULL, .X = NULL, .Y = NULL };
 
-    switch (inst.params.mode)
+    double tlim = inst.params.tlim;
+    enum Mode m = inst.params.mode;
+
+    if ((m == MODE_NN) || (m == MODE_EM))
     {
-    case MODE_NONE:
-        // should never enter here
-        throwError(&inst, NULL, "mode is not set even after checking in argParse");
-        break;
+        sol = runHeuristic(&inst, m, tlim);
+    }
+    else if ((m >= MODE_TABU) && (m <= MODE_GENETIC))
+    {
+        sol = runHeuristic(&inst, inst.params.metaheurInitMode, tlim * METAHEUR_INIT_RATIO );
+        run2Opt(&sol);
+        runMetaheuristic(&sol, m, tlim * (1 - METAHEUR_INIT_RATIO));
+    }
+    else
+    {
+        enum Mode init;
+        if (m <= MODE_BRANCH_CUT)
+            init = inst.params.warmStartMode;
+        else
+            init = inst.params.matheurInitMode;
 
-    case MODE_NN:
-        sol = runNearestNeighbor(&inst);
-        if (inst.params.use2Opt)
+        double remainingTime = tlim;
+        if (init <= MODE_EM)
+        {
+            sol = runHeuristic(&inst, init, tlim * MATHEUR_INIT_RATIO);
             run2Opt(&sol);
-        break;
-
-    case MODE_EM:
-        sol = runExtraMileage(&inst);
-        if (inst.params.use2Opt)
+        }
+        else 
+        {
+            sol = runHeuristic(&inst, inst.params.metaheurInitMode, tlim * METAHEUR_INIT_RATIO);
+            runMetaheuristic(&sol, m, tlim * (1 - METAHEUR_INIT_RATIO));
             run2Opt(&sol);
-        break;
-    
-    case MODE_TABU:
-        break;
+            remainingTime -= tlim * METAHEUR_INIT_RATIO;
+        }
+        remainingTime -= tlim * MATHEUR_INIT_RATIO;
 
-    case MODE_VNS:
-        sol = runVariableNeighborhoodSearch(&inst);
-        break;
-
-    case MODE_ANNEALING:
-        break;
-    
-    case MODE_GENETIC:
-        break;
-
-    case MODE_BENDERS:
-        sol = runBenders(&inst);
-        break;
-
-    case MODE_BRANCH_CUT:
-        sol = runBranchAndCut(&inst);
-        break;
-
-    case MODE_HARDFIX:
-        sol = runHardFixing(&inst);
-        break;
-    
-    case MODE_LOCAL_BRANCHING:
-        break;
+        if (m <= MODE_BRANCH_CUT)
+            runExactSolver(&sol, m, remainingTime);
+        else
+            runMatheuristic(&sol, m, remainingTime);
     }
 
+    if (inst.params.use2Opt)
+        run2Opt(&sol);
 
     if (inst.params.showPlot)
-        plotSolution(&sol, "800,600", "green", "black", 1, 0);
+        plotSolution(&sol, "1920,1080", "green", "black", 1, false);
     
     if (inst.params.saveSolution)
         saveSolution(&sol, argc, argv);
@@ -101,102 +102,150 @@ int main (int argc, char *argv[])
     return EXIT_SUCCESS;
 }
 
-
-static Solution runNearestNeighbor(Instance *inst)
+static Solution runHeuristic(Instance *inst, enum Mode mode, double tlim)
 {
-    printf("\nNearest Neighbor starting...\n");
+    Solution sol = {0};
 
-    Solution nn = NearestNeighbor(inst, inst->params.nnFirstNodeOption, inst->params.tlim, 1);
+    printf(SEPARATOR_STR);
 
-    printf("Nearest Neighbot finished in %lf second\n", nn.execTime);
-    printf("Cost = %lf\n", nn.cost);
+    switch (mode)
+    {
+    case MODE_NN:
+        printf("Nearest Neighbor Starting...\n");
 
-    return nn;
-}
+        sol = NearestNeighbor(inst, inst->params.nnFirstNodeOption, tlim, 0);
 
-static Solution runExtraMileage(Instance *inst)
-{
-    printf("\nExtra Mileage starting...\n");
+        printf("Nearest Neighbor finished in %lf second\n", sol.execTime);
+        printf("Solution Cost = %lf\n", sol.cost);
+        break;
 
-    Solution em = ExtraMileage(inst, 0, inst->params.emInitOption, inst->params.tlim, true, 0);
+    case MODE_EM:
+        printf("Extra Mileage starting...\n");
 
-    printf("Extra Mileage finished in %lf seconds\n", em.execTime);
-    printf("Cost = %lf\n", em.cost);
+        sol = ExtraMileage(inst, 0, inst->params.emInitOption, tlim, 0);
 
-    return em;
-}
+        printf("Extra Mileage finished in %lf seconds\n", sol.execTime);
+        printf("Solution Cost = %lf\n", sol.cost);
+        break;
 
-static Solution runVariableNeighborhoodSearch(Instance *inst)
-{
-    Solution sol = VariableNeighborhood(inst, inst->params.metaheurInitMode);
-    return sol;
-}
+    default: throwError(inst, NULL, "runHeuristic: specified mode must be in [MODE_NN, MODE_EM]"); break;
+    }
 
-static Solution runBenders(Instance *inst)
-{
-    printf("##############################################################################################################################\n");
-    printf("Benders starting...\n");
-    printf("##############################################################################################################################\n");
-
-    Solution sol = benders(inst, inst->params.tlim);
-
-    printf("##############################################################################################################################\n");
-    printf("Benders finished in %lf seconds\n", sol.execTime);
-    printf("Cost = %lf\n", sol.cost);
-    printf("##############################################################################################################################\n");
+    printf(SEPARATOR_STR);
+    printf("\n");
 
     return sol;
 }
 
-static Solution runBranchAndCut(Instance *inst)
+static void runMetaheuristic(Solution *sol, enum Mode mode, double tlim)
 {
-    printf("Running TEMPORARELY extra mileage to get a warm start solution\n");
-    Solution warmStart = ExtraMileage(inst, 0, EM_INIT_EXTREMES, inst->params.tlim/50, true, 0);
-    apply2OptBestFix(&warmStart, 0);
+    printf(SEPARATOR_STR);
 
-    printf("##############################################################################################################################\n");
-    printf("Branch & Cut starting...\n");
-    printf("##############################################################################################################################\n");
+    switch (mode)
+    {
+    case MODE_TABU:
+        printf("Tabu Search Starting...\n");
 
-    Solution sol = BranchAndCut(inst, inst->params.tlim, &warmStart);
+        printf("Tabu Search finished in %lf second\n", sol->execTime);
+        printf("Solution Cost = %lf\n", sol->cost);
+        break;
+    case MODE_VNS:
+        printf("Variable Neighborhood Search Starting...\n");
 
-    destroySolution(&warmStart);
+        VariableNeighborhood(sol, tlim, 0);
 
-    printf("##############################################################################################################################\n");
-    printf("Branch & Cut finished in %lf seconds\n", sol.execTime);
-    printf("Cost = %lf\n", sol.cost);
-    printf("##############################################################################################################################\n");
+        printf("Variable Neighborhood Search finished in %lf second\n", sol->execTime);
+        printf("Solution Cost = %lf\n", sol->cost);
+        break;
+    case MODE_ANNEALING:
+        printf("Simulated Annealing Starting...\n");
 
-    return sol;
+        printf("Simulated Annealing finished in %lf second\n", sol->execTime);
+        printf("Solution Cost = %lf\n", sol->cost);
+        break;
+    case MODE_GENETIC:
+        printf("Genetic Search Starting...\n");
+
+        printf("Genetic Search finished in %lf second\n", sol->execTime);
+        printf("Solution Cost = %lf\n", sol->cost);
+        break;
+
+    default: throwError(sol->instance, sol, "runMetaheuristic: specified mode must be in [MODE_TABU, MODE_VNS, MODE_ANNEALING, MODE_GENETIC]"); break;
+    }
+
+    printf(SEPARATOR_STR);
+    printf("\n");
 }
 
-static Solution runHardFixing(Instance *inst)
+static void runExactSolver(Solution *sol, enum Mode mode, double tlim)
 {
-    printf("Running TEMPORARELY extra mileage to get a warm start solution\n");
-    Solution sol = ExtraMileage(inst, 0, EM_INIT_EXTREMES, inst->params.tlim/50, true, 0);
-    apply2OptBestFix(&sol, 0);
+    printf(SEPARATOR_STR);
 
-    printf("##############################################################################################################################\n");
-    printf("Hard Fixing Starting...\n");
-    printf("##############################################################################################################################\n");
+    switch (mode)
+    {
+    case MODE_BENDERS:
+        printf("Benders Starting...\n");
 
-    HardFixing(&sol, 0.5, HARDFIX_POLICY_RANDOM, inst->params.tlim);
+        benders(sol, tlim);
 
-    printf("##############################################################################################################################\n");
-    printf("Hard Fixing finished in %lf seconds\n", sol.execTime);
-    printf("Cost = %lf\n", sol.cost);
-    printf("##############################################################################################################################\n");
+        printf("Benders finished in %lf second\n", sol->execTime);
+        printf("Solution Cost = %lf\n", sol->cost);
+        break;
+    case MODE_BRANCH_CUT:
+        printf("Branch & Cut Starting...\n");
 
-    return sol;
+        BranchAndCut(sol, tlim);
+
+        printf("Branch & Cut finished in %lf second\n", sol->execTime);
+        printf("Solution Cost = %lf\n", sol->cost);
+        break;
+
+    default: throwError(sol->instance, sol, "runMetaheuristic: specified mode must be in [MODE_BENDERS, MODE_BRANCH_CUT]"); break;
+    }
+
+    printf(SEPARATOR_STR);
+    printf("\n");
+}
+
+static void runMatheuristic (Solution *sol, enum Mode mode, double tlim)
+{
+    printf(SEPARATOR_STR);
+
+    switch (mode)
+    {
+    case MODE_HARDFIX:
+        printf("Hard Fixing Starting...\n");
+
+        HardFixing(sol, 0.5, sol->instance->params.hardFixPolicy, tlim);
+
+        printf("Hard Fixing finished in %lf second\n", sol->execTime);
+        printf("Solution Cost = %lf\n", sol->cost);
+        break;
+    case MODE_LOCAL_BRANCHING:
+        printf("Local Branching Starting...\n");
+
+        printf("Local Branching finished in %lf second\n", sol->execTime);
+        printf("Solution Cost = %lf\n", sol->cost);
+        break;
+
+    default: throwError(sol->instance, sol, "runMetaheuristic: specified mode must be in [MODE_HARDFIX, MODE_LOCAL_BRANCHING]"); break;
+    }
+
+    printf(SEPARATOR_STR);
+    printf("\n");
 }
 
 static void run2Opt(Solution *sol)
 {
-    printf("\n2Opt starting...\n");
+    printf(SEPARATOR_STR);
+    printf("2Opt starting...\n");
 
     double optTime = apply2OptBestFix(sol, _2OPT_AVX_ST);
     sol->execTime += optTime;
 
     printf("2Opt finished in %lf seconds\n", optTime);
-    printf("Cost = %lf\n", sol->cost);
+    printf("Solution Cost = %lf\n", sol->cost);
+    printf(SEPARATOR_STR);
+    printf("\n");
 }
+

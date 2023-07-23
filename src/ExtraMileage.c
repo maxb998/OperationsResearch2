@@ -18,7 +18,6 @@ typedef struct
     pthread_mutex_t mutex;
 
     double tlim;
-    bool useThreads;
 } EMThreadsSharedData;
 
 typedef struct
@@ -35,8 +34,6 @@ static void updateBestSolutionEM(Solution *bestSol, Solution *newBest);
 
 static size_t initialization(Solution *sol, enum EMInitType emType, unsigned int *rndState);
 
-static void extremeCoordsPointsInit(Solution *sol);
-
 static void farthestPointsInit(Solution *sol);
 
 static bool checkSolutionIntegrity(Solution *sol);
@@ -50,56 +47,44 @@ static void extraMileageVectorized(Solution *sol, size_t nCovered, unsigned int 
 static void extraMileageBase(Solution *sol, size_t nCovered, unsigned int *rndState, bool useCostMatrix);
 
 
-Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emInitType, double tlim, bool useThreads, unsigned int *rndState)
+Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emInitType, double tlim, int nThreads)
 {
     struct timespec start, finish;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &start);
 
-    unsigned int autoRndState;
-    if (useThreads && (inst->params.nThreads == 1))
-    {
-        useThreads = false;
-        autoRndState = (unsigned int)rand();
-        rndState = &autoRndState;
-    }
+    if ((nThreads < 0) || (nThreads > MAX_THREADS))
+        throwError(inst, NULL, "ExtraMileage: nThreads value is not valid: %d", nThreads);
+    else if (nThreads == 0)
+        nThreads = inst->params.nThreads;
 
     // apply extra mileage
     Solution bestSol = newSolution(inst);
-    EMThreadsSharedData shared = { .bestSol=&bestSol, .emInitType=emInitType, .emOpt=emOpt, .tlim=tlim, .useThreads=useThreads };
+    EMThreadsSharedData shared = { .bestSol=&bestSol, .emInitType=emInitType, .emOpt=emOpt, .tlim=tlim };
     unsigned long iterCount = 0;
 
-    if (useThreads)
+    pthread_mutex_init(&shared.mutex, NULL);
+    EMThreadsData th[MAX_THREADS];
+    unsigned int states[MAX_THREADS];
+    for (size_t i = 0; i < nThreads; i++)
     {
-        pthread_mutex_init(&shared.mutex, NULL);
-        EMThreadsData th[MAX_THREADS];
-        unsigned int states[MAX_THREADS];
-        for (size_t i = 0; i < inst->params.nThreads; i++)
-        {
-            th[i].shared = &shared;
-            states[i] = (unsigned int)rand();
-            th[i].rndState = &states[i];
-            th[i].iterCount = 0;
-        }
-
-        // start threads
-        pthread_t threads[MAX_THREADS];
-        for (size_t i = 0; i < inst->params.nThreads; i++)
-            pthread_create(&threads[i], NULL, runExtraMileage, &th[i]);
-
-        for (size_t i = 0; i < inst->params.nThreads; i++)
-        {
-            pthread_join(threads[i], NULL);
-            iterCount += th[i].iterCount;
-        }
-
-        pthread_mutex_destroy(&shared.mutex);
+        th[i].shared = &shared;
+        states[i] = (unsigned int)rand();
+        th[i].rndState = &states[i];
+        th[i].iterCount = 0;
     }
-    else
+
+    // start threads
+    pthread_t threads[MAX_THREADS];
+    for (size_t i = 0; i < nThreads; i++)
+        pthread_create(&threads[i], NULL, runExtraMileage, &th[i]);
+
+    for (size_t i = 0; i < nThreads; i++)
     {
-        EMThreadsData th = { .shared=&shared, .iterCount=0, .rndState=rndState };
-        runExtraMileage(&th);
-        iterCount = th.iterCount;
+        pthread_join(threads[i], NULL);
+        iterCount += th[i].iterCount;
     }
+
+    pthread_mutex_destroy(&shared.mutex);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &finish);
     bestSol.execTime = ((finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0);
@@ -144,15 +129,10 @@ static void *runExtraMileage(void * arg)
 
         if (sol.cost < bestSol->cost)
         {
-            if (shared->useThreads)
-            {
-                pthread_mutex_lock(&shared->mutex);
-                if (sol.cost < bestSol->cost)
-                    updateBestSolutionEM(bestSol, &sol);
-                pthread_mutex_unlock(&shared->mutex);
-            }
-            else
+            pthread_mutex_lock(&shared->mutex);
+            if (sol.cost < bestSol->cost)
                 updateBestSolutionEM(bestSol, &sol);
+            pthread_mutex_unlock(&shared->mutex);
         }
 
         th->iterCount++;
@@ -161,18 +141,19 @@ static void *runExtraMileage(void * arg)
         t = currT.tv_sec + currT.tv_nsec / 1000000000.0;
     }
 
-    if (shared->useThreads)
-        pthread_exit(NULL);
-    
-    return NULL;
+    pthread_exit(NULL);
 }
 
 static void updateBestSolutionEM(Solution *bestSol, Solution *newBest)
 {
     // check solution when debugging
     if (bestSol->instance->params.logLevel >= LOG_LVL_EVERYTHING)
-        checkSolution(newBest);
-
+        if (!checkSolution(newBest))
+        {
+            destroySolution(bestSol);
+		    throwError(newBest->instance, newBest, "updateBestSolutionEM: newBest Solution is not valid");
+        }
+    
     LOG(LOG_LVL_LOG, "Found better solution: New cost: %f   Old cost: %f", newBest->cost, bestSol->cost);
 
     bestSol->cost = newBest->cost;
@@ -261,14 +242,7 @@ static size_t initialization(Solution *sol, enum EMInitType emInitType, unsigned
         coveredElems = 2;
         }
         break;
-    case EM_INIT_EXTREMES:
-        extremeCoordsPointsInit(sol);
 
-        // update cost
-        sol->cost = computeEdgeCost(sol->X[0], sol->Y[0], sol->X[1], sol->Y[1], inst->params.edgeWeightType , inst->params.roundWeights) * 2.;
-
-        coveredElems = 2;
-        break;
     case EM_INIT_FARTHEST_POINTS:
         farthestPointsInit(sol);
 
@@ -291,85 +265,6 @@ static size_t initialization(Solution *sol, enum EMInitType emInitType, unsigned
     sol->indexPath[2] = sol->indexPath[0];
 
     return coveredElems;
-}
-
-static void extremeCoordsPointsInit(Solution *sol)
-{
-    Instance *inst = sol->instance;
-    size_t n = inst->nNodes;
- 
-    __m256 maxXVec = _mm256_set1_ps(-INFINITY), maxYVec = _mm256_set1_ps(-INFINITY);
-    __m256 minXVec = _mm256_set1_ps(INFINITY), minYVec = _mm256_set1_ps(INFINITY);
-
-    __m256i maxIDVec = _mm256_set1_epi32(-1);//, maxYIDVec = _mm256_set1_epi32(-1);
-    __m256i minIDVec = _mm256_set1_epi32(-1);//, minYIDVec = _mm256_set1_epi32(-1);
-
-    __m256i idsVec = _mm256_set_epi32( 7, 6, 5, 4, 3, 2, 1, 0 ), incrementVec = _mm256_set1_epi32(AVX_VEC_SIZE);
-
-    for (size_t i = 0; i < n; i += AVX_VEC_SIZE, idsVec = _mm256_add_epi32(idsVec, incrementVec)) // all but last iteration
-    {
-        if (i > n - AVX_VEC_SIZE)
-        {
-            idsVec = _mm256_sub_epi32(idsVec, _mm256_set1_epi32(AVX_VEC_SIZE - n % AVX_VEC_SIZE ));
-            i = n - AVX_VEC_SIZE; // subtract AVX_VEC_SIZE one extra time to compensate the increment of the loop
-        }
-
-        __m256 mask, maskGT, maskLT, maskEQ;
-        __m256 x = _mm256_loadu_ps(&inst->X[i]), y = _mm256_loadu_ps(&inst->Y[i]);
-
-        // find proper mask for xMax (select only if x[j] > xMax[j] or (x[j] == xMax[j] and y[j] > yMax[j]) )
-        maskEQ = _mm256_cmp_ps(maxXVec, x, _CMP_EQ_OQ);
-        maskGT = _mm256_cmp_ps(y, maxYVec, _CMP_GT_OQ);
-        mask = _mm256_and_ps(maskEQ, maskGT);
-        maskGT = _mm256_cmp_ps(x, maxXVec, _CMP_GT_OQ);
-        mask = _mm256_or_ps(mask, maskGT);
-
-        // save maxiumum value
-        maxXVec = _mm256_blendv_ps(maxXVec, x, mask);
-        maxYVec = _mm256_blendv_ps(maxYVec, y, mask);
-        maxIDVec = _mm256_blendv_epi8(maxIDVec, idsVec, _mm256_castps_si256(mask));
-
-        
-        // same as for xMax but for xMin
-        maskEQ = _mm256_cmp_ps(minXVec, x, _CMP_EQ_OQ);
-        maskLT = _mm256_cmp_ps(y, minYVec, _CMP_LT_OQ);
-        mask = _mm256_and_ps(maskEQ, maskLT);
-        maskLT = _mm256_cmp_ps(x, minXVec, _CMP_LT_OQ);
-        mask = _mm256_or_ps(mask, maskLT);
-
-        // save minimum values
-        minXVec = _mm256_blendv_ps(minXVec, x, mask);
-        minYVec = _mm256_blendv_ps(minYVec, y, mask);
-        minIDVec = _mm256_blendv_epi8(minIDVec, idsVec, _mm256_castps_si256(mask));
-    }
-
-    // xMax and xMin are inside the vectors now with the corresponing index stored in the appropriate vector
-    float xVecStore[AVX_VEC_SIZE];
-    int IDVecStore[AVX_VEC_SIZE];
-
-    // find and save point one
-    _mm256_storeu_ps(xVecStore, maxXVec);
-    _mm256_storeu_si256((__m256i*)IDVecStore, maxIDVec);
-    size_t i1 = 0;
-    for (size_t i = 1; i < AVX_VEC_SIZE; i++)
-        if (xVecStore[i1] < xVecStore[i])
-            i1 = i;
-    i1 = (size_t)IDVecStore[i1];
-
-    // find and save point two
-    _mm256_storeu_ps(xVecStore, minXVec);
-    _mm256_storeu_si256((__m256i*)IDVecStore, minIDVec);
-    size_t i2 = 0;
-    for (size_t i = 1; i < AVX_VEC_SIZE; i++)
-        if (xVecStore[i2] > xVecStore[i])
-            i2 = i;
-    i2 = (size_t)IDVecStore[i2];
-    
-    LOG(LOG_LVL_DEBUG, "Extra Mileage EM_INIT_EXTREMES: cost found is %f between nodes %d and %d", 
-                computeEdgeCost(inst->X[i1], inst->Y[i1], inst->X[i1], inst->Y[i2], inst->params.edgeWeightType, inst->params.roundWeights), i1, i2);
-
-    swapElementsInSolution(sol, 0, i1);
-    swapElementsInSolution(sol, 1, i2);
 }
 
 static void farthestPointsInit(Solution *sol)

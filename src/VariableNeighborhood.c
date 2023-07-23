@@ -5,9 +5,6 @@
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 #include <stdio.h>
 
-/* Checks wheter the time passed since the initialization of start has passed timeLimit.
-    Returns 1 in that case, 0 otherwise.*/
-static inline int checkTime(struct timespec start, double timeLimit);
 
 // Returns 5 random different integers in [0,nNodes) making sure they differ of more than 1 unit
 static inline int * random5Edges(int nNodes, Solution * sol);
@@ -16,48 +13,38 @@ static inline void _5Kick(Solution *sol);
 
 static inline void sort5int(int * array);
 
-Solution VariableNeighborhood(Instance *inst, enum Mode config)
+void VariableNeighborhood(Solution *sol, double timeLimit, int nThreads)
 {
     // time limit management
-    struct timespec start;
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &start);
+    struct timespec timeStruct;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    double startTime = timeStruct.tv_sec + timeStruct.tv_nsec / 1000000000.0;
 
-    Solution sol = newSolution(inst);
+    if ((nThreads < 0) || (nThreads > MAX_THREADS))
+        throwError(sol->instance, sol, "VariableNeighborhood: nThreads value is not valid: %d", nThreads);
+    else if (nThreads == 0)
+        nThreads = sol->instance->params.nThreads;
 
-    if((config != MODE_NN) && (config != MODE_EM)) throwError(inst, &sol, "VariableNeighborhood: incorrect argument for config");
-    else 
+    Instance *inst = sol->instance;
+
+    if(inst->nNodes <= 9)
+        throwError(inst, sol, "VariableNeighborhood: number of nodes too low to run VNS. #Nodes: ", inst->nNodes);
+
+    if (!checkSolution(sol))
+        throwError(inst, sol, "VariableNeighborhood: Input solution is not valid");
+
+    apply2OptBestFix(sol, _2OPT_AVX_ST);
+
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    double currentTime = timeStruct.tv_sec + timeStruct.tv_nsec / 1000000000.0;
+
+    while (currentTime < startTime + timeLimit)
     {
-        if(config == MODE_NN) // Find local minimum with Nearest Neighbour
-        {
-            // Compute a solution with Nearest Neighbour and optimize it with 2-opt
-            sol = NearestNeighbor(inst, inst->params.nnFirstNodeOption, inst->params.tlim/20, 1);
-            apply2OptBestFix(&sol, _2OPT_AVX_ST);
-            while(checkTime(start, inst->params.tlim) == 0)
-            {
-                _5Kick(&sol);
-                apply2OptBestFix(&sol, _2OPT_AVX_ST);
-                if(inst->params.logLevel == LOG_LVL_DEBUG && inst->params.mode == MODE_VNS)
-                {
-                    plotSolution(&sol, "1600,900", "green", "black", 1, 0);
-                    getchar();
-                }
-            }
+        _5Kick(sol);
+        apply2OptBestFix(sol, _2OPT_AVX_ST);
 
-        }else // (config == VNS_INIT_EM)
-        {   
-            // Compute a solution with Extra Mileage and optimize it with 2-opt
-            sol = ExtraMileage(inst, EM_OPTION_AVX, EM_INIT_RANDOM, inst->params.tlim/50, false, 0);
-            apply2OptBestFix(&sol, _2OPT_AVX_ST);
-            while(checkTime(start, inst->params.tlim) == 0)
-            {
-                _5Kick(&sol);
-                apply2OptBestFix(&sol, _2OPT_AVX_ST);
-                
-            }
-            
-        }
+        clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     }
-    return sol;
 }
 
 static inline void _5Kick(Solution *sol)
@@ -118,19 +105,8 @@ static inline void _5Kick(Solution *sol)
     free(newPath);
 }
 
-static inline int checkTime(struct timespec start, double timeLimit)
-{
-    struct timespec currentTime;
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &currentTime);
-    double elapsed = ((currentTime.tv_sec - start.tv_sec) + (currentTime.tv_nsec - start.tv_nsec) / 1000000000.0); // nsed are useless if we are counting time in minutes
-    
-    if(elapsed < timeLimit) return 0;
-    else return 1;
-}
-
 static inline int * random5Edges(int nNodes, Solution * sol)
 {
-    if(nNodes <= 9) throwError(sol->instance, sol, "random5edges: number of nodes too low to run VNS. #Nodes: ", nNodes);
     int * randomEdges = malloc(5*sizeof(int));
     for(int i = 0; i < 5; i++)
     {
@@ -148,17 +124,14 @@ static inline int * random5Edges(int nNodes, Solution * sol)
 }
 
 static inline void sort5int(int * array)
-{
-    int temp;	
+{	
 	for(int j = 0; j < 4; j++)
 	{
 		int min = j;
 		for(int i = j+1; i < 5; i++)
-		{
-			if(array[i] < array[min]) min = i;
-		}
-		temp = array[j];
-		array[j] = array[min];
-		array[min] = temp;
+			if(array[i] < array[min])
+                min = i;
+		register int temp;
+        swapElems(array[j], array[min], temp);
 	}
 }

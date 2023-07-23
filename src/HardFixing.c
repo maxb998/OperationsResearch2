@@ -47,8 +47,8 @@ void HardFixing(Solution *sol, double fixingAmount, enum HardFixPolicy policy, d
         fixAmount = n - MIN_UNFIX;
 
 
-    if (inst->params.logLevel >= LOG_LVL_DEBUG)
-        checkSolution(sol);
+    if (!checkSolution(sol))
+		throwError(inst, sol, "HardFixing: Input solution is not valid");
 
     CplexData cpx = initCplexData(inst);
     int ncols = CPXgetnumcols(cpx.env, cpx.lp);

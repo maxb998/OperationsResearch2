@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-#define MAX_THREADS 256
+#define MAX_THREADS 64
 #define USE_APPROXIMATED_DISTANCES 1
 
 // size of avx vector. 4 is vector of doubles 64bits, 8 is vector of floats 32bits
@@ -66,7 +66,6 @@ enum NNFirstNodeOptions{
 
 enum EMInitType {
     EM_INIT_RANDOM,
-    EM_INIT_EXTREMES,
     EM_INIT_FARTHEST_POINTS,
     EM_INIT_HULL // won't be working for now
 };

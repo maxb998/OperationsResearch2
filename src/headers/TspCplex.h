@@ -138,11 +138,10 @@ int WarmStart(CplexData *cpx, int *successors);
 
 /*!
 * @brief Apply benders method to the tsp instance inst. Uses Repair Heurstic between calls of CPXmipopt to provide a solution if time limit does not allow to find optimal solution.
-* @param inst Instance of the tsp problem to solve
+* @param sol Pointer to a valid solution that will be used as warm start as well as output
 * @param tlim Time limit for benders
-* @result Optimal solution or solution built using repair heuristic if time limit wasn't long enough
 */
-Solution benders(Instance *inst, double tlim);
+void benders(Solution *sol, double tlim);
 
 //###################################################################################################################################
 // LAZY_CALLBACK
@@ -150,12 +149,10 @@ Solution benders(Instance *inst, double tlim);
 
 /*!
 * @brief Implement Branch and Cut method in Cplex using a generic callback to add SEC to the problem.
-* @param inst Instance of tsp to solve
+* @param sol Pointer to a valid solution that will be used as warm start as well as output
 * @param tlim Time limit for benders
-* @param warmStartSol Pointer to solution to use as warm start. If set to NULL warm start is not used
-* @result Solution of the problem obtained by branch and cut method
 */
-Solution BranchAndCut(Instance *inst, double tlim, Solution *warmStartSol);
+void BranchAndCut(Solution *sol, double tlim);
 
 // cplex callback to that solves tsp instance
 int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG contextid, void *userhandle );

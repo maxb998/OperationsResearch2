@@ -168,20 +168,29 @@ void throwError (Instance *inst, Solution *sol, char * line, ...)
     exit(EXIT_FAILURE);
 }
 
-void checkSolution(Solution *sol)
+bool checkSolution(Solution *sol)
 {
     Instance *inst = sol->instance;
 
     char * coveredNodes = calloc(sol->instance->nNodes, sizeof(char));
 
     // First and last node must be equal (the circuit is closed)
-    if (sol->indexPath[0] != sol->indexPath[sol->instance->nNodes]) 
-        throwError(sol->instance, sol, "SolutionCheck: first and last node in sol.indexPath should coincide, but they do not");
+    if (sol->indexPath[0] != sol->indexPath[sol->instance->nNodes])
+    {
+        LOG(LOG_LVL_CRITICAL, "SolutionCheck: first and last node in sol.indexPath should coincide, but they do not");
+        return false;
+    }
     // also check for sol.X and sol.Y
     if (sol->X[0] != sol->X[inst->nNodes])
-        throwError(inst, sol, "SolutionCheck: first and last node in sol.X should coincide, but they do not");
+    {
+        LOG(LOG_LVL_CRITICAL, "SolutionCheck: first and last node in sol.X should coincide, but they do not");
+        return false;
+    }
     if (sol->Y[0] != sol->Y[inst->nNodes])
-        throwError(inst, sol, "SolutionCheck: first and last node in sol.Y should coincide, but they do not");
+    {
+        LOG(LOG_LVL_CRITICAL, "SolutionCheck: first and last node in sol.Y should coincide, but they do not");
+        return false;
+    }
 
     LOG(LOG_LVL_EVERYTHING, "SolutionCheck: first and last node in sol.indexPath coincide.");
 
@@ -191,7 +200,10 @@ void checkSolution(Solution *sol)
         int currentNode = sol->indexPath[i];
 
         if(coveredNodes[currentNode] == 1)
-            throwError(inst, sol, "SolutionCheck: node %d repeated in the solution. Loop iteration %d", currentNode, i);
+        {
+            LOG(LOG_LVL_CRITICAL, "SolutionCheck: node %d repeated in the solution. Loop iteration %d", currentNode, i);
+            return false;
+        }
         else
             coveredNodes[currentNode] = 1;
     }
@@ -200,7 +212,10 @@ void checkSolution(Solution *sol)
     // Check that all the nodes are covered in the path
     for (int i = 0; i < inst->nNodes; i++)
         if(coveredNodes[i] == 0)
-            throwError(inst, sol, "SolutionCheck: node %d is not in the path", i);
+        {
+            LOG(LOG_LVL_CRITICAL, "SolutionCheck: node %d is not in the path", i);
+            return false;
+        }
     free(coveredNodes);
     LOG(LOG_LVL_EVERYTHING, "SolutionCheck: all the nodes are present in the path");
 
@@ -208,15 +223,24 @@ void checkSolution(Solution *sol)
     for (size_t i = 0; i < inst->nNodes; i++)
     {
         if (sol->X[i] != inst->X[sol->indexPath[i]])
-            throwError(inst, sol, "SolutionCheck: sol.X[sol.indexPath[%ld]] = %.3e and does not correspond with inst.X[%ld] = %.3e", i, inst->X[sol->indexPath[i]], i, sol->X[i]);
+        {
+            LOG(LOG_LVL_CRITICAL, "SolutionCheck: sol.X[sol.indexPath[%ld]] = %.3e and does not correspond with inst.X[%ld] = %.3e", i, inst->X[sol->indexPath[i]], i, sol->X[i]);
+            return false;
+        }
         if (sol->Y[i] != inst->Y[sol->indexPath[i]])
-            throwError(inst, sol, "SolutionCheck: sol.Y[sol.indexPath[%ld]] = %.3e and does not correspond with inst.Y[%ld] = %.3e", i, inst->Y[sol->indexPath[i]], i, sol->Y[i]);
+        {
+            LOG(LOG_LVL_CRITICAL, "SolutionCheck: sol.Y[sol.indexPath[%ld]] = %.3e and does not correspond with inst.Y[%ld] = %.3e", i, inst->Y[sol->indexPath[i]], i, sol->Y[i]);
+            return false;
+        }
     }
 
     double recomputedCost = computeSolutionCost(sol);//computeSolutionCostVectorized(sol);
 
     if (recomputedCost != sol->cost)
-        throwError(sol->instance, sol, "SolutionCheck: Error in the computation of the pathCost. Recomputed Cost: %lf Cost in Solution: %lf", recomputedCost, sol->cost);
+    {
+        LOG(LOG_LVL_CRITICAL, "SolutionCheck: Error in the computation of the pathCost. Recomputed Cost: %lf Cost in Solution: %lf", recomputedCost, sol->cost);
+        return false;
+    }
     
     LOG(LOG_LVL_EVERYTHING, "SolutionCheck: Cost of solution is correct");
 

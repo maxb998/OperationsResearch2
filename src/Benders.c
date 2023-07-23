@@ -7,14 +7,18 @@
 
 
 
-Solution benders(Instance *inst, double tlim)
+void benders(Solution *sol, double tlim)
 {
 	struct timespec currT;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
     double startTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
 	double currentTimeSec = startTimeSec;
 
+	Instance *inst = sol->instance;
 	size_t n = inst->nNodes;
+
+	if (!checkSolution(sol))
+		throwError(inst, sol, "benders: Input solution is not valid");
 
     CplexData cpx = initCplexData(inst);
 
@@ -27,19 +31,23 @@ Solution benders(Instance *inst, double tlim)
         .subtoursMap = malloc(n * sizeof(int))
     };
 
-	double bestCost = INFINITY;
 	int *bestSuccessorsSol = malloc(n * sizeof(int));
+	double bestCost = sol->cost;
+	cvtSolutionToSuccessors(sol, bestSuccessorsSol);
 
 	int *indexes = malloc(ncols * sizeof(int));
 
+	int iterNum = 0;
+
 	while (currentTimeSec - startTimeSec < tlim)
 	{
-		static int iterNum = 0;
+		WarmStart(&cpx, bestSuccessorsSol);
 
 		// set time limit as remainig time from starting time
 		clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
     	currentTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
 		CPXsetdblparam(cpx.env, CPX_PARAM_TILIM, currentTimeSec + tlim - startTimeSec);
+
 
 		if (CPXmipopt(cpx.env, cpx.lp))
 		{
@@ -104,17 +112,13 @@ Solution benders(Instance *inst, double tlim)
 	free(sub.successors);
 	free(sub.subtoursMap);
 
-	Solution sol = newSolution(inst);
-
-	cvtSuccessorsToSolution(bestSuccessorsSol, &sol);
+	cvtSuccessorsToSolution(bestSuccessorsSol, sol);
 
 	free(bestSuccessorsSol);
 
-	sol.cost = computeSolutionCost(&sol);
+	sol->cost = bestCost;
 	clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
     currentTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
-	sol.execTime = currentTimeSec - startTimeSec;
-
-    return sol;
+	sol->execTime += currentTimeSec - startTimeSec;
 }
 
