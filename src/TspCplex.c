@@ -269,17 +269,20 @@ bool checkSuccessorSolution(Instance *inst, int *successors)
 	for (size_t i = 1; i < n; i++)
 		indexChecked[i] = 0;
 
+	bool retVal = true;
+
 	int i = 0, count = 0;
 	do
 	{
 		if (indexChecked[i] == 1)
-			return false;
+		{ LOG(LOG_LVL_CRITICAL, "checkSuccessorSolution: Node %d appears multiple times in successors", i); retVal = false; break; }
+
 		indexChecked[i]++;
 		i = successors[i];
 		count++;
 	} while (count <= n);
 	
-	return true;
+	return retVal;
 }
 
 int WarmStart(CplexData *cpx, int *successors)
@@ -287,7 +290,7 @@ int WarmStart(CplexData *cpx, int *successors)
 	Instance *inst = cpx->inst;
 	size_t n = inst->nNodes;
 
-	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (!checkSuccessorSolution(inst, successors) != 0))
+	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (!checkSuccessorSolution(inst, successors)))
 	{
 		LOG(LOG_LVL_ERROR, "WarStartSuccessors: successor solution is incorrect");
 		return 1;
@@ -314,26 +317,26 @@ int WarmStart(CplexData *cpx, int *successors)
 	return retVal;
 }
 
-CallbackData initCallbackData(CplexData *cpx, Solution *sol)
+
+SubtoursData initSubtoursData(int n)
 {
-	CallbackData cbData = 
-	{
-		.inst = cpx->inst,
-		.ncols = CPXgetnumcols(cpx->env, cpx->lp),
-		.iterNum = 0,
-		.bestSuccessors = malloc((cpx->inst->nNodes + AVX_VEC_SIZE) * sizeof(int)), // Adding AVX_VEC_SIZE elems to alloc allows for vectorized computations(HardFix method)
-		.bestCost = INFINITY,
+	SubtoursData subData = {
+		.subtoursCount = 0,
+		.successors = malloc((n + AVX_VEC_SIZE) * sizeof(int)),
+		.subtoursMap = malloc((n + AVX_VEC_SIZE) * sizeof(int))
 	};
-	pthread_mutex_init(&cbData.mutex, NULL);
 
-	cvtSolutionToSuccessors(sol, cbData.bestSuccessors);
-	cbData.bestCost = sol->cost;
+	if ((subData.successors == NULL) || (subData.subtoursMap == NULL))
+		throwError(NULL, NULL, "initSubtoursData: Failed to allocate memory");
 
-	return cbData;
+	return subData;
 }
 
-void destroyCallbackData(CallbackData *cbData)
+
+void destroySubtoursData(SubtoursData *subData)
 {
-	free(cbData->bestSuccessors);
-	pthread_mutex_destroy(&cbData->mutex);
+	free(subData->successors);
+	free(subData->subtoursMap);
+	subData->successors = NULL;
+	subData->subtoursMap = NULL;
 }

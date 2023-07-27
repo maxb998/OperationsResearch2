@@ -133,17 +133,17 @@ bool checkSuccessorSolution(Instance *inst, int *successors);
 int WarmStart(CplexData *cpx, int *successors);
 
 /*!
-* @brief Initializes CallbackData by setting values and allocating memory
-* @param cpx Pointer to CplexData
-* @param sol Pointer to warm start solution
+* @brief Allocate memory and initialize new SubtoursData struct
+* @param n Number of elements in solution
+* @result Initialized SubtoursData
 */
-CallbackData initCallbackData(CplexData *cpx, Solution *sol);
+SubtoursData initSubtoursData(int n);
 
 /*!
-* @brief Free memory allocated inside a CallbackData type and destroy the mutex
-* @param cbData Pointer to the CallbackData target
+* @brief Free all memory allocated by SubtoursData struct
+* @param subData Pointer to SubtoursData struct target
 */
-void destroyCallbackData(CallbackData *cbData);
+void destroySubtoursData(SubtoursData *subData);
 
 //###################################################################################################################################
 // BENDERS
@@ -169,6 +169,19 @@ void BranchAndCut(Solution *sol, double tlim);
 
 // cplex callback to that solves tsp instance
 int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG contextid, void *userhandle );
+
+/*!
+* @brief Initializes CallbackData by setting values and allocating memory
+* @param cpx Pointer to CplexData
+* @param sol Pointer to warm start solution
+*/
+CallbackData initCallbackData(CplexData *cpx, Solution *sol);
+
+/*!
+* @brief Free memory allocated inside a CallbackData type and destroy the mutex
+* @param cbData Pointer to the CallbackData target
+*/
+void destroyCallbackData(CallbackData *cbData);
 
 //###################################################################################################################################
 // HARD_FIXING

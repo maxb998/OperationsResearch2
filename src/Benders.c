@@ -25,11 +25,7 @@ void benders(Solution *sol, double tlim)
 	int ncols = CPXgetnumcols(cpx.env, cpx.lp);
 	double *xstar = malloc(ncols * sizeof(double));
 
-	SubtoursData sub = {
-        .subtoursCount = 0,
-        .successors = malloc(n * sizeof(int)),
-        .subtoursMap = malloc(n * sizeof(int))
-    };
+	SubtoursData sub = initSubtoursData(n);
 
 	int *bestSuccessorsSol = malloc(n * sizeof(int));
 	double bestCost = sol->cost;
@@ -109,8 +105,7 @@ void benders(Solution *sol, double tlim)
 	free(indexes);
 	destroyCplexData(&cpx);
 
-	free(sub.successors);
-	free(sub.subtoursMap);
+	destroySubtoursData(&sub);
 
 	cvtSuccessorsToSolution(bestSuccessorsSol, sol);
 

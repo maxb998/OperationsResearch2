@@ -86,11 +86,7 @@ int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG co
 		return 1;
 	}
 
-	SubtoursData sub = {
-		.successors = malloc(nNodes * sizeof(int)),
-		.subtoursMap = malloc(nNodes * sizeof(int)),
-		.subtoursCount = 0
-	};
+	SubtoursData sub = initSubtoursData(inst->nNodes);
 	
 	// Stores the index of the coefficients that we pass to CPLEX 
 	int *indexes = malloc(cbData->ncols * sizeof(int));
@@ -135,8 +131,39 @@ int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG co
 		}
 	}
 
-	free(xstar); free(sub.successors); free(sub.subtoursMap); free(indexes);
+	free(xstar); destroySubtoursData(&sub); free(indexes);
 	return 0;
+}
+
+CallbackData initCallbackData(CplexData *cpx, Solution *sol)
+{
+	CallbackData cbData = {
+		.inst = cpx->inst,
+		.ncols = CPXgetnumcols(cpx->env, cpx->lp),
+		.iterNum = 0,
+		.bestCost = INFINITY,
+	};
+
+	if (cbData.ncols <= 0)
+		throwError(NULL, sol, "initCallbackData: CPXgetnumcols returned 0. Cpx.env is probably empty");
+
+	cbData.bestSuccessors = malloc((cpx->inst->nNodes + AVX_VEC_SIZE) * sizeof(int));
+	if (cbData.bestSuccessors == NULL)
+		throwError(NULL, sol, "initCallbackData: Failed to allocate memory");
+
+	pthread_mutex_init(&cbData.mutex, NULL);
+
+	cvtSolutionToSuccessors(sol, cbData.bestSuccessors);
+	cbData.bestCost = sol->cost;
+
+	return cbData;
+}
+
+void destroyCallbackData(CallbackData *cbData)
+{
+	free(cbData->bestSuccessors);
+	cbData->bestSuccessors = NULL;
+	pthread_mutex_destroy(&cbData->mutex);
 }
 
 static int PostSolution(CPXCALLBACKCONTEXTptr context, Instance *inst, int ncols, int *successors, double cost, double *vals, int *indexes)

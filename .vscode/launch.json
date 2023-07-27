@@ -23,7 +23,7 @@
                 "--em-opt", "random",
 
                 //"--metaheur-init-mode", "em",
-                //"--matheur-init-mode", "vns",
+                //"--matheur-init-mode", "nn",
                 //"--warm-start-mode", "tabu",
 
                 "--hardfix-policy", "small",
@@ -33,7 +33,7 @@
                 "--roundcosts",
                 "--plot", 
                 //"--save",
-                "--loglvl", "all"
+                "--loglvl", "log"
             ],
             "cwd": "${workspaceFolder}"
        },
@@ -58,7 +58,7 @@
                 //"--matheur-init-mode", "vns",
                 //"--warm-start-mode", "tabu",
 
-                "--hardfix-policy", "random",
+                "--hardfix-policy", "small",
 
                 //"--seed", "102563",
                 "--threads", "8",
