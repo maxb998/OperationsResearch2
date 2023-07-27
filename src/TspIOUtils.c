@@ -78,7 +78,7 @@ double readFile (Instance *inst)
     while ((keywordFinished == 0) && ((lineSize = getline(&line, &lineMemSize, f)) != EOF))
     {
         keywordsLinesCount++;
-        LOG(LOG_LVL_EVERYTHING, line);
+        //LOG(LOG_LVL_EVERYTHING, line);
 
         // check in the first part of each line if we find a useful keyword
         int keywordID = NO_KEYWORD_FOUND_ID;
@@ -196,8 +196,8 @@ double readFile (Instance *inst)
     if (line) free(line);
 
     // print the coordinates data with enough log level
-    for (size_t i = 0; i < inst->nNodes; i++)
-        LOG(LOG_LVL_EVERYTHING, "Node %4lu: [%.2e, %.2e]", i+1, inst->X[i], inst->Y[i]);
+    //for (size_t i = 0; i < inst->nNodes; i++)
+    //    LOG(LOG_LVL_EVERYTHING, "Node %4lu: [%.2e, %.2e]", i+1, inst->X[i], inst->Y[i]);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &finish);
     return ((finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0);
@@ -223,7 +223,7 @@ static void checkFileType(char * line, int lineSize, Instance *inst)
     // here check if last 3 charaters(excludiing the '\n') are "TSP"
     char substr[3] = {0};
     memcpy(substr, &line[lineSize - 4], 3); // generate substring of 3 chars for logging/debugging purposes
-    LOG(LOG_LVL_EVERYTHING, "Checking file TYPE keyword: comparing \"TSP\" with what is found at the of the line which is:%s", substr);
+    //LOG(LOG_LVL_EVERYTHING, "Checking file TYPE keyword: comparing \"TSP\" with what is found at the of the line which is:%s", substr);
     if (strncmp(&line[lineSize - 4], "TSP", 3) != 0)
         throwError(inst, NULL, "The file is either not of type TSP, or there are some characters (even blank spaces) after \"TSP\" and before the next line. \n\
                                      Check that the file used in input is of the correct type and correctly formatted. Only \"TSP\" files are currently supported");
@@ -239,7 +239,7 @@ static size_t getDimensionFromLine(char * line, int lineSize, Instance *inst)
     else
         numberFirstChar++;
     // now numberFirstChar should be pointing to the first character that makes the decimal number in line
-    LOG(LOG_LVL_EVERYTHING, "Getting the number of nodes from file: the first character of the number is:%c", *numberFirstChar);
+    //LOG(LOG_LVL_EVERYTHING, "Getting the number of nodes from file: the first character of the number is:%c", *numberFirstChar);
 
     char *endPtr = NULL;
     size_t dimension = strtoul(numberFirstChar, &endPtr, 10);
