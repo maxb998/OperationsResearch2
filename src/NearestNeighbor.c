@@ -75,13 +75,11 @@ Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, do
         data[i].rndState = rand();
         data[i].iterCount = 0;
         pthread_create(&threads[i], NULL, nnThread, (void *)&data);
-        LOG(LOG_LVL_DEBUG, "Nearest Neighbour : Thread %d CREATED", i);
     }
 
     for (int i = 0; i < inst->params.nThreads; i++)
     {
         pthread_join(threads[i], NULL);
-        LOG(LOG_LVL_DEBUG, "Nearest Neighbour : Thread %d finished", i);
         iterCount += data[i].iterCount;
     }
 
@@ -205,7 +203,7 @@ static void applyNearestNeighbor(Solution *sol, size_t startingNodeIndex, unsign
     swapElementsInSolution(sol, 0, startingNodeIndex);
 
     // reset cost
-    sol->cost = 0.F;
+    sol->cost = 0;
 
     for (size_t i = 1; i < n-1; i++)
     {

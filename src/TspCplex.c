@@ -242,7 +242,7 @@ double computeSuccessorsSolCost(int *successors, Instance *inst)
 	enum EdgeWeightType ewt = inst->params.edgeWeightType ;
 	bool roundFlag = inst->params.roundWeights;
 
-	double cost = 0.0;
+	double cost = 0;
 
 	int i = 0;
 	int counter = 0;
@@ -312,4 +312,28 @@ int WarmStart(CplexData *cpx, int *successors)
 	free(indexes);
 
 	return retVal;
+}
+
+CallbackData initCallbackData(CplexData *cpx, Solution *sol)
+{
+	CallbackData cbData = 
+	{
+		.inst = cpx->inst,
+		.ncols = CPXgetnumcols(cpx->env, cpx->lp),
+		.iterNum = 0,
+		.bestSuccessors = malloc((cpx->inst->nNodes + AVX_VEC_SIZE) * sizeof(int)), // Adding AVX_VEC_SIZE elems to alloc allows for vectorized computations(HardFix method)
+		.bestCost = INFINITY,
+	};
+	pthread_mutex_init(&cbData.mutex, NULL);
+
+	cvtSolutionToSuccessors(sol, cbData.bestSuccessors);
+	cbData.bestCost = sol->cost;
+
+	return cbData;
+}
+
+void destroyCallbackData(CallbackData *cbData)
+{
+	free(cbData->bestSuccessors);
+	pthread_mutex_destroy(&cbData->mutex);
 }

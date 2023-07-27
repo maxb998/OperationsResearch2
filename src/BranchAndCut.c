@@ -20,64 +20,49 @@ void BranchAndCut(Solution *sol, double tlim)
     double startTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
 
 	Instance *inst = sol->instance;
-	size_t n = inst->nNodes;
 
 	if (!checkSolution(sol))
 		throwError(inst, sol, "benders: Input solution is not valid");
 
 	CplexData cpx = initCplexData(inst);
-	int ncols = CPXgetnumcols(cpx.env, cpx.lp);
 	int errCode = 0;
 
-	CallbackData cbData = 
-	{
-		.inst = inst,
-		.ncols = ncols,
-		.iterNum = 0,
-		.bestSuccessors = malloc(n * sizeof(int)),
-		.bestCost = INFINITY,
-	};
-	pthread_mutex_init(&cbData.mutex, NULL);
-
-	cvtSolutionToSuccessors(sol, cbData.bestSuccessors);
-	cbData.bestCost = sol->cost;
+	CallbackData cbData = initCallbackData(&cpx, sol);
 
 	if ((errCode = WarmStart(&cpx, cbData.bestSuccessors)) != 0)
 	{
-		destroyCplexData(&cpx);
-		free(cbData.bestSuccessors);
-		destroySolution(sol);
+		destroyCplexData(&cpx); destroySolution(sol);
 		throwError(inst, NULL, "BranchAndCut: error on WarmStart with code %d", errCode);
 	}
 
 	if (CPXsetintparam(cpx.env, CPX_PARAM_MIPCBREDLP, CPX_OFF))
 	{
-		destroyCplexData(&cpx); free(cbData.bestSuccessors); destroySolution(sol);
+		destroyCplexData(&cpx); destroySolution(sol);
 		throwError(inst, NULL, "BranchAndCut: error on CPXsetinitparam(CPX_PARAM_MIPCBREDLP)");
 	}
 
 	if (CPXcallbacksetfunc(cpx.env, cpx.lp, CPX_CALLBACKCONTEXT_CANDIDATE, genericCallbackCandidate, &cbData))
 	{
-		destroyCplexData(&cpx); free(cbData.bestSuccessors); destroySolution(sol);
+		destroyCplexData(&cpx); destroySolution(sol);
 		throwError(inst, NULL, "BranchAndCut: error on CPXsetlazyconstraintcallbackfunc");
 	}
 	
 	if (CPXsetintparam(cpx.env, CPX_PARAM_THREADS, inst->params.nThreads))
 	{
-		destroyCplexData(&cpx); free(cbData.bestSuccessors); destroySolution(sol);
+		destroyCplexData(&cpx); destroySolution(sol);
 		throwError(inst, NULL, "BranchAndCut: error on CPXsetintparam(CPX_PARAM_THREADS)");
 	}
 
 	if (CPXmipopt(cpx.env, cpx.lp))
 	{
-		destroyCplexData(&cpx); free(cbData.bestSuccessors); destroySolution(sol);
+		destroyCplexData(&cpx); destroySolution(sol);
 		throwError(inst, NULL, "BranchAndCut: output of CPXmipopt != 0");
 	}
-
-	pthread_mutex_destroy(&cbData.mutex);
 	
 	cvtSuccessorsToSolution(cbData.bestSuccessors, sol);
 	sol->cost = cbData.bestCost;
+
+	destroyCallbackData(&cbData);
 
 	clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
 	sol->execTime += (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0 - startTimeSec;
@@ -138,7 +123,7 @@ int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG co
 	{
 		int *temp;
 		swapElems(cbData->bestSuccessors, sub.successors, temp);
-		LOG(LOG_LVL_NOTICE, "New incumbent %lf    Old incumbent %lf", cost, cbData->bestCost);
+		LOG(LOG_LVL_NOTICE, "Branch & Cut: Incumbent updated -> cost = %lf", cost);
 		cbData->bestCost = cost;
 
 		// post solution to cplex

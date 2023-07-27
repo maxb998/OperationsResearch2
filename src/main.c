@@ -89,7 +89,7 @@ int main (int argc, char *argv[])
         run2Opt(&sol);
 
     if (inst.params.showPlot)
-        plotSolution(&sol, "1920,1080", "green", "black", 1, false);
+        plotSolution(&sol, "1000,600", "green", "black", 1, false);
     
     if (inst.params.saveSolution)
         saveSolution(&sol, argc, argv);

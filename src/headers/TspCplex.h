@@ -132,6 +132,19 @@ bool checkSuccessorSolution(Instance *inst, int *successors);
 */
 int WarmStart(CplexData *cpx, int *successors);
 
+/*!
+* @brief Initializes CallbackData by setting values and allocating memory
+* @param cpx Pointer to CplexData
+* @param sol Pointer to warm start solution
+*/
+CallbackData initCallbackData(CplexData *cpx, Solution *sol);
+
+/*!
+* @brief Free memory allocated inside a CallbackData type and destroy the mutex
+* @param cbData Pointer to the CallbackData target
+*/
+void destroyCallbackData(CallbackData *cbData);
+
 //###################################################################################################################################
 // BENDERS
 //###################################################################################################################################

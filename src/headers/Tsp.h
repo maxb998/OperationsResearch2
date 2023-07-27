@@ -131,6 +131,20 @@ double computeSolutionCost(Solution *sol);
 */
 double computeSolutionCostVectorized(Solution *sol);
 
+/*!
+* @brief Perform argsort using quicksort algorithm with random pivot
+* @param arr Floating point array to sort.
+* @param indexes Array where to store the sorted indexes of arr. (memory MUST be preallocated (n*sizeof(int)))
+* @param n Amount of elements in arr and indexes
+*/
+void argsort(float *arr, int *indexes, size_t n);
+
+/*!
+* @brief Sort arr using quicksort algorithm with random pivot
+* @param arr Floating point array to sort.
+* @param n Amount of elements in arr
+*/
+void sort(float *arr, size_t n);
 
 //###################################################################################################################################
 // COST_MATRIX

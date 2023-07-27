@@ -4,7 +4,8 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdarg.h> // used for logger va_list
-#include <math.h>
+//#include <math.h>
+#include <stdint.h>
 
 const char * logLevelString [] = {
 	"\033[1;31mERR \033[0m", // 0
@@ -192,8 +193,6 @@ bool checkSolution(Solution *sol)
         return false;
     }
 
-    LOG(LOG_LVL_EVERYTHING, "SolutionCheck: first and last node in sol.indexPath coincide.");
-
     // Populate uncoveredNodes array, here we check if a node is repeated along the path
     for (int i = 0; i < inst->nNodes; i++)
     {
@@ -207,7 +206,6 @@ bool checkSolution(Solution *sol)
         else
             coveredNodes[currentNode] = 1;
     }
-    LOG(LOG_LVL_EVERYTHING, "SolutionCheck: all nodes in the path are unique.");
 
     // Check that all the nodes are covered in the path
     for (int i = 0; i < inst->nNodes; i++)
@@ -217,7 +215,6 @@ bool checkSolution(Solution *sol)
             return false;
         }
     free(coveredNodes);
-    LOG(LOG_LVL_EVERYTHING, "SolutionCheck: all the nodes are present in the path");
 
     // Check sol.X and sol.Y if they correspond correctly to inst.X and inst.Y given the indexes in sol.indexPath
     for (size_t i = 0; i < inst->nNodes; i++)
@@ -241,10 +238,8 @@ bool checkSolution(Solution *sol)
         LOG(LOG_LVL_CRITICAL, "SolutionCheck: Error in the computation of the pathCost. Recomputed Cost: %lf Cost in Solution: %lf", recomputedCost, sol->cost);
         return false;
     }
-    
-    LOG(LOG_LVL_EVERYTHING, "SolutionCheck: Cost of solution is correct");
 
-    LOG(LOG_LVL_DEBUG, "SolutionCheck: solution is coherent and feasible");
+    return true;
 }
 
 double computeSolutionCostVectorized(Solution *sol)
@@ -295,7 +290,7 @@ double computeSolutionCostVectorized(Solution *sol)
     double vecStore[4];
     _mm256_storeu_pd(vecStore, costVec);
     
-    double totalCost = 0.0;
+    double totalCost = 0;
     for (size_t i = 0; i < 4; i++)
         totalCost += vecStore[i];
     
@@ -307,9 +302,81 @@ double computeSolutionCost(Solution *sol)
     enum EdgeWeightType ewt = sol->instance->params.edgeWeightType ;
     bool roundFlag = sol->instance->params.roundWeights;
 
-    double cost = 0.0;
+    double cost = 0;
     for (size_t i = 0; i < sol->instance->nNodes; i++)
         cost += (double)computeEdgeCost(sol->X[i], sol->Y[i], sol->X[i+1], sol->Y[i+1], ewt, roundFlag);
     
     return cost;
+}
+
+static void quicksort_internal(float *arr, size_t low, size_t high)
+{
+    if ((high < SIZE_MAX) && (low < high))
+    {
+        size_t pivot = (((size_t)rand() + 1) * (high - low) / RAND_MAX) + low;
+        {
+            register float temp;
+            swapElems(arr[high], arr[pivot], temp);
+        }
+
+        size_t i = (low - 1);
+
+        for (size_t j = low; j <= high - 1; j++)
+        {
+            if (arr[j] <= arr[high])
+            {
+                i++;
+                register float tempf;
+                swapElems(arr[i], arr[j], tempf);
+            }
+        }
+
+        register float tempf;
+        swapElems(arr[i + 1], arr[high], tempf);
+
+        quicksort_internal(arr, low, i);
+        quicksort_internal(arr, i + 2, high);
+    }
+}
+
+void sort(float *arr, size_t n)
+{
+    quicksort_internal(arr, 0, n-1);
+}
+
+static void quickargsort_internal(float *arr, int *indexes, size_t low, size_t high)
+{
+    if ((high < SIZE_MAX) && (low < high))
+    {
+        size_t pivot = (((size_t)rand() + 1) * (high - low) / RAND_MAX) + low;
+        {
+            register int tempi;
+            swapElems(indexes[high], indexes[pivot], tempi);
+        }
+
+        size_t i = (low - 1);
+        for (size_t j = low; j <= high - 1; j++)
+        {
+            if (arr[indexes[j]] <= arr[indexes[high]])
+            {
+                i++;
+                register int tempi;
+                swapElems(indexes[i], indexes[j], tempi);
+            }
+        }
+
+        register int tempi;
+        swapElems(indexes[i + 1], indexes[high], tempi);
+
+        quickargsort_internal(arr, indexes, low, i);
+        quickargsort_internal(arr, indexes, i + 2, high);
+    }
+}
+
+void argsort(float *arr, int *indexes, size_t n)
+{
+    for (size_t i = 0; i < n; i++)
+        indexes[i] = (int)i;
+
+    quickargsort_internal(arr, indexes, 0, n-1);
 }

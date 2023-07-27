@@ -2,6 +2,8 @@
 #include "Tsp.h"
 
 #include <cplex.h>
+#include <stdio.h>
+#include <stdarg.h> // used for logger va_list
 #include <time.h>
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
@@ -16,12 +18,42 @@
 // Number of non-improving iterations before fixAmount is increased
 #define STATIC_COST_THRESHOLD 10
 
+typedef struct
+{
+    CplexData cpx;
+
+    CallbackData cbData;
+
+    size_t fixAmount;
+
+    // Bounds Value
+    double *bVal;
+    // Bounds Type
+    char *bType;
+    int *indexes;
+
+} HardfixAllocatedMem;
+
+// Initialize HardfixAllocatedMem struct allocating all necessary memory and initializing all sub-structs and initializes the fixAmount value
+static HardfixAllocatedMem initHardfixAllocatedMem(Solution *sol);
+
+// Free all memory allocated by init method and destriy all sub-structs
+static void destroyHardfixAllocatedMem(HardfixAllocatedMem *hfAlloc);
+
+// Very similar to throwError but frees all memory allocated in [HardfixAllocatedMem, sol] and destroys sub-structs. Defined to improve readability
+static void throwHardFixError(HardfixAllocatedMem *hfAlloc, Solution *sol, char *msg, ...);
+
+// Updates fixAmount value. Only does so after STATIC_COST_THRESHOLD iterations
+static void updateFixAmount(HardfixAllocatedMem *hfAlloc);
 
 // Reset Upper and Lower bounds of the problem in cplex. Pass already allocated memory in indexes and bounds (ncols elements each)
-static int resetBounds(CplexData *cpx, int *successors, int *indexes, char *boundsType, double *bounds);
+static int resetBounds(HardfixAllocatedMem *hfAlloc);
 
-// Fix variables in random way up the the fixAmount, but not all the way for sure.
-static int randomFix(CplexData *cpx, size_t fixAmount, int *fixedPositions, int *successors, int *indexes, char *boundsType, double *bounds);
+// Fix edges in random way up the the fixAmount
+static int randomFix(HardfixAllocatedMem *hfAlloc);
+
+// Fix smallest edges up to the fixAmount
+static int smallestFix(HardfixAllocatedMem *hfAlloc);
 
 
 void HardFixing(Solution *sol, double fixingAmount, enum HardFixPolicy policy, double tlim)
@@ -32,72 +64,32 @@ void HardFixing(Solution *sol, double fixingAmount, enum HardFixPolicy policy, d
 	double currentTimeSec = startTimeSec;
 
     Instance *inst = sol->instance;
-    size_t n = inst->nNodes;
     int errCode = 0;
-
-    int fixAmount;
-    if(n < MIN_UNFIX)
-    {
-        LOG(LOG_LVL_WARNING, "HardFix: Solution is small, so no edge will be fixed, resulting in a computation that is the same as branch-cut");
-        fixAmount = 0;
-    }
-    else if (n < MIN_UNFIX + MIN_FIX)
-        fixAmount = MIN_FIX;
-    else
-        fixAmount = n - MIN_UNFIX;
-
 
     if (!checkSolution(sol))
 		throwError(inst, sol, "HardFixing: Input solution is not valid");
 
-    CplexData cpx = initCplexData(inst);
-    int ncols = CPXgetnumcols(cpx.env, cpx.lp);
+    HardfixAllocatedMem hfAlloc = initHardfixAllocatedMem(sol);
 
-    // allocate necessary memory
-    double *xstar = malloc(ncols * sizeof(double));
-    int *indexes = malloc(n * sizeof(int));
-    int *fixesIndexes = malloc(n * sizeof(int)); for (size_t i = 0; i < n; i++) { fixesIndexes[i] = (int)i; }    
-    char *boundsType = malloc(n);
-    SubtoursData sub = {
-        .subtoursCount = 0,
-        .successors = malloc(n * sizeof(int)),
-        .subtoursMap = malloc(n * sizeof(int))
-    };
-    CallbackData cbData = {
-        .bestCost = INFINITY,
-        .bestSuccessors = malloc(n * sizeof(int)),
-        .ncols = ncols,
-        .inst = inst,
-        .iterNum = 0
-    };
-    cvtSolutionToSuccessors(sol, cbData.bestSuccessors);
-    cbData.bestCost = sol->cost;
-
-    if ((errCode = CPXcallbacksetfunc(cpx.env, cpx.lp, CPX_CALLBACKCONTEXT_CANDIDATE, genericCallbackCandidate, &cbData)) != 0)
-	{
-		destroyCplexData(&cpx); free(xstar); free(indexes); free(fixesIndexes); free(boundsType); free(sub.successors); free(sub.subtoursMap); free(cbData.bestSuccessors);
-		throwError(inst, NULL, "HardFix: error on CPXsetlazyconstraintcallbackfunc with code %d", errCode);
-	}
+    if ((errCode = CPXcallbacksetfunc(hfAlloc.cpx.env, hfAlloc.cpx.lp, CPX_CALLBACKCONTEXT_CANDIDATE, genericCallbackCandidate, &hfAlloc.cbData)) != 0)
+        throwHardFixError(&hfAlloc, sol, "HardFix: CPXcallbacksetfunc failed with code %d", errCode);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
     currentTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
 
-    int staticCostCount = 0;
-
     while (currentTimeSec < startTimeSec + tlim)
     {
-        if (fixAmount > 0)
+        if (hfAlloc.fixAmount > 0)
         {
             switch (policy)
             {
             case HARDFIX_POLICY_RANDOM:
-                if ((errCode = randomFix(&cpx, (size_t)fixAmount, fixesIndexes, cbData.bestSuccessors, indexes, boundsType, xstar)) != 0)
-                {
-                    destroyCplexData(&cpx); free(xstar); free(indexes); free(fixesIndexes); free(boundsType); free(sub.successors); free(sub.subtoursMap); free(cbData.bestSuccessors);
-                    throwError(inst, sol, "HardFix: randomFix failed with code %d", errCode);
-                }
+                if ((errCode = randomFix(&hfAlloc)) != 0)
+                    throwHardFixError(&hfAlloc, sol, "HardFix: randomFix failed with code %d", errCode);
                 break;
             case HARDFIX_POLICY_SMALLEST:
+                if ((errCode = smallestFix(&hfAlloc)) != 0)
+                    throwHardFixError(&hfAlloc, sol, "HardFix: smallestFix failed with code %d", errCode);
                 break;
             case HARDFIX_POLICY_PROBABILITY:
                 break;
@@ -106,122 +98,230 @@ void HardFixing(Solution *sol, double fixingAmount, enum HardFixPolicy policy, d
             }
         }
 
+        LOG(LOG_LVL_DEBUG, "HardFix: Bounds were fixed");
+
+        // update time limit
         double remainingTime = startTimeSec + tlim - currentTimeSec;
-        if ((errCode = CPXsetdblparam(cpx.env, CPX_PARAM_TILIM, remainingTime)) != 0)
+        if ((errCode = CPXsetdblparam(hfAlloc.cpx.env, CPX_PARAM_TILIM, remainingTime)) != 0)
+            throwHardFixError(&hfAlloc, sol, "HardFix: CPXsetdblparam failed with code %d", errCode);
+
+        // update/set warm start solution
+        if ((errCode = WarmStart(&hfAlloc.cpx, hfAlloc.cbData.bestSuccessors)) != 0)
+            throwHardFixError(&hfAlloc, sol, "HardFix: WarmStart failed with code %d", errCode);
+
+        LOG(LOG_LVL_DEBUG, "HardFix: WarmStart was set");
+
+        // run cplex
+        if ((errCode = CPXmipopt(hfAlloc.cpx.env, hfAlloc.cpx.lp)) != 0)
+            throwHardFixError(&hfAlloc, sol, "HardFix: CPXmipopt failed with code %d", errCode);
+
+        LOG(LOG_LVL_DEBUG, "HardFix: CPXmipopt finished");
+
+        if (hfAlloc.fixAmount == 0)
         {
-            destroyCplexData(&cpx); free(xstar); free(indexes); free(fixesIndexes); free(boundsType); free(sub.successors); free(sub.subtoursMap); free(cbData.bestSuccessors);
-            throwError(inst, sol, "HardFix: CPXsetdblparam failed with code %d", errCode);
-        }
-
-        if ((errCode = WarmStart(&cpx, cbData.bestSuccessors)) != 0)
-        {
-            destroyCplexData(&cpx); free(xstar); free(indexes); free(fixesIndexes); free(boundsType); free(sub.successors); free(sub.subtoursMap); free(cbData.bestSuccessors);
-            throwError(inst, sol, "HardFix: CPXsetdblparam failed with code %d", errCode);
-        }
-
-        double oldCost = cbData.bestCost;
-
-        if ((errCode = CPXmipopt(cpx.env, cpx.lp)) != 0)
-        {
-            destroyCplexData(&cpx); free(xstar); free(indexes); free(fixesIndexes); free(boundsType); free(sub.successors); free(sub.subtoursMap); free(cbData.bestSuccessors);
-            throwError(inst, sol, "HardFix: CPXsetdblparam failed with code %d", errCode);
-        }
-
-        if (oldCost <= cbData.bestCost)
-            staticCostCount++;
-        else
-            staticCostCount = 0;
-
-        if (fixAmount == 0)
-        {
-            LOG(LOG_LVL_NOTICE, "HardFix: Found the best solution");
+            LOG(LOG_LVL_NOTICE, "HardFix: No edges were fixed. Best solution has been found");
             break;
         }
         
-        if ((fixAmount > (int)n - MAX_UNFIX) && (staticCostCount > STATIC_COST_THRESHOLD))
-        {
-            int oldFix = fixAmount;
-            fixAmount -= FIX_OFFSET;
-            if (fixAmount < 0)
-                fixAmount = (int)n - MAX_UNFIX;
-            LOG(LOG_LVL_LOG, "Decreasing the amount of fixed edges from %lu to %lu", oldFix, fixAmount);
-            staticCostCount = 0;//(n - fixAmount - MIN_UNFIX) / FIX_OFFSET;
-        }
+        updateFixAmount(&hfAlloc);
 
-        if ((errCode = resetBounds(&cpx, cbData.bestSuccessors, indexes, boundsType, xstar)) != 0)
-        {
-            destroyCplexData(&cpx); free(xstar); free(indexes); free(fixesIndexes); free(boundsType); free(sub.successors); free(sub.subtoursMap); free(cbData.bestSuccessors);
-            throwError(inst, sol, "HardFix: resetBounds failed with code %d", errCode);
-        }
+        if ((errCode = resetBounds(&hfAlloc)) != 0)
+            throwHardFixError(&hfAlloc, sol, "HardFix: resetBounds failed with code %d", errCode);
 
         clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
         currentTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
     }
-    destroyCplexData(&cpx);
-    free(xstar); free(indexes); free(fixesIndexes); free(boundsType); free(sub.successors); free(sub.subtoursMap);
     
-    if (cbData.bestCost < sol->cost)
+    // update sol if necessary(very likely)
+    if (hfAlloc.cbData.bestCost < sol->cost)
     {
-        cvtSuccessorsToSolution(cbData.bestSuccessors, sol);
+        cvtSuccessorsToSolution(hfAlloc.cbData.bestSuccessors, sol);
         sol->cost = computeSolutionCost(sol);
     }
     else
         LOG(LOG_LVL_WARNING, "HardFixing: Solution could not be optimized any further");
 
-    free(cbData.bestSuccessors);
+    destroyHardfixAllocatedMem(&hfAlloc);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
     currentTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
     sol->execTime += currentTimeSec - startTimeSec;
 }
 
-static int resetBounds(CplexData *cpx, int *successors, int *indexes, char *boundsType, double *bounds)
+static HardfixAllocatedMem initHardfixAllocatedMem(Solution *sol)
 {
-    size_t n = cpx->inst->nNodes;
+    size_t n = sol->instance->nNodes;
 
-    // set lower bounds
+    HardfixAllocatedMem hfAlloc = {
+        .cpx = initCplexData(sol->instance),
+        .bVal = malloc(n * sizeof(double)),
+        .bType = malloc(n),
+        .indexes = malloc(n * sizeof(int))
+    };
+
+    hfAlloc.cbData = initCallbackData(&hfAlloc.cpx, sol);
+
+    // init fixAmount
+    if(n < MIN_UNFIX)
+    {
+        LOG(LOG_LVL_WARNING, "HardFix: Solution is small, so no edge will be fixed, resulting in a computation that is the same as branch-cut");
+        hfAlloc.fixAmount = 0;
+    }
+    else if (n < MIN_UNFIX + MIN_FIX)
+        hfAlloc.fixAmount = MIN_FIX;
+    else
+        hfAlloc.fixAmount = n - MIN_UNFIX;
+
+    return hfAlloc;
+}
+
+static void destroyHardfixAllocatedMem(HardfixAllocatedMem *hfAlloc)
+{
+    destroyCplexData(&hfAlloc->cpx);
+    destroyCallbackData(&hfAlloc->cbData);
+    free(hfAlloc->bVal);
+    free(hfAlloc->bType);
+    free(hfAlloc->indexes);
+}
+
+static void throwHardFixError(HardfixAllocatedMem *hfAlloc, Solution *sol, char *msg, ...)
+{
+    printf("[\033[1;31mERR \033[0m] ");
+
+    va_list params;
+    va_start(params, msg);
+    vprintf(msg, params);
+    va_end(params);
+
+    printf("\n");
+
+    if (hfAlloc) destroyHardfixAllocatedMem(hfAlloc);
+    if (sol->instance) destroyInstance(sol->instance);
+    if (sol) destroySolution(sol);
+
+    exit(EXIT_FAILURE);
+}
+
+static void updateFixAmount(HardfixAllocatedMem *hfAlloc)
+{
+    // counts how for how many iterations the cost of the solution hasn't improved
+    static int staticCostCount = -1;
+    // keeps track of the previous iteration cost
+    static double oldCost = INFINITY;
+
+    size_t n = hfAlloc->cpx.inst->nNodes;
+
+    if (hfAlloc->fixAmount == n - MAX_UNFIX) // fixAmount == 0 is handled in HardFix method since it is a special case(opt sol)
+        return;
+
+    if (oldCost <= hfAlloc->cbData.bestCost)
+    {
+        staticCostCount = 0;
+        oldCost = hfAlloc->cbData.bestCost;
+    }
+    else if (staticCostCount >= STATIC_COST_THRESHOLD)
+    {
+        hfAlloc->fixAmount -= FIX_OFFSET;
+
+        if (hfAlloc->fixAmount > n) // overflow of unsigned operation (fixAmount is way too big) -> set fixAmount to 0
+            hfAlloc->fixAmount = 0;
+        
+        if ((n > MAX_UNFIX) && (hfAlloc->fixAmount < n - MAX_UNFIX))
+            hfAlloc->fixAmount = n - MAX_UNFIX;
+
+        LOG(LOG_LVL_LOG, "Decreasing the amount of fixed edges to %lu", hfAlloc->fixAmount);
+        staticCostCount = 0; //(n - fixAmount - MIN_UNFIX) / FIX_OFFSET;
+    }
+    else
+        staticCostCount++;
+}
+
+static int resetBounds(HardfixAllocatedMem *hfAlloc)
+{
+    size_t n = hfAlloc->cpx.inst->nNodes;
+
+    // set lower bounds (upper bounds are not modified)
     for (size_t i = 0; i < n; i++)
     {
-        boundsType[i] = 'L';
-        indexes[i] = xpos(i, (size_t)successors[i], n);
-        bounds[i] = 0.0;
+        hfAlloc->bType[i] = 'L';
+        hfAlloc->indexes[i] = xpos(i, (size_t)hfAlloc->cbData.bestSuccessors[i], n);
+        hfAlloc->bVal[i] = 0.0;
     }
-    int retVal = CPXchgbds(cpx->env, cpx->lp, (int)n, indexes, boundsType, bounds);
-    if (retVal != 0)  return retVal;
-
-    // set upper bounds
-    for (size_t i = 0; i < n; i++)
-    {
-        boundsType[i] = 'U';
-        bounds[i] = 1.0;
-    }
-    retVal = CPXchgbds(cpx->env, cpx->lp, (int)n, indexes, boundsType, bounds);
+    int retVal = CPXchgbds(hfAlloc->cpx.env, hfAlloc->cpx.lp, (int)n, hfAlloc->indexes, hfAlloc->bType, hfAlloc->bVal);
 
     return retVal;
 }
 
-static int randomFix(CplexData *cpx, size_t fixAmount, int *fixedPositions, int *successors, int *indexes, char *boundsType, double *bounds)
+static int randomFix(HardfixAllocatedMem *hfAlloc)
 {
-    size_t n = cpx->inst->nNodes;
+    size_t n = hfAlloc->cpx.inst->nNodes;
+
+    // setup indexes from 0 to n-1 in order to perform permutations on it
+    for (size_t i = 0; i < n; i++)
+        hfAlloc->indexes[i] = (int)i;
 
     // n random permutations
     for (size_t i = 0; i < n; i++)
     {
-        size_t pos1 = (size_t)rand() * fixAmount / RAND_MAX, pos2 = (size_t)rand() * fixAmount / RAND_MAX;
-        while (pos2 == pos1) pos2 = (size_t)rand() * fixAmount / RAND_MAX;
+        size_t pos1 = (size_t)rand() * hfAlloc->fixAmount / RAND_MAX, pos2 = (size_t)rand() * hfAlloc->fixAmount / RAND_MAX;
+        while (pos2 == pos1) pos2 = (size_t)rand() * hfAlloc->fixAmount / RAND_MAX;
 
         register int temp;
-        swapElems(fixedPositions[pos1], fixedPositions[pos2], temp);
+        swapElems(hfAlloc->indexes[pos1], hfAlloc->indexes[pos2], temp);
     }
     
     // setup arrays to fix bounds
-    for (size_t i = 0; i < fixAmount; i++)
+    for (size_t i = 0; i < hfAlloc->fixAmount; i++)
     {
-        boundsType[i] = 'B';
-        indexes[i] = xpos((size_t)fixedPositions[i], (size_t)successors[fixedPositions[i]], n);
-        bounds[i] = 1.0;
+        hfAlloc->bType[i] = 'B';
+        hfAlloc->indexes[i] = xpos((size_t)hfAlloc->indexes[i], (size_t)hfAlloc->cbData.bestSuccessors[hfAlloc->indexes[i]], n);
+        hfAlloc->bVal[i] = 1.0;
     }
-    int retVal = CPXchgbds(cpx->env, cpx->lp, fixAmount, indexes, boundsType, bounds);
+    int retVal = CPXchgbds(hfAlloc->cpx.env, hfAlloc->cpx.lp, hfAlloc->fixAmount, hfAlloc->indexes, hfAlloc->bType, hfAlloc->bVal);
+
+    return retVal;
+}
+
+static int smallestFix(HardfixAllocatedMem *hfAlloc)
+{
+    Instance *inst = hfAlloc->cpx.inst;
+    size_t n = inst->nNodes;
+
+    // instead of allocating new memory cast some pointers inside space allocated pointed by bounds(which is bounds)
+    float *tourEdgesCost = (float*)hfAlloc->bVal;
+    int *successors = hfAlloc->cbData.bestSuccessors;
+
+    for (size_t i = n; i < n + AVX_VEC_SIZE; i++)
+        successors[i] = 0;
+
+    // compute cost of each edge with avx instructions(not necessary since it's not a performance critical function)
+    __m256i indexes = _mm256_set_epi32(7, 6, 5, 4, 3, 2, 1, 0);
+    __m256i increment = _mm256_set1_epi32(AVX_VEC_SIZE);
+    for (size_t i = 0; i < n; i += AVX_VEC_SIZE)
+    {
+        __m256 x1 = _mm256_i32gather_ps(inst->X, indexes, 4), y1 = _mm256_i32gather_ps(inst->Y, indexes, 4);
+
+        __m256i indexesSucc = _mm256_loadu_si256((__m256i_u*)&successors[i]);
+        __m256 x2 = _mm256_i32gather_ps(inst->X, indexesSucc, 4), y2 = _mm256_i32gather_ps(inst->Y, indexesSucc, 4);
+
+        __m256 cost = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType, inst->params.roundWeights);
+
+        increment = _mm256_add_epi32(indexes, increment);
+
+        _mm256_storeu_ps(&tourEdgesCost[i], cost);
+    }
+
+    // perform argsort on tourEdgesCost using minCostIndexes as output
+    argsort(tourEdgesCost, hfAlloc->indexes, n);
+
+    for (size_t i = 0; i < hfAlloc->fixAmount; i++)
+    {
+        hfAlloc->bType[i] = 'B';
+        hfAlloc->indexes[i] = xpos((size_t)hfAlloc->indexes[i], (size_t)hfAlloc->cbData.bestSuccessors[hfAlloc->indexes[i]], n);
+        hfAlloc->bVal[i] = 1.0;
+    }
+    
+    int retVal = CPXchgbds(hfAlloc->cpx.env, hfAlloc->cpx.lp, hfAlloc->fixAmount, hfAlloc->indexes, hfAlloc->bType, hfAlloc->bVal);
 
     return retVal;
 }
