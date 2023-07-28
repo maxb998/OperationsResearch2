@@ -14,7 +14,7 @@ typedef struct
 
     pthread_mutex_t getStartNodeMutex;
     pthread_mutex_t saveSolutionMutex;
-    size_t startingNode;
+    int startingNode;
 
     double tlim;
     int nThreads;
@@ -29,12 +29,12 @@ typedef struct
 } NNThreadsDataRnd;
 
 
-static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos2);
+static inline void swapElementsInSolution(Solution *sol, int pos1, int pos2);
 
 // finds the closest unvisited node (pathCost is also updated in this method)
-static inline size_t findSuccessorID(Solution *sol, size_t iterNum, double *pathCost, unsigned int *state);
+static inline int findSuccessorID(Solution *sol, int iterNum, double *pathCost, unsigned int *state);
 
-static void applyNearestNeighbor(Solution *sol, size_t startingNodeIndex, unsigned int *state);
+static void applyNearestNeighbor(Solution *sol, int startingNodeIndex, unsigned int *state);
 
 static void updateBestSolutionNN(Solution *bestSol, Solution *newBest);
 
@@ -95,7 +95,7 @@ Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, do
     return sol;
 }
 
-static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos2)
+static inline void swapElementsInSolution(Solution *sol, int pos1, int pos2)
 {
     register float tempf;
     swapElems(sol->X[pos1], sol->X[pos2], tempf);
@@ -104,7 +104,7 @@ static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos
     swapElems(sol->indexPath[pos1], sol->indexPath[pos2], tempi);
 }
 
-static inline size_t findSuccessorID(Solution *sol, size_t iterNum, double *pathCost, unsigned int *state)
+static inline int findSuccessorID(Solution *sol, int iterNum, double *pathCost, unsigned int *state)
 {
     Instance *inst = sol->instance;
     enum EdgeWeightType ewt = inst->params.edgeWeightType ;
@@ -121,10 +121,10 @@ static inline size_t findSuccessorID(Solution *sol, size_t iterNum, double *path
     __m256 x1 = _mm256_set1_ps(sol->X[iterNum-1]), y1 = _mm256_set1_ps(sol->Y[iterNum-1]);
     
     // set ids to right starting position
-    ids = _mm256_add_epi32(ids, _mm256_set1_epi32((int)iterNum));
+    ids = _mm256_add_epi32(ids, _mm256_set1_epi32(iterNum));
 
     // check if we are working with rounded weights
-    for (size_t i = iterNum; i < inst->nNodes; i += AVX_VEC_SIZE)
+    for (int i = iterNum; i < inst->nNodes; i += AVX_VEC_SIZE)
     {
         // get distance first
         __m256 x2 = _mm256_loadu_ps(&sol->X[i]), y2 = _mm256_loadu_ps(&sol->Y[i]);
@@ -144,9 +144,9 @@ static inline size_t findSuccessorID(Solution *sol, size_t iterNum, double *path
     _mm256_storeu_si256((__m256i*)minIDsVecStore, minIDsVec);
 
     // sort arrays in ascendant order (size is fixed to 8 so this computation count as linear)
-    for (size_t i = 0; i < AVX_VEC_SIZE-1; i++)
+    for (int i = 0; i < AVX_VEC_SIZE-1; i++)
     {
-        for (size_t j = i+1; j < AVX_VEC_SIZE; j++)
+        for (int j = i+1; j < AVX_VEC_SIZE; j++)
         {
             if (minVecStore[j] < minVecStore[i])
             {
@@ -160,7 +160,7 @@ static inline size_t findSuccessorID(Solution *sol, size_t iterNum, double *path
 
     // choose successor
     int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
-    size_t successor = minIDsVecStore[0];
+    int successor = minIDsVecStore[0];
     float pathCostIncrement = minVecStore[0];
 
     if ((inst->params.graspType != GRASP_NONE) && (rand_r(state) < graspThreshold) && (inst->nNodes - iterNum > 8))
@@ -176,12 +176,12 @@ static inline size_t findSuccessorID(Solution *sol, size_t iterNum, double *path
 
         case GRASP_ALMOSTBEST:
         {
-            size_t rndIdx = 1;
+            int rndIdx = 1;
             for (; rndIdx < AVX_VEC_SIZE-1; rndIdx++)
                 if (rand_r(state) > RAND_MAX / 2)
                     break;
 
-            successor = (size_t)minIDsVecStore[rndIdx];
+            successor = minIDsVecStore[rndIdx];
             pathCostIncrement = minVecStore[rndIdx];
             break;
         }
@@ -192,10 +192,10 @@ static inline size_t findSuccessorID(Solution *sol, size_t iterNum, double *path
     return successor;
 }
 
-static void applyNearestNeighbor(Solution *sol, size_t startingNodeIndex, unsigned int *state)
+static void applyNearestNeighbor(Solution *sol, int startingNodeIndex, unsigned int *state)
 {
     Instance *inst = sol->instance;
-    size_t n = inst->nNodes;
+    int n = inst->nNodes;
     enum EdgeWeightType ewt = inst->params.edgeWeightType ;
     bool roundFlag = inst->params.roundWeights;
 
@@ -205,9 +205,9 @@ static void applyNearestNeighbor(Solution *sol, size_t startingNodeIndex, unsign
     // reset cost
     sol->cost = 0;
 
-    for (size_t i = 1; i < n-1; i++)
+    for (int i = 1; i < n-1; i++)
     {
-        size_t successorIndex = findSuccessorID(sol, i, &sol->cost, state);
+        int successorIndex = findSuccessorID(sol, i, &sol->cost, state);
 
         if (successorIndex >= n)
             throwError(inst, sol, "applyNearestNeighbor: Value of successor isn't applicable: %lu (startNode=%lu)", successorIndex, startingNodeIndex);
@@ -273,7 +273,7 @@ static void *nnThread(void *arg)
     // check startingNode even before locking the mutex to avoid useless mutex calls
     while((thShared->startingNode < inst->nNodes) && (t < thShared->tlim))
     {
-        size_t iterNode;
+        int iterNode;
         if (thShared->startOption == NN_FIRST_TRYALL)
         {
             pthread_mutex_lock(&thShared->getStartNodeMutex);
@@ -290,13 +290,13 @@ static void *nnThread(void *arg)
             pthread_mutex_unlock(&thShared->getStartNodeMutex);
         }
         else
-            iterNode = (size_t)rand_r(&state) % inst->nNodes;
+            iterNode = rand_r(&state) % inst->nNodes;
 
         // copy all the nodes in the original order from instance into tempSol.X/Y (Take advantage of the way the memory is allocated for the best and current sol)
-        for (size_t i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
+        for (int i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
             tempSol.X[i] = inst->X[i];
 
-        for (int i = 0; i < (int)inst->nNodes + 1; i++)
+        for (int i = 0; i < inst->nNodes + 1; i++)
             tempSol.indexPath[i] = i;
         
         applyNearestNeighbor(&tempSol, iterNode, &state);

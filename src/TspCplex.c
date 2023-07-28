@@ -30,7 +30,7 @@ CplexData initCplexData(Instance *inst)
 	if (errno)
 		throwError(inst, NULL, "buildCPXModel: error at CPXcreateprob with code %d", errno);
 
-    size_t n = inst->nNodes;
+    int n = inst->nNodes;
     enum EdgeWeightType ewt = inst->params.edgeWeightType ;
     bool roundFlag = inst->params.roundWeights;
 
@@ -66,13 +66,13 @@ CplexData initCplexData(Instance *inst)
 	int *index = (int *) calloc(n, sizeof(int));
 	double *value = (double *) calloc(n, sizeof(double));
 
-	for ( size_t h = 0; h < n; h++ )  		// add the degree constraint on node h
+	for ( int h = 0; h < n; h++ )  		// add the degree constraint on node h
 	{
 		double rhs = 2.0;
 		char sense = 'E';                            // 'E' for equality constraint 
-		sprintf(cname[0], "degree(%lu)", h+1);
+		sprintf(cname[0], "degree(%d)", h+1);
 		int nnz = 0;
-		for ( size_t i = 0; i < n; i++ )
+		for ( int i = 0; i < n; i++ )
 		{
 			if ( i == h ) continue;
 			index[nnz] = xpos(i,h,n);
@@ -102,13 +102,13 @@ void destroyCplexData(CplexData * cpxData)
     CPXcloseCPLEX(&cpxData->env);
 }
 
-size_t xpos(size_t i, size_t j, size_t n)
+int xpos(int i, int j, int n)
 {
     if (i == j)
         throwError(NULL, NULL, "xpos: i == j");
     if (i > j)
     {
-        register size_t temp;
+        register int temp;
         swapElems(i, j, temp);
     }
 
@@ -116,24 +116,24 @@ size_t xpos(size_t i, size_t j, size_t n)
     return pos;
 }
 
-void cvtCPXtoSuccessors(double *xstar, int ncols, size_t nNodes, SubtoursData *subData)
+void cvtCPXtoSuccessors(double *xstar, int ncols, int nNodes, SubtoursData *subData)
 {
 	// reset arrays
-	for (size_t i = 0; i < nNodes; i++)
+	for (int i = 0; i < nNodes; i++)
 		subData->successors[i] = -1;
-	for (size_t i = 0; i < nNodes; i++)
+	for (int i = 0; i < nNodes; i++)
 		subData->subtoursMap[i] = -1;
 
 	LOG(LOG_LVL_EVERYTHING, "###################################################");
 
-	for (size_t i = 0; i < nNodes; i++)
+	for (int i = 0; i < nNodes; i++)
 	{
-		size_t succ = i;
-		for (size_t j = 0; j < nNodes; j++)
+		int succ = i;
+		for (int j = 0; j < nNodes; j++)
 		{
 			if ((succ != j) && (xstar[xpos(succ, j, nNodes)] > 0.5) && (subData->subtoursMap[j] == -1))
 			{
-				subData->successors[succ] = (int)j;
+				subData->successors[succ] = j;
 				subData->subtoursMap[succ] = subData->subtoursCount;
 				LOG(LOG_LVL_EVERYTHING, "x(%3d,%3d) = 1   subtour n° %d\n", succ, j, subData->subtoursMap[succ] + 1);
 				succ = j;
@@ -153,14 +153,14 @@ void cvtCPXtoSuccessors(double *xstar, int ncols, size_t nNodes, SubtoursData *s
 void cvtSuccessorsToSolution(int *successors, Solution *sol)
 {
 	Instance *inst = sol->instance;
-	size_t n = inst->nNodes;
+	int n = inst->nNodes;
 	
 	// start from 0
 	sol->indexPath[0] = 0;
 	sol->X[0] = inst->X[0];
 	sol->Y[0] = inst->Y[0];
 
-	for (size_t i = successors[0], pos = 1; i != 0; i = successors[i])
+	for (int i = successors[0], pos = 1; i != 0; i = successors[i])
 	{
 		sol->indexPath[pos] = i;
 		sol->X[pos] = inst->X[i];
@@ -176,9 +176,9 @@ void cvtSuccessorsToSolution(int *successors, Solution *sol)
 
 void cvtSolutionToSuccessors(Solution *sol, int* successors)
 {
-	size_t n = sol->instance->nNodes;
+	int n = sol->instance->nNodes;
 
-	for (size_t i = 0; i < n; i++)
+	for (int i = 0; i < n; i++)
 		successors[sol->indexPath[i]] = sol->indexPath[i+1];
 
 	if ((sol->instance->params.logLevel >= LOG_LVL_EVERYTHING) && (!checkSuccessorSolution(sol->instance, successors) != 0))
@@ -188,10 +188,10 @@ void cvtSolutionToSuccessors(Solution *sol, int* successors)
 int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, SubtoursData *subData, int iterNum, Instance *inst, int nCols, bool isBenders)
 {
 	int retVal = 0;
-	size_t n = inst->nNodes;
+	int n = inst->nNodes;
 
 	// set all coeffs to 1 at the beggining so we don't have to think about them again
-	for (size_t i = 0; i < nCols; i++)
+	for (int i = 0; i < nCols; i++)
 		coeffs[i] = 1.;
 
 	static char sense = 'L';
@@ -213,7 +213,7 @@ int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr c
 		{
 			for (int i = subData->successors[next]; i != subtourStart; i = subData->successors[i])
 			{
-				indexes[nnz] = (int)xpos(next, i, n);
+				indexes[nnz] = xpos(next, i, n);
 				nnz++;
 			}
 			rhs++;
@@ -238,7 +238,7 @@ double computeSuccessorsSolCost(int *successors, Instance *inst)
 	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (!checkSuccessorSolution(inst, successors) != 0))
 		return -1.0;
 
-	int n = (int)inst->nNodes;
+	int n = inst->nNodes;
 	enum EdgeWeightType ewt = inst->params.edgeWeightType ;
 	bool roundFlag = inst->params.roundWeights;
 
@@ -262,11 +262,11 @@ double computeSuccessorsSolCost(int *successors, Instance *inst)
 
 bool checkSuccessorSolution(Instance *inst, int *successors)
 {
-	size_t n = inst->nNodes;
+	int n = inst->nNodes;
 
 	int *indexChecked = malloc(n * sizeof(int));
 	indexChecked[0] = -1;
-	for (size_t i = 1; i < n; i++)
+	for (int i = 1; i < n; i++)
 		indexChecked[i] = 0;
 
 	bool retVal = true;
@@ -288,7 +288,7 @@ bool checkSuccessorSolution(Instance *inst, int *successors)
 int WarmStart(CplexData *cpx, int *successors)
 {
 	Instance *inst = cpx->inst;
-	size_t n = inst->nNodes;
+	int n = inst->nNodes;
 
 	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (!checkSuccessorSolution(inst, successors)))
 	{
@@ -298,9 +298,9 @@ int WarmStart(CplexData *cpx, int *successors)
 
 	double *ones = malloc(n * sizeof(double));
 	int *indexes = malloc(n * sizeof(int));
-	for (size_t i = 0; i < n; i++)
+	for (int i = 0; i < n; i++)
 		ones[i] = 1.0;
-	for (size_t i = 0; i < n; i++)
+	for (int i = 0; i < n; i++)
 		indexes[i] = xpos(i, successors[i], n);
 
 	int izero = 0;

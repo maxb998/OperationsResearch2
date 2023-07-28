@@ -7,7 +7,7 @@
 #define USE_FAST_SOLUTION_UPDATE 1
 #define LOG_INTERVAL 5
 
-static inline void updateSolutionNN(Solution *sol, size_t bestOffsetEdges[2], float bestOffset);
+static inline void updateSolutionNN(Solution *sol, int bestOffsetEdges[2], float bestOffset);
 
 // Loads inverts and stores two vectors of floats according to update solution procedure. Speeds Up update procedure
 static inline void invertVectorSizeElemsF(float *firstPtr, float *secondPtr);
@@ -88,7 +88,7 @@ double apply2OptBestFix(Solution *sol, enum _2OptOptions option)
     return elapsed;
 }
 
-static inline void updateSolutionNN(Solution *sol, size_t bestOffsetEdges[2], float bestOffset)
+static inline void updateSolutionNN(Solution *sol, int bestOffsetEdges[2], float bestOffset)
 {
     // update cost
     sol->cost += (double)bestOffset;
@@ -104,7 +104,7 @@ static inline void updateSolutionNN(Solution *sol, size_t bestOffsetEdges[2], fl
      * Which means that we must invert the elements of bestSolution from index 3(not inlcuded) to index 8(included)
      */
 
-    size_t smallID = bestOffsetEdges[0] + 1, bigID = bestOffsetEdges[1];
+    int smallID = bestOffsetEdges[0] + 1, bigID = bestOffsetEdges[1];
 
     static int updateCount = 0;
     updateCount++;
@@ -185,7 +185,7 @@ static inline unsigned long _2optBestFixBase(Solution *sol)
     Instance *inst = sol->instance;
 
     // setup "shortcuts" variables to declutter the code
-    size_t n = inst->nNodes;
+    int n = inst->nNodes;
     enum EdgeWeightType edgeWgtType = inst->params.edgeWeightType;
     bool roundFlag = inst->params.roundWeights;
 
@@ -199,14 +199,14 @@ static inline unsigned long _2optBestFixBase(Solution *sol)
     {
         // setup local values to avoid calling mutex too often
         float bestOffset = 0;
-        size_t bestOffsetEdges[2];
+        int bestOffsetEdges[2];
 
         // do while there are edges to be checked
-        for (size_t edgeID = 0; edgeID < n - 1; edgeID++) // check for one edge at a time every other edge(except already checked)
+        for (int edgeID = 0; edgeID < n - 1; edgeID++) // check for one edge at a time every other edge(except already checked)
         {
 
             float solEdgeWgt1 = computeEdgeCost(sol->X[edgeID], sol->Y[edgeID], sol->X[edgeID + 1], sol->Y[edgeID + 1], edgeWgtType, roundFlag); /// inst->edgeCostMat[sol->indexPath[edgeID] * n + sol->indexPath[edgeID + 1]];
-            for (size_t i = 2 + edgeID; (i < n - 1) || ((i < n) && (edgeID > 0)); i++)
+            for (int i = 2 + edgeID; (i < n - 1) || ((i < n) && (edgeID > 0)); i++)
             {
                 float solEdgeWgt2 = computeEdgeCost(sol->X[i], sol->Y[i], sol->X[i + 1], sol->Y[i + 1], edgeWgtType, roundFlag); // inst->edgeCostMat[sol->indexPath[i] * n + sol->indexPath[i + 1]];
 
@@ -251,7 +251,7 @@ static inline unsigned long _2optBestFixCostMatrix(Solution *sol)
     Instance *inst = sol->instance;
 
     // setup "shortcuts" variables to declutter the code
-    size_t n = inst->nNodes;
+    int n = inst->nNodes;
 
     struct timespec currT;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
@@ -263,13 +263,13 @@ static inline unsigned long _2optBestFixCostMatrix(Solution *sol)
     {
         // setup local values to avoid calling mutex too often
         float bestOffset = 0;
-        size_t bestOffsetEdges[2] = {0, 0};
+        int bestOffsetEdges[2] = {0, 0};
 
         // do while there are edges to be checked
-        for (size_t edgeID = 0; edgeID < n - 1; edgeID++) // check for one edge at a time every other edge(except already checked)
+        for (int edgeID = 0; edgeID < n - 1; edgeID++) // check for one edge at a time every other edge(except already checked)
         {
             float solEdgeWgt1 = inst->edgeCostMat[sol->indexPath[edgeID] * n + sol->indexPath[edgeID + 1]];
-            for (size_t i = 2 + edgeID; (i < n - 1) || ((i < n) && (edgeID > 0)); i++)
+            for (int i = 2 + edgeID; (i < n - 1) || ((i < n) && (edgeID > 0)); i++)
             {
                 float solEdgeWgt2 = inst->edgeCostMat[sol->indexPath[i] * n + sol->indexPath[i + 1]];
 
@@ -312,7 +312,7 @@ static inline unsigned long _2OptBestFixAVX(Solution *sol)
     Instance *inst = sol->instance;
 
     // setup "shortcuts" variables to declutter the code
-    size_t n = inst->nNodes;
+    int n = inst->nNodes;
     enum EdgeWeightType edgeWgtType = inst->params.edgeWeightType;
     bool roundFlag = inst->params.roundWeights;
 
@@ -328,10 +328,10 @@ static inline unsigned long _2OptBestFixAVX(Solution *sol)
     while (finishedFlag == 0) // runs 2opt until no more moves are made in one iteration of 2opt
     {
         float bestOffset = 0;
-        size_t bestOffsetEdges[2] = {0};
+        int bestOffsetEdges[2] = {0};
 
         // do while there are edges to be checked
-        for (size_t edgeID = 0; edgeID < n - 1; edgeID++) // check for one edge at a time every other edge(except already checked)
+        for (int edgeID = 0; edgeID < n - 1; edgeID++) // check for one edge at a time every other edge(except already checked)
         {
 
             __m256 x1 = _mm256_broadcast_ss(&sol->X[edgeID]), y1 = _mm256_broadcast_ss(&sol->Y[edgeID]);
@@ -339,11 +339,11 @@ static inline unsigned long _2OptBestFixAVX(Solution *sol)
             __m256 partialSolEdgeWgt = computeEdgeCost_VEC(x1, y1, x2, y2, edgeWgtType, roundFlag);
             __m256 bestOffsetVec = _mm256_set1_ps(INFINITY);
 
-            __m256i idsVec = _mm256_add_epi32((_mm256_set_epi32(9, 8, 7, 6, 5, 4, 3, 2)), _mm256_set1_epi32((int)edgeID));
+            __m256i idsVec = _mm256_add_epi32((_mm256_set_epi32(9, 8, 7, 6, 5, 4, 3, 2)), _mm256_set1_epi32(edgeID));
             __m256i increment = _mm256_set1_epi32(AVX_VEC_SIZE);
             __m256i bestIDsVec = _mm256_set1_epi32(-1);
 
-            for (size_t i = 2 + edgeID; (i < n - 1) || ((i < n) && (edgeID > 0)); i += AVX_VEC_SIZE)
+            for (int i = 2 + edgeID; (i < n - 1) || ((i < n) && (edgeID > 0)); i += AVX_VEC_SIZE)
             {
                 __m256 altEdgeWgt, solEdgeWgt;
                 { // scope "force" a thing compiler should do automatically -> x3,y3,x4,y4 destroyed as soon as we don't need them anymore
@@ -371,7 +371,7 @@ static inline unsigned long _2OptBestFixAVX(Solution *sol)
             _mm256_storeu_ps(vecStore, bestOffsetVec);
             _mm256_storeu_si256((__m256i *)idsVecStore, bestIDsVec);
 
-            for (size_t i = 0; i < AVX_VEC_SIZE; i++)
+            for (int i = 0; i < AVX_VEC_SIZE; i++)
             {
                 if (bestOffset > vecStore[i])
                 {
@@ -410,7 +410,7 @@ typedef struct
     Solution *sol;
 
     // id of the next edge to be checked against all solution edges
-    size_t nextEdge;
+    int nextEdge;
 
     // flag that is set to 1 when the bestSolution has stopped improving
     char finishedFlag;
@@ -420,7 +420,7 @@ typedef struct
     float bestOffset;
 
     // best optimization configuration: ids of the nodes that give the best costOffset when "switched" with 2opt
-    size_t bestOffsetEdges[2];
+    int bestOffsetEdges[2];
 
     // Each thread set threadFinishFlag[threadID] = 1 when it's waiting for other thread to finish and update the bestSolution
     volatile int threadFinishFlag[MAX_THREADS];
@@ -461,7 +461,7 @@ static inline unsigned long _2OptBestFixAVXMultiThread(Solution *sol)
 
     // struct necessary to give each thread it's identifier correctly
     ThreadsDataWithID thIDs[MAX_THREADS];
-    for (size_t i = 0; i < inst->params.nThreads; i++)
+    for (int i = 0; i < inst->params.nThreads; i++)
     {
         thIDs[i].th = &th;
         thIDs[i].threadID = i;
@@ -469,14 +469,14 @@ static inline unsigned long _2OptBestFixAVXMultiThread(Solution *sol)
 
     // start threads
     pthread_t workers[MAX_THREADS];
-    for (size_t i = 0; i < inst->params.nThreads; i++)
+    for (int i = 0; i < inst->params.nThreads; i++)
     {
         pthread_create(&workers[i], NULL, _2OptBestFixAVXThread, &thIDs[i]);
         LOG(LOG_LVL_DEBUG, "2-Opt: Thread %ld created", i);
     }
 
     // wait for threads
-    for (size_t i = 0; i < inst->params.nThreads; i++)
+    for (int i = 0; i < inst->params.nThreads; i++)
     {
         pthread_join(workers[i], NULL);
         LOG(LOG_LVL_DEBUG, "2-Opt: Thread %ld finished", i);
@@ -497,7 +497,7 @@ static void *_2OptBestFixAVXThread(void *arg)
     Instance *inst = sol->instance;
 
     // setup "shortcuts" variables to declutter the code
-    size_t n = inst->nNodes;
+    int n = inst->nNodes;
     enum EdgeWeightType edgeWgtType = inst->params.edgeWeightType;
     bool roundFlag = inst->params.roundWeights;
 
@@ -508,14 +508,14 @@ static void *_2OptBestFixAVXThread(void *arg)
     {
         // setup local values to avoid calling mutex too often
         float localBestOffset = 0;
-        size_t localBestOffsetID[2];
+        int localBestOffsetID[2];
 
         // do while there are edges to be checked
         while (pthread_mutex_trylock(&th->mutex) != 0)
             ;
         while (th->nextEdge < n - 1) // check for one edge at a time every other edge(except already checked)
         {
-            size_t edgeID = th->nextEdge; // goes from 0 (means edge from first node in solution to second) to n which is the number of nodes
+            int edgeID = th->nextEdge; // goes from 0 (means edge from first node in solution to second) to n which is the number of nodes
             th->nextEdge++;
             pthread_mutex_unlock(&th->mutex);
 
@@ -524,11 +524,11 @@ static void *_2OptBestFixAVXThread(void *arg)
             __m256 partialSolEdgeWgt = computeEdgeCost_VEC(x1, y1, x2, y2, edgeWgtType, roundFlag); // inst->edgeCostMat[sol->indexPath[edgeID] * n + sol->indexPath[edgeID + 1]];
             __m256 bestOffsetVec = _mm256_set1_ps(INFINITY);
 
-            __m256i idsVec = _mm256_add_epi32((_mm256_set_epi32(9, 8, 7, 6, 5, 4, 3, 2)), _mm256_set1_epi32((int)edgeID));
+            __m256i idsVec = _mm256_add_epi32((_mm256_set_epi32(9, 8, 7, 6, 5, 4, 3, 2)), _mm256_set1_epi32(edgeID));
             __m256i increment = _mm256_set1_epi32(AVX_VEC_SIZE);
             __m256i bestIDsVec = _mm256_set1_epi32(-1);
 
-            for (size_t i = 2 + edgeID; (i < n - 1) || ((i < n) && (edgeID > 0)); i += AVX_VEC_SIZE)
+            for (int i = 2 + edgeID; (i < n - 1) || ((i < n) && (edgeID > 0)); i += AVX_VEC_SIZE)
             {
                 __m256 altEdgeWgt, solEdgeWgt;
                 { // scope "force" a thing compiler should do automatically -> x3,y3,x4,y4 destroyed as soon as we don't need them anymore
@@ -556,7 +556,7 @@ static void *_2OptBestFixAVXThread(void *arg)
             _mm256_storeu_ps(vecStore, bestOffsetVec);
             _mm256_storeu_si256((__m256i *)idsVecStore, bestIDsVec);
 
-            for (size_t i = 0; i < AVX_VEC_SIZE; i++)
+            for (int i = 0; i < AVX_VEC_SIZE; i++)
             {
                 if (localBestOffset > vecStore[i])
                 {
@@ -584,7 +584,7 @@ static void *_2OptBestFixAVXThread(void *arg)
         th->threadFinishFlag[threadID] = 1;
 
         int lastThreadFlag = 1; // if it remains one than this is the last thread going through this part at the end of the 2opt move search
-        for (size_t i = 0; i < inst->params.nThreads; i++)
+        for (int i = 0; i < inst->params.nThreads; i++)
             if (th->threadFinishFlag[i] == 0)
                 lastThreadFlag = 0;
 
@@ -610,7 +610,7 @@ static void *_2OptBestFixAVXThread(void *arg)
             th->bestOffset = 0;
 
             // reset all the threadFinishFlag to 0
-            for (size_t i = 0; i < inst->params.nThreads; i++)
+            for (int i = 0; i < inst->params.nThreads; i++)
                 th->threadFinishFlag[i] = 0;
         }
         pthread_mutex_unlock(&th->mutex);

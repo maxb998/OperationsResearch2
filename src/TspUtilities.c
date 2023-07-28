@@ -114,10 +114,10 @@ void cloneSolution(Solution *src, Solution *dst)
     dst->instance = src->instance;
     dst->execTime = src->execTime;
 
-    for (size_t i = 0; i < ((dst->instance->nNodes + AVX_VEC_SIZE) * 2); i++)
+    for (int i = 0; i < ((dst->instance->nNodes + AVX_VEC_SIZE) * 2); i++)
         dst->X[i] = src->X[i];
     
-    for (size_t i = 0; i < dst->instance->nNodes + 1; i++)
+    for (int i = 0; i < dst->instance->nNodes + 1; i++)
         dst->indexPath[i] = src->indexPath[i];
 }
 
@@ -202,7 +202,7 @@ bool checkSolution(Solution *sol)
     free(coveredNodes);
 
     // Check sol.X and sol.Y if they correspond correctly to inst.X and inst.Y given the indexes in sol.indexPath
-    for (size_t i = 0; i < inst->nNodes; i++)
+    for (int i = 0; i < inst->nNodes; i++)
     {
         if (sol->X[i] != inst->X[sol->indexPath[i]])
         { LOG(LOG_LVL_CRITICAL, "SolutionCheck: sol.X[sol.indexPath[%ld]] = %.3e and does not correspond with inst.X[%ld] = %.3e", i, inst->X[sol->indexPath[i]], i, sol->X[i]); return false; }
@@ -220,12 +220,12 @@ bool checkSolution(Solution *sol)
 
 double computeSolutionCostVectorized(Solution *sol)
 {
-    size_t n = sol->instance->nNodes;
+    int n = sol->instance->nNodes;
     enum EdgeWeightType ewt = sol->instance->params.edgeWeightType ;
     bool roundFlag = sol->instance->params.roundWeights;
 
     __m256d costVec = _mm256_setzero_pd();
-    size_t i = 0;
+    int i = 0;
     while (i < n) //- AVX_VEC_SIZE)
     {
         __m256 x1, x2, y1, y2;
@@ -238,7 +238,7 @@ double computeSolutionCostVectorized(Solution *sol)
         if ((i > n - AVX_VEC_SIZE) && (n % AVX_VEC_SIZE != 0))
         {
             int loadMask[AVX_VEC_SIZE] = { 0 };
-            for (size_t j = 0; j < n % AVX_VEC_SIZE; j++)
+            for (int j = 0; j < n % AVX_VEC_SIZE; j++)
                 loadMask[j] = -1;
             __m256i mask = _mm256_loadu_si256((__m256i_u*)loadMask);
             
@@ -267,7 +267,7 @@ double computeSolutionCostVectorized(Solution *sol)
     _mm256_storeu_pd(vecStore, costVec);
     
     double totalCost = 0;
-    for (size_t i = 0; i < 4; i++)
+    for (int i = 0; i < 4; i++)
         totalCost += vecStore[i];
     
     return totalCost;
@@ -279,25 +279,25 @@ double computeSolutionCost(Solution *sol)
     bool roundFlag = sol->instance->params.roundWeights;
 
     double cost = 0;
-    for (size_t i = 0; i < sol->instance->nNodes; i++)
+    for (int i = 0; i < sol->instance->nNodes; i++)
         cost += (double)computeEdgeCost(sol->X[i], sol->Y[i], sol->X[i+1], sol->Y[i+1], ewt, roundFlag);
     
     return cost;
 }
 
-static void quicksort_internal(float *arr, size_t low, size_t high)
+static void quicksort_internal(float *arr, int low, int high)
 {
     if ((high < SIZE_MAX) && (low < high))
     {
-        size_t pivot = (((size_t)rand() + 1) * (high - low) / RAND_MAX) + low;
+        int pivot = (int)(((long)rand() + 1) * (long)(high - low) / (long)RAND_MAX) + low;
         {
             register float temp;
             swapElems(arr[high], arr[pivot], temp);
         }
 
-        size_t i = (low - 1);
+        int i = (low - 1);
 
-        for (size_t j = low; j <= high - 1; j++)
+        for (int j = low; j <= high - 1; j++)
         {
             if (arr[j] <= arr[high])
             {
@@ -315,23 +315,23 @@ static void quicksort_internal(float *arr, size_t low, size_t high)
     }
 }
 
-void sort(float *arr, size_t n)
+void sort(float *arr, int n)
 {
     quicksort_internal(arr, 0, n-1);
 }
 
-static void quickargsort_internal(float *arr, int *indexes, size_t low, size_t high)
+static void quickargsort_internal(float *arr, int *indexes, int low, int high)
 {
     if ((high < SIZE_MAX) && (low < high))
     {
-        size_t pivot = (((size_t)rand() + 1) * (high - low) / RAND_MAX) + low;
+        int pivot = (int)(((long)rand() + 1) * (long)(high - low) / (long)RAND_MAX) + low;
         {
             register int tempi;
             swapElems(indexes[high], indexes[pivot], tempi);
         }
 
-        size_t i = (low - 1);
-        for (size_t j = low; j <= high - 1; j++)
+        int i = (low - 1);
+        for (int j = low; j <= high - 1; j++)
         {
             if (arr[indexes[j]] <= arr[indexes[high]])
             {
@@ -349,10 +349,10 @@ static void quickargsort_internal(float *arr, int *indexes, size_t low, size_t h
     }
 }
 
-void argsort(float *arr, int *indexes, size_t n)
+void argsort(float *arr, int *indexes, int n)
 {
-    for (size_t i = 0; i < n; i++)
-        indexes[i] = (int)i;
+    for (int i = 0; i < n; i++)
+        indexes[i] = i;
 
     quickargsort_internal(arr, indexes, 0, n-1);
 }

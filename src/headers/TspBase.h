@@ -123,7 +123,7 @@ typedef struct
 typedef struct
 {
     // data
-    size_t nNodes;
+    int nNodes;
     float *X;
     float *Y;
 

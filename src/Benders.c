@@ -15,7 +15,7 @@ void benders(Solution *sol, double tlim)
 	double currentTimeSec = startTimeSec;
 
 	Instance *inst = sol->instance;
-	size_t n = inst->nNodes;
+	int n = inst->nNodes;
 
 	if (!checkSolution(sol))
 		throwError(inst, sol, "benders: Input solution is not valid");

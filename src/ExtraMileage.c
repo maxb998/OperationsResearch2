@@ -32,19 +32,19 @@ static void *runExtraMileage(void *arg);
 
 static void updateBestSolutionEM(Solution *bestSol, Solution *newBest);
 
-static size_t initialization(Solution *sol, enum EMInitType emType, unsigned int *rndState);
+static int initialization(Solution *sol, enum EMInitType emType, unsigned int *rndState);
 
 static void farthestPointsInit(Solution *sol);
 
 static bool checkSolutionIntegrity(Solution *sol);
 
-static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos2);
+static inline void swapElementsInSolution(Solution *sol, int pos1, int pos2);
 
-static inline void updateSolutionEM(Solution *sol, size_t posCovered, size_t bestMileageIndex, size_t anchorIndex, float extraCost);
+static inline void updateSolutionEM(Solution *sol, int posCovered, int bestMileageIndex, int anchorIndex, float extraCost);
 
-static void extraMileageVectorized(Solution *sol, size_t nCovered, unsigned int *rndState);
+static void extraMileageVectorized(Solution *sol, int nCovered, unsigned int *rndState);
 
-static void extraMileageBase(Solution *sol, size_t nCovered, unsigned int *rndState, bool useCostMatrix);
+static void extraMileageBase(Solution *sol, int nCovered, unsigned int *rndState, bool useCostMatrix);
 
 
 Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emInitType, double tlim, int nThreads)
@@ -65,7 +65,7 @@ Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emIn
     pthread_mutex_init(&shared.mutex, NULL);
     EMThreadsData th[MAX_THREADS];
     unsigned int states[MAX_THREADS];
-    for (size_t i = 0; i < nThreads; i++)
+    for (int i = 0; i < nThreads; i++)
     {
         th[i].shared = &shared;
         states[i] = (unsigned int)rand();
@@ -75,10 +75,10 @@ Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emIn
 
     // start threads
     pthread_t threads[MAX_THREADS];
-    for (size_t i = 0; i < nThreads; i++)
+    for (int i = 0; i < nThreads; i++)
         pthread_create(&threads[i], NULL, runExtraMileage, &th[i]);
 
-    for (size_t i = 0; i < nThreads; i++)
+    for (int i = 0; i < nThreads; i++)
     {
         pthread_join(threads[i], NULL);
         iterCount += th[i].iterCount;
@@ -109,7 +109,7 @@ static void *runExtraMileage(void * arg)
 
     // optimization: save initialization if it is the same for every run (if init mode is random then it must be generated every time so no optimization)
     Solution init;
-    size_t coveredNodes;
+    int coveredNodes;
     if (shared->emInitType != EM_INIT_RANDOM)
     {
         init = newSolution(inst);
@@ -165,10 +165,10 @@ static void updateBestSolutionEM(Solution *bestSol, Solution *newBest)
     swapElems(bestSol->indexPath, newBest->indexPath, tempi);
 }
 
-void applyExtraMileage(Solution *sol, size_t nCovered, enum EMOptions emOpt, unsigned int *rndState)
+void applyExtraMileage(Solution *sol, int nCovered, enum EMOptions emOpt, unsigned int *rndState)
 {
     Instance *inst = sol->instance;
-    size_t n = inst->nNodes;
+    int n = inst->nNodes;
 
     // first check that the solution element at index nCovered is the same as the one at index 0
     if (sol->indexPath[0] != sol->indexPath[nCovered])
@@ -209,14 +209,14 @@ void applyExtraMileage(Solution *sol, size_t nCovered, enum EMOptions emOpt, uns
     }
 }
 
-static size_t initialization(Solution *sol, enum EMInitType emInitType, unsigned int *rndState)
+static int initialization(Solution *sol, enum EMInitType emInitType, unsigned int *rndState)
 {
     Instance *inst = sol->instance;
-    size_t coveredElems = 0;
+    int coveredElems = 0;
     sol->cost = 0;
 
     // Set data for solution (copy coords from distance and create index path as 0,1,2,...,n-1)
-    for (size_t i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
+    for (int i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
         sol->X[i] = inst->X[i];
     for (int i = 0; i < inst->nNodes; i++)
         sol->indexPath[i] = i;
@@ -226,9 +226,9 @@ static size_t initialization(Solution *sol, enum EMInitType emInitType, unsigned
     case EM_INIT_RANDOM:
         {
         // select two random nodes
-        int rndIndex0 = rand_r(rndState) % (int)inst->nNodes, rndIndex1 = rand_r(rndState) % (int)inst->nNodes;
+        int rndIndex0 = rand_r(rndState) % inst->nNodes, rndIndex1 = rand_r(rndState) % inst->nNodes;
         while (abs(rndIndex1 - rndIndex0) <= 1)
-            rndIndex1 = rand_r(rndState) % (int)inst->nNodes;
+            rndIndex1 = rand_r(rndState) % inst->nNodes;
 
         // add the two nodes to the solution (order does not matter)
         swapElementsInSolution(sol, 0, rndIndex0);
@@ -270,7 +270,7 @@ static size_t initialization(Solution *sol, enum EMInitType emInitType, unsigned
 static void farthestPointsInit(Solution *sol)
 {
     Instance *inst = sol->instance;
-    size_t n = inst->nNodes;
+    int n = inst->nNodes;
 
     __m256 maxCostVec = _mm256_set1_ps(0), rowMaxCostVec = _mm256_set1_ps(0); // cost is always positive
     __m256i maxIndexVec1 = _mm256_set1_epi32(0), maxIndexVec2 = _mm256_set1_epi32(0);
@@ -278,12 +278,12 @@ static void farthestPointsInit(Solution *sol)
     
 
     __m256i rowIDsVec = _mm256_set1_epi32(0); // the content of this are always all i
-    for (size_t i = 0; i < n-1; i++, rowIDsVec = _mm256_add_epi32(rowIDsVec, ones))
+    for (int i = 0; i < n-1; i++, rowIDsVec = _mm256_add_epi32(rowIDsVec, ones))
     {
         __m256i colIDsVec = _mm256_set_epi32( 8+i, 7+i, 6+i, 5+i, 4+i, 3+i, 2+i, 1+i );
         __m256 x1 = _mm256_broadcast_ss(&inst->X[i]), y1 = _mm256_broadcast_ss(&inst->Y[i]);
         
-        for (size_t j = i+1; j < n; j += AVX_VEC_SIZE, colIDsVec = _mm256_add_epi32(colIDsVec, incrementVec))
+        for (int j = i+1; j < n; j += AVX_VEC_SIZE, colIDsVec = _mm256_add_epi32(colIDsVec, incrementVec))
         {
             if (j > n - AVX_VEC_SIZE)
             {
@@ -307,8 +307,8 @@ static void farthestPointsInit(Solution *sol)
 
     float maxCosts[AVX_VEC_SIZE];
     _mm256_storeu_ps(maxCosts, maxCostVec);
-    size_t maxIndex = 0;
-    for (size_t i = 1; i < AVX_VEC_SIZE; i++)
+    int maxIndex = 0;
+    for (int i = 1; i < AVX_VEC_SIZE; i++)
         if (maxCosts[maxIndex] < maxCosts[i])
             maxIndex = i;
 
@@ -328,9 +328,9 @@ static void farthestPointsInit(Solution *sol)
 static bool checkSolutionIntegrity(Solution *sol)
 {
     Instance *inst = sol->instance;
-    size_t n = inst->nNodes;
+    int n = inst->nNodes;
 
-    for (size_t i = 0; i < n; i++)
+    for (int i = 0; i < n; i++)
     {
         int index = sol->indexPath[i];
         if (index < 0 || index > n)
@@ -349,7 +349,7 @@ static bool checkSolutionIntegrity(Solution *sol)
     return true;
 }
 
-static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos2)
+static inline void swapElementsInSolution(Solution *sol, int pos1, int pos2)
 {
     register float tempf;
     swapElems(sol->X[pos1], sol->X[pos2], tempf);
@@ -358,7 +358,7 @@ static inline void swapElementsInSolution(Solution *sol, size_t pos1, size_t pos
     swapElems(sol->indexPath[pos1], sol->indexPath[pos2], tempi);
 }
 
-static inline void updateSolutionEM(Solution *sol, size_t posCovered, size_t bestMileageIndex, size_t anchorIndex, float extraCost)
+static inline void updateSolutionEM(Solution *sol, int posCovered, int bestMileageIndex, int anchorIndex, float extraCost)
 {
     // update cost
     sol->cost += extraCost;
@@ -377,7 +377,7 @@ static inline void updateSolutionEM(Solution *sol, size_t posCovered, size_t bes
     if (EM_USE_FAST_SOLUTION_UPDATE)
     {
         // shift elements forward of 1 position iteratively with avx until vector is too big for the amount of elements to shift (do AVX_VEC_SIZE elements per iteration)
-        for (i -= AVX_VEC_SIZE; i > (int)anchorIndex; i -= AVX_VEC_SIZE)
+        for (i -= AVX_VEC_SIZE; i > anchorIndex; i -= AVX_VEC_SIZE)
         {
             __m256 xVec = _mm256_loadu_ps(&sol->X[i]);
             __m256 yVec = _mm256_loadu_ps(&sol->Y[i]);
@@ -406,11 +406,11 @@ static inline void updateSolutionEM(Solution *sol, size_t posCovered, size_t bes
     LOG(LOG_LVL_EVERYTHING, "Extra Mileage Solution Update: Node %d added to solution between nodes %d and %d", sol->indexPath[i], sol->indexPath[i-1], sol->indexPath[i+1]);
 }
 
-static void extraMileageVectorized(Solution *sol, size_t nCovered, unsigned int *rndState)
+static void extraMileageVectorized(Solution *sol, int nCovered, unsigned int *rndState)
 {
     // shortcuts/decluttering
     Instance *inst = sol->instance;
-    size_t n = inst->nNodes;
+    int n = inst->nNodes;
     enum EdgeWeightType ewt = inst->params.edgeWeightType ;
     bool roundW = inst->params.roundWeights;
     int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
@@ -418,7 +418,7 @@ static void extraMileageVectorized(Solution *sol, size_t nCovered, unsigned int 
     float bestExtraMileage[AVX_VEC_SIZE];
     int bestNodes[AVX_VEC_SIZE], bestAnchors[AVX_VEC_SIZE];
 
-    for (size_t posCovered = nCovered + 1; posCovered <= n; posCovered++) // until there are uncored nodes (each iteration adds one to posCovered)
+    for (int posCovered = nCovered + 1; posCovered <= n; posCovered++) // until there are uncored nodes (each iteration adds one to posCovered)
     {
         // Contains best mileage values
         __m256 bestExtraMileageVec = _mm256_set1_ps(INFINITY);
@@ -428,7 +428,7 @@ static void extraMileageVectorized(Solution *sol, size_t nCovered, unsigned int 
         __m256i bestAnchorsVec = _mm256_set1_epi32(-1);
 
         // we do this to avoid the need of checking the last elements loaded by _mm256_loadu -> exploit the "INFINITY" placed at the end of the last elements in sol.X and sol.Y
-        for (size_t i = 0; i < posCovered-1; i++)
+        for (int i = 0; i < posCovered-1; i++)
         {
             // Create vectors containig necessary data on the points attached to the edge i
             __m256 x1Vec = _mm256_broadcast_ss(&sol->X[i]), y1Vec = _mm256_broadcast_ss(&sol->Y[i]);
@@ -438,14 +438,14 @@ static void extraMileageVectorized(Solution *sol, size_t nCovered, unsigned int 
             __m256 curEdgeCostVec = computeEdgeCost_VEC(x1Vec, y1Vec, x2Vec, y2Vec, ewt, roundW);
 
             // Vector that contains only the index of the current edge
-            __m256i curEdgeID = _mm256_set1_epi32((int)i);
+            __m256i curEdgeID = _mm256_set1_epi32(i);
 
             // Vector that keeps track of the IDs of the best candidates for the current edge
             __m256i idsVec = _mm256_add_epi32(_mm256_set_epi32( 7, 6, 5, 4, 3, 2, 1, 0 ), _mm256_set1_epi32( posCovered ) );
             __m256i incrementVec = _mm256_set1_epi32( AVX_VEC_SIZE );
 
             // check for each edge which ones are the best
-            for (size_t u = posCovered; u <= n; u += AVX_VEC_SIZE, idsVec = _mm256_add_epi32(idsVec, incrementVec))
+            for (int u = posCovered; u <= n; u += AVX_VEC_SIZE, idsVec = _mm256_add_epi32(idsVec, incrementVec))
             {
                 __m256 curExtraMileageVec;
                 {
@@ -472,8 +472,8 @@ static void extraMileageVectorized(Solution *sol, size_t nCovered, unsigned int 
         _mm256_storeu_si256((__m256i_u*)bestAnchors, bestAnchorsVec);
 
         // sort bestExtraMileage while matching the sorting moves on both bestNodes and bestAnchors
-        for (size_t i = 0; i < AVX_VEC_SIZE; i++) {
-            for (size_t j = i+1; j < AVX_VEC_SIZE; j++) {
+        for (int i = 0; i < AVX_VEC_SIZE; i++) {
+            for (int j = i+1; j < AVX_VEC_SIZE; j++) {
                 if (bestExtraMileage[i] > bestExtraMileage[j]) {
                     register float tempf;
                     swapElems(bestExtraMileage[i], bestExtraMileage[j], tempf);
@@ -490,7 +490,7 @@ static void extraMileageVectorized(Solution *sol, size_t nCovered, unsigned int 
 
             case GRASP_ALMOSTBEST:
             {
-                size_t rndIdx = 1;
+                int rndIdx = 1;
                 for (; rndIdx < AVX_VEC_SIZE-1; rndIdx++)
                     if (rand_r(rndState) > RAND_MAX / 2)
                         break;
@@ -500,8 +500,8 @@ static void extraMileageVectorized(Solution *sol, size_t nCovered, unsigned int 
 
             case GRASP_RANDOM:
             {
-                size_t node = posCovered + (size_t)rand_r(rndState) % (n+1-posCovered);
-                size_t anchor = (size_t)rand_r(rndState) % (posCovered-1);
+                int node = posCovered + rand_r(rndState) % (n+1-posCovered);
+                int anchor = rand_r(rndState) % (posCovered-1);
                 float extraMileage = computeEdgeCost(sol->X[anchor], sol->Y[anchor], sol->X[node], sol->Y[node], ewt, roundW) +
                                      computeEdgeCost(sol->X[node], sol->Y[node], sol->X[anchor+1], sol->Y[anchor+1], ewt, roundW) -
                                      computeEdgeCost(sol->X[anchor], sol->Y[anchor], sol->X[anchor+1], sol->Y[anchor+1], ewt, roundW);
@@ -516,24 +516,24 @@ static void extraMileageVectorized(Solution *sol, size_t nCovered, unsigned int 
     }
 }
 
-static void extraMileageBase(Solution *sol, size_t nCovered, unsigned int *rndState, bool useCostMatrix)
+static void extraMileageBase(Solution *sol, int nCovered, unsigned int *rndState, bool useCostMatrix)
 {
     // shortcuts/decluttering
     Instance *inst = sol->instance;
-    size_t n = inst->nNodes;
+    int n = inst->nNodes;
     enum EdgeWeightType ewt = inst->params.edgeWeightType ;
     bool roundW = inst->params.roundWeights;
     int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
 
-    for (size_t posCovered = nCovered + 1; posCovered <= n; posCovered++) // until there are uncored nodes (each iteration adds one to posCovered)
+    for (int posCovered = nCovered + 1; posCovered <= n; posCovered++) // until there are uncored nodes (each iteration adds one to posCovered)
     {
         float bestMileage = INFINITY; // saves best mileage value
-        size_t bestNode = 0xFFFFFFFFFFFFFFFF; // saves the index of the node that will be added at the end of the iteration
+        int bestNode = -1; // saves the index of the node that will be added at the end of the iteration
 
         // index of the covered nodes that represent the edge that will be splitted to integrate u at solution update
-        size_t bestAnchor = 0xFFFFFFFFFFFFFFFF;
+        int bestAnchor = -1;
 
-        for (size_t i = 0; i < posCovered-1; i++) // u stands for uncovered
+        for (int i = 0; i < posCovered-1; i++) // u stands for uncovered
         {
             // cost of edge already in solution [i,j]
             float currEdgeCost;
@@ -542,7 +542,7 @@ static void extraMileageBase(Solution *sol, size_t nCovered, unsigned int *rndSt
             else
                 currEdgeCost = computeEdgeCost(sol->X[i], sol->Y[i], sol->X[i+1], sol->Y[i+1], ewt, roundW);
 
-            for (size_t u = posCovered; u < n+1; u++) // covered node i from 0 to posCovered
+            for (int u = posCovered; u < n+1; u++) // covered node i from 0 to posCovered
             {
                 // sum of cost of edge [i,u] and edge [u,j]
                 float altEdgeCost;
@@ -572,8 +572,8 @@ static void extraMileageBase(Solution *sol, size_t nCovered, unsigned int *rndSt
             case GRASP_ALMOSTBEST: break; // not supported in this mode
             case GRASP_RANDOM:
             {
-                size_t node = posCovered + (size_t)rand_r(rndState) % (n+1-posCovered);
-                size_t anchor = (size_t)rand_r(rndState) % (posCovered-1);
+                int node = posCovered + rand_r(rndState) % (n+1-posCovered);
+                int anchor = rand_r(rndState) % (posCovered-1);
                 float extraMileage = computeEdgeCost(sol->X[anchor], sol->Y[anchor], sol->X[node], sol->Y[node], ewt, roundW) +
                                      computeEdgeCost(sol->X[node], sol->Y[node], sol->X[anchor+1], sol->Y[anchor+1], ewt, roundW) -
                                      computeEdgeCost(sol->X[anchor], sol->Y[anchor], sol->X[anchor+1], sol->Y[anchor+1], ewt, roundW);

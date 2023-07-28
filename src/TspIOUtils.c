@@ -51,12 +51,12 @@ const char * wgtTypeStr[] = {
 static void getNameFromFile(char * line, int lineSize, char out[], Instance *inst);
 // checks that the file type is "TSP"
 static void checkFileType(char * line, int lineSize, Instance *inst);
-// get the value related with the keyword "DIMENSION" and returns it as a size_t
-static size_t getDimensionFromLine(char * line, int lineSize, Instance *inst);
+// get the value related with the keyword "DIMENSION" and returns it as a int
+static int getDimensionFromLine(char * line, int lineSize, Instance *inst);
 // check that the string associated with "EDGE_WEIGHT_TYPE" is correct and return it as a number
-static size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *inst);
+static int getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *inst);
 
-static void readTspLine(char *line, size_t length, size_t index, Instance *inst, size_t keywordsLinesCount);
+static void readTspLine(char *line, int length, int index, Instance *inst, int keywordsLinesCount);
 
 double readFile (Instance *inst)
 {
@@ -73,18 +73,18 @@ double readFile (Instance *inst)
     int lineSize;
     int keywordsFound[KEYWORDS_COUNT] = { 0 };    // starting value assumes bad file
 
-    size_t keywordsLinesCount = 0; // count the number of lines occupied by the keywords
+    int keywordsLinesCount = 0; // count the number of lines occupied by the keywords
     int keywordFinished = 0;
-    while ((keywordFinished == 0) && ((lineSize = getline(&line, &lineMemSize, f)) != EOF))
+    while ((keywordFinished == 0) && ((lineSize = (int)getline(&line, &lineMemSize, f)) != EOF))
     {
         keywordsLinesCount++;
         //LOG(LOG_LVL_EVERYTHING, line);
 
         // check in the first part of each line if we find a useful keyword
         int keywordID = NO_KEYWORD_FOUND_ID;
-        for (size_t i = 0; i < KEYWORDS_COUNT; i++)
+        for (int i = 0; i < KEYWORDS_COUNT; i++)
         {
-            size_t keywordLength = strlen(keywords[i]);
+            int keywordLength = (int)strlen(keywords[i]);
 
             if (strncmp(line, keywords[i], keywordLength) == 0)
             {
@@ -139,7 +139,7 @@ double readFile (Instance *inst)
     }
 
     // check all important keywords have been found
-    for (size_t i = 0; i < KEYWORDS_COUNT; i++)
+    for (int i = 0; i < KEYWORDS_COUNT; i++)
         if (keywordsFound[i] != 1)  // keyword has not been found in the loop above
             throwError(inst, NULL, "Important keyword \"%s\" has not been found/detected in the tsp file. Check the .tsp file", keywords[i]);
 
@@ -149,7 +149,7 @@ double readFile (Instance *inst)
     inst->Y = &inst->X[inst->nNodes + AVX_VEC_SIZE];
 
     // fill the memory with data
-    size_t i = 0;
+    int i = 0;
     while (((lineSize = getline(&line, &lineMemSize, f)) != EOF) && (strncmp(line, "EOF", 3) != 0))
     {
         // check if the number of data lines are not more than the number specified in dimension
@@ -172,7 +172,7 @@ double readFile (Instance *inst)
         // reallocataing memory to better fit the smaller instance
         float *reallocX = malloc((inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float));
         float *reallocY = &reallocX[inst->nNodes + AVX_VEC_SIZE];
-        for (size_t j = 0; j < inst->nNodes; j++)
+        for (int j = 0; j < inst->nNodes; j++)
         {
             reallocX[j] = inst->X[j];
             reallocY[j] = inst->Y[j];
@@ -185,7 +185,7 @@ double readFile (Instance *inst)
     }
 
     // set to infinite the empty <AVX_VEC_SIZE> elements at the end of X and Y
-    for (size_t i = inst->nNodes; i < inst->nNodes + AVX_VEC_SIZE; i++)
+    for (int i = inst->nNodes; i < inst->nNodes + AVX_VEC_SIZE; i++)
     {
         inst->X[i] = INFINITY;
         inst->Y[i] = INFINITY;
@@ -196,7 +196,7 @@ double readFile (Instance *inst)
     if (line) free(line);
 
     // print the coordinates data with enough log level
-    //for (size_t i = 0; i < inst->nNodes; i++)
+    //for (int i = 0; i < inst->nNodes; i++)
     //    LOG(LOG_LVL_EVERYTHING, "Node %4lu: [%.2e, %.2e]", i+1, inst->X[i], inst->Y[i]);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &finish);
@@ -229,7 +229,7 @@ static void checkFileType(char * line, int lineSize, Instance *inst)
                                      Check that the file used in input is of the correct type and correctly formatted. Only \"TSP\" files are currently supported");
 }
 
-static size_t getDimensionFromLine(char * line, int lineSize, Instance *inst)
+static int getDimensionFromLine(char * line, int lineSize, Instance *inst)
 {
     // first find the pointer to the first number part of line and then convert it to integer checking for all errors
     char *numberFirstChar = strchr(line, ':');
@@ -242,7 +242,7 @@ static size_t getDimensionFromLine(char * line, int lineSize, Instance *inst)
     //LOG(LOG_LVL_EVERYTHING, "Getting the number of nodes from file: the first character of the number is:%c", *numberFirstChar);
 
     char *endPtr = NULL;
-    size_t dimension = strtoul(numberFirstChar, &endPtr, 10);
+    int dimension = (int)strtoul(numberFirstChar, &endPtr, 10);
 
     // check for errors on conversion
     if (endPtr == numberFirstChar)
@@ -260,7 +260,7 @@ static size_t getDimensionFromLine(char * line, int lineSize, Instance *inst)
     return dimension;
 }
 
-static size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *inst)
+static int getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *inst)
 {
     // first find the pointer to the weight type descriptor
     char *firstWgtTypePtr = strchr(line, ':');
@@ -274,9 +274,9 @@ static size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *ins
     LOG(LOG_LVL_EVERYTHING, "Getting the edge weight type from file: the first character of the weight type is:%c", *firstWgtTypePtr);
 
     int foundEdgeWeightTypeID = -1;
-    for (size_t i = 0; i < EDGE_WEIGHT_TYPES_COUNT; i++)
+    for (int i = 0; i < EDGE_WEIGHT_TYPES_COUNT; i++)
     {
-        size_t wgtTypeStrLen = strlen(wgtTypeStr[i]);
+        int wgtTypeStrLen = (int)strlen(wgtTypeStr[i]);
 
         if (strncmp(firstWgtTypePtr, wgtTypeStr[i], wgtTypeStrLen) == 0)
         {
@@ -292,12 +292,12 @@ static size_t getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *ins
     return foundEdgeWeightTypeID;
 }
 
-static void readTspLine(char *line, size_t length, size_t index, Instance *inst, size_t keywordsLinesCount)
+static void readTspLine(char *line, int length, int index, Instance *inst, int keywordsLinesCount)
 {
     double numbers[3] = { 0 };
     char *endPtr = line;
 
-    size_t i = 0, numID = 0;
+    int i = 0, numID = 0;
     while (i < length)
     {
         // scroll past any black spaces
@@ -321,8 +321,8 @@ static void readTspLine(char *line, size_t length, size_t index, Instance *inst,
         i += endPtr - oldEndPtr;
     }
 
-    if ((size_t)numbers[0] != index + 1)
-        LOG(LOG_LVL_WARNING, "readFile: File has inconsistent enumeration, node %lu at line %lu should be identified with %ld", (size_t)numbers[0], keywordsLinesCount + index + 1, index + 1);
+    if ((int)numbers[0] != index + 1)
+        LOG(LOG_LVL_WARNING, "readFile: File has inconsistent enumeration, node %lu at line %lu should be identified with %ld", (int)numbers[0], keywordsLinesCount + index + 1, index + 1);
 
     inst->X[index] = numbers[1];
     inst->Y[index] = numbers[2];
@@ -364,14 +364,14 @@ void saveSolution(Solution *sol, int argc, char *argv[])
 
     // add description of the parameters used for this run
     char comment[1000] = { 0 };
-    for (size_t i = 1; i < argc-1; i++)
+    for (int i = 1; i < argc-1; i++)
     {
         // check if args is meaningless to save
         int skip = 0;
-        for (size_t j = 0; j < MEANINGLESS_FLAGS_COUNT; j++)
+        for (int j = 0; j < MEANINGLESS_FLAGS_COUNT; j++)
             if (strcmp(argv[i], meaninglessFlags[j]) == 0)
                 { skip = 1; break; }
-        for (size_t j = 0; j < MEANINGLESS_ARGS_COUNT; j++)
+        for (int j = 0; j < MEANINGLESS_ARGS_COUNT; j++)
             if (strcmp(argv[i], meaninglessArgs[j]) == 0)
                 { i++; skip = 1; break; }
         if (skip) continue;
@@ -396,7 +396,7 @@ void saveSolution(Solution *sol, int argc, char *argv[])
     fprintf(solutionFile, "COMMENT : %s\n", comment);
 
     fprintf(solutionFile, "TYPE : TOUR\n");
-    fprintf(solutionFile, "DIMENSION : %ld\n", sol->instance->nNodes);
+    fprintf(solutionFile, "DIMENSION : %d\n", sol->instance->nNodes);
     fprintf(solutionFile, "TOUR_SECTION\n");
 
     // populating the file with the solution
@@ -424,15 +424,15 @@ void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointC
 
     // assign number to points
     if (printIndex)
-        for (size_t i = 0; i < sol->instance->nNodes; i++)
-            fprintf(gnuplotPipe, "set label \"%ld\" at %f,%f\n", i, sol->instance->X[i], sol->instance->Y[i]);
+        for (int i = 0; i < sol->instance->nNodes; i++)
+            fprintf(gnuplotPipe, "set label \"%d\" at %f,%f\n", i, sol->instance->X[i], sol->instance->Y[i]);
 
     // populating the plot
     
     fprintf(gnuplotPipe, "plot '-' with point linestyle 1, '-' with linespoint linestyle 2\n");
 
     // first plot only the points
-    for (size_t i = 0; i < sol->instance->nNodes; i++)
+    for (int i = 0; i < sol->instance->nNodes; i++)
         fprintf(gnuplotPipe, "%f %f\n", sol->instance->X[i], sol->instance->Y[i]);
     fprintf(gnuplotPipe, "e\n");
 

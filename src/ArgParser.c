@@ -312,7 +312,7 @@ static int parseGrasp(char *arg, Instance *inst)
         inst->params.graspType = GRASP_ALMOSTBEST;
 
         // check if GRASP_CHANCE is also specified
-        size_t graspChancePosStart = strlen(graspStrings[GRASP_ALMOSTBEST]);
+        int graspChancePosStart = (int)strlen(graspStrings[GRASP_ALMOSTBEST]);
         if (arg[graspChancePosStart] == '(')
         {
             char *endPtr;
@@ -337,7 +337,7 @@ static int parseGrasp(char *arg, Instance *inst)
         inst->params.graspType = GRASP_RANDOM;
 
         // check if GRASP_CHANCE is also specified
-        size_t graspChancePosStart = strlen(graspStrings[GRASP_RANDOM]);
+        int graspChancePosStart = (int)strlen(graspStrings[GRASP_RANDOM]);
         if (arg[graspChancePosStart] == '(')
         {
             char *endPtr;
@@ -399,7 +399,7 @@ static int parseNThreads(char *arg, Instance *inst)
     long cvt = strtol(arg, &endPtr, 10);
     if (cvt <= 0 || cvt > 32)
     {
-        LOG(LOG_LVL_ERROR, "The number of threads must be an interger value > 0 and < 32");
+        LOG(LOG_LVL_ERROR, "The number of threads must be an interger value > 0 and < %d", MAX_THREADS);
         return ARGP_ERR_UNKNOWN;
     }
     if (endPtr != &arg[strlen(arg)])

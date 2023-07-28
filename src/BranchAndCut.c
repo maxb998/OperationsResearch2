@@ -175,11 +175,11 @@ static int PostSolution(CPXCALLBACKCONTEXTptr context, Instance *inst, int ncols
 	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (!checkSuccessorSolution(inst, successors) != 0))
 		return 1;
 
-	for (size_t i = 0; i < ncols; i++)
+	for (int i = 0; i < ncols; i++)
 		vals[i] = 0.0;
-	for (size_t i = 0; i < ncols; i++)
+	for (int i = 0; i < ncols; i++)
 		indexes[i] = i;
-	for (size_t i = 0; i < inst->nNodes; i++)
+	for (int i = 0; i < inst->nNodes; i++)
 	{
 		int pos = xpos(i, successors[i], inst->nNodes);
 		vals[pos] = 1.0;

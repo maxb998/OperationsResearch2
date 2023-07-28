@@ -57,7 +57,7 @@ void destroyCplexData(CplexData * cpxData);
 * @param n Number of nodes
 * @result Index of edge selected by i and j in cplex format
 */
-size_t xpos(size_t i, size_t j, size_t n);
+int xpos(int i, int j, int n);
 
 /*!
 * @brief Convert Cplex solution to a SubtoursData format
@@ -67,7 +67,7 @@ size_t xpos(size_t i, size_t j, size_t n);
 * @param nNodes Number of nodes in the instance
 * @param subData Output of conversion is stored here
 */
-void cvtCPXtoSuccessors(double *xstar, int ncols, size_t nNodes, SubtoursData *subData);
+void cvtCPXtoSuccessors(double *xstar, int ncols, int nNodes, SubtoursData *subData);
 
 /*!
 * @brief Compute the cost of a solution in "successors" form

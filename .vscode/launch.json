@@ -45,11 +45,11 @@
             "program": "${workspaceFolder}/bin/x64/main",
             "args": [
                 "--file", "data/a280.tsp",
-                "--mode", "hardfix",
+                "--mode", "em",
 
-                //"--grasp", "almostbest(0.1)",
+                "--grasp", "almostbest(0.1)",
                 "--2opt",
-                "--tlim", "200",
+                "--tlim", "30",
 
                 //"--nn-opt", "tryall",
                 //"--em-opt", "random",

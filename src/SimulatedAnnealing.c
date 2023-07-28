@@ -31,7 +31,7 @@ void SimulatedAnnealing(Solution *sol, double timeLimit)
 
     // Contains a copy of the current indexPath, which will be modified and from which we will update the solution
     int *newIndexPath = malloc(sizeof(int) * sol->instance->nNodes);
-    for (size_t i = 0; i < sol->instance->nNodes; i++)
+    for (int i = 0; i < sol->instance->nNodes; i++)
     {
         newIndexPath[i] = sol->indexPath[i];
     }
@@ -50,8 +50,8 @@ void SimulatedAnnealing(Solution *sol, double timeLimit)
 static inline double randomSwap(int *path, Solution *sol)
 {
     int nNodes = sol->instance->nNodes;
-    size_t index1 = (size_t)rand() * nNodes / (RAND_MAX+1);
-    size_t index2 = (size_t)rand() * nNodes / (RAND_MAX+1);
+    int index1 = (int)((long)rand() * (long)nNodes / ((long)RAND_MAX+1L));
+    int index2 = (int)((long)rand() * (long)nNodes / ((long)RAND_MAX+1L));
     {
         register int temp;
         if(index2 < index1) swapElems(index1, index2, temp);
@@ -94,7 +94,7 @@ static inline void updateT(float *temperature)
 
 static inline void normalizeDelta(double *deltaCost, Solution *sol)
 {
-    *deltaCost = *deltaCost / (sol->cost / (int)sol->instance->nNodes);
+    *deltaCost = *deltaCost / (sol->cost / sol->instance->nNodes);
 }
 
 static bool keepMove(double *threshold)

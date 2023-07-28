@@ -5,7 +5,7 @@ static inline void findBestSubtourMerge(SubtoursData *sub, int subtoursCount, In
 
 double PatchingHeuristic(SubtoursData *sub, Instance *inst)
 {
-	size_t n = inst->nNodes;
+	int n = inst->nNodes;
 
 	int subtoursCount = sub->subtoursCount;
 	while (subtoursCount > 1)
@@ -41,7 +41,7 @@ double PatchingHeuristic(SubtoursData *sub, Instance *inst)
 
 		// now adjust subtoursMap
 		int sub2Map = sub->subtoursMap[mergeIndexes[1]];
-		for (size_t i = 0; i < n; i++)
+		for (int i = 0; i < n; i++)
 		{
 			if (sub->subtoursMap[i] == sub2Map)
 				sub->subtoursMap[i] = sub->subtoursMap[mergeIndexes[0]];
@@ -65,15 +65,15 @@ static inline void findBestSubtourMerge(SubtoursData *sub, int subtoursCount, In
 
 	float min = INFINITY;
 
-	for (size_t subtourID = 0; subtourID < subtoursCount-1; subtourID++)
+	for (int subtourID = 0; subtourID < subtoursCount-1; subtourID++)
 	{
-		size_t first1 = 0;
+		int first1 = 0;
 			while (sub->subtoursMap[first1] != subtourID)
 				first1++;
 
-		for (size_t subtourToCompare = subtourID+1; subtourToCompare < subtoursCount; subtourToCompare++)
+		for (int subtourToCompare = subtourID+1; subtourToCompare < subtoursCount; subtourToCompare++)
 		{
-			size_t first2 = 0;
+			int first2 = 0;
 			while (sub->subtoursMap[first2] != subtourToCompare)
 				first2++;
 			

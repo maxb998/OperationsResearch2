@@ -148,7 +148,7 @@ void HardFixing(Solution *sol, double fixingAmount, enum HardFixPolicy policy, d
 
 static HardfixAllocatedMem initHardfixAllocatedMem(Solution *sol)
 {
-    size_t n = sol->instance->nNodes;
+    int n = sol->instance->nNodes;
 
     HardfixAllocatedMem hfAlloc = {
         .cpx = initCplexData(sol->instance),
@@ -211,7 +211,7 @@ static void updateFixAmount(HardfixAllocatedMem *hfAlloc)
     // keeps track of the previous iteration cost
     static double oldCost = INFINITY;
 
-    size_t n = hfAlloc->cpx.inst->nNodes;
+    int n = hfAlloc->cpx.inst->nNodes;
 
     if (oldCost <= hfAlloc->cbData.bestCost)
     {
@@ -236,43 +236,43 @@ static void updateFixAmount(HardfixAllocatedMem *hfAlloc)
 
 static int resetBounds(HardfixAllocatedMem *hfAlloc)
 {
-    size_t n = hfAlloc->cpx.inst->nNodes;
+    int n = hfAlloc->cpx.inst->nNodes;
 
     // set lower bounds (upper bounds are not modified)
-    for (size_t i = 0; i < n; i++)
+    for (int i = 0; i < n; i++)
     {
         hfAlloc->bType[i] = 'L';
-        hfAlloc->indexes[i] = xpos(i, (size_t)hfAlloc->cbData.bestSuccessors[i], n);
+        hfAlloc->indexes[i] = xpos(i, hfAlloc->cbData.bestSuccessors[i], n);
         hfAlloc->bVal[i] = 0.0;
     }
-    int retVal = CPXchgbds(hfAlloc->cpx.env, hfAlloc->cpx.lp, (int)n, hfAlloc->indexes, hfAlloc->bType, hfAlloc->bVal);
+    int retVal = CPXchgbds(hfAlloc->cpx.env, hfAlloc->cpx.lp, n, hfAlloc->indexes, hfAlloc->bType, hfAlloc->bVal);
 
     return retVal;
 }
 
 static int randomFix(HardfixAllocatedMem *hfAlloc)
 {
-    size_t n = hfAlloc->cpx.inst->nNodes;
+    int n = hfAlloc->cpx.inst->nNodes;
 
     // setup indexes from 0 to n-1 in order to perform permutations on it
-    for (size_t i = 0; i < n; i++)
-        hfAlloc->indexes[i] = (int)i;
+    for (int i = 0; i < n; i++)
+        hfAlloc->indexes[i] = i;
 
     // n random permutations
-    for (size_t i = 0; i < n; i++)
+    for (int i = 0; i < n; i++)
     {
-        size_t pos1 = (size_t)rand() * hfAlloc->fixAmount / RAND_MAX, pos2 = (size_t)rand() * hfAlloc->fixAmount / RAND_MAX;
-        while (pos2 == pos1) pos2 = (size_t)rand() * hfAlloc->fixAmount / RAND_MAX;
+        int pos1 = (int)((long)rand() * (long)hfAlloc->fixAmount / (long)RAND_MAX), pos2 = (int)((long)rand() * (long)hfAlloc->fixAmount / (long)RAND_MAX);
+        while (pos2 == pos1) pos2 = (int)((long)rand() * (long)hfAlloc->fixAmount / (long)RAND_MAX);
 
         register int temp;
         swapElems(hfAlloc->indexes[pos1], hfAlloc->indexes[pos2], temp);
     }
     
     // setup arrays to fix bounds
-    for (size_t i = 0; i < hfAlloc->fixAmount; i++)
+    for (int i = 0; i < hfAlloc->fixAmount; i++)
     {
         hfAlloc->bType[i] = 'B';
-        hfAlloc->indexes[i] = xpos((size_t)hfAlloc->indexes[i], (size_t)hfAlloc->cbData.bestSuccessors[hfAlloc->indexes[i]], n);
+        hfAlloc->indexes[i] = xpos(hfAlloc->indexes[i], hfAlloc->cbData.bestSuccessors[hfAlloc->indexes[i]], n);
         hfAlloc->bVal[i] = 1.0;
     }
     int retVal = CPXchgbds(hfAlloc->cpx.env, hfAlloc->cpx.lp, hfAlloc->fixAmount, hfAlloc->indexes, hfAlloc->bType, hfAlloc->bVal);
@@ -283,19 +283,19 @@ static int randomFix(HardfixAllocatedMem *hfAlloc)
 static int smallestFix(HardfixAllocatedMem *hfAlloc)
 {
     Instance *inst = hfAlloc->cpx.inst;
-    size_t n = inst->nNodes;
+    int n = inst->nNodes;
 
     // instead of allocating new memory cast some pointers inside space allocated pointed by bounds(which is bounds)
     float *tourEdgesCost = (float*)hfAlloc->bVal;
     int *successors = hfAlloc->cbData.bestSuccessors;
 
-    for (size_t i = n; i < n + AVX_VEC_SIZE; i++)
+    for (int i = n; i < n + AVX_VEC_SIZE; i++)
         successors[i] = 0;
 
     // compute cost of each edge with avx instructions(not necessary since it's not a performance critical function)
     __m256i indexes = _mm256_set_epi32(7, 6, 5, 4, 3, 2, 1, 0);
     __m256i increment = _mm256_set1_epi32(AVX_VEC_SIZE);
-    for (size_t i = 0; i < n; i += AVX_VEC_SIZE)
+    for (int i = 0; i < n; i += AVX_VEC_SIZE)
     {
         __m256 x1 = _mm256_i32gather_ps(inst->X, indexes, 4), y1 = _mm256_i32gather_ps(inst->Y, indexes, 4);
 
@@ -312,10 +312,10 @@ static int smallestFix(HardfixAllocatedMem *hfAlloc)
     // perform argsort on tourEdgesCost using minCostIndexes as output
     argsort(tourEdgesCost, hfAlloc->indexes, n);
 
-    for (size_t i = 0; i < hfAlloc->fixAmount; i++)
+    for (int i = 0; i < hfAlloc->fixAmount; i++)
     {
         hfAlloc->bType[i] = 'B';
-        hfAlloc->indexes[i] = xpos((size_t)hfAlloc->indexes[i], (size_t)hfAlloc->cbData.bestSuccessors[hfAlloc->indexes[i]], n);
+        hfAlloc->indexes[i] = xpos(hfAlloc->indexes[i], hfAlloc->cbData.bestSuccessors[hfAlloc->indexes[i]], n);
         hfAlloc->bVal[i] = 1.0;
     }
     

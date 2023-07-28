@@ -10,7 +10,7 @@ typedef struct
 {
     Instance *inst;
     pthread_mutex_t mutex;
-    size_t nextRow; // only value that needs critical region, used to select the row on which the thread will work on
+    int nextRow; // only value that needs critical region, used to select the row on which the thread will work on
 } ThreadsData;
 
 // method to compute edges weights with multiple threads using AVX2 instructions
@@ -20,10 +20,10 @@ void printCostMatrix(Instance *inst)
 {
     LOG(LOG_LVL_LOG, "Printing the distance matrix");
 
-    for (size_t row = 0; row < inst->nNodes; row++)
+    for (int row = 0; row < inst->nNodes; row++)
     {
         printf(" ");
-        for (size_t col = 0; col < inst->nNodes; col++)
+        for (int col = 0; col < inst->nNodes; col++)
             printf("%.3e ", inst->edgeCostMat[row * inst->nNodes + col]);
         printf("\n");
     }
@@ -50,13 +50,13 @@ double computeCostMatrix(Instance *inst)
 
     // start threads
     pthread_t threads[MAX_THREADS];
-    for (size_t i = 0; i < inst->params.nThreads; i++)
+    for (int i = 0; i < inst->params.nThreads; i++)
     {
         pthread_create (&threads[i], NULL, computeDistMatThread, &thInst);
         LOG (LOG_LVL_DEBUG, "Distance Matrix Computation: Thread %ld CREATED", i);
     }
 
-    for (size_t i = 0; i < inst->params.nThreads; i++)
+    for (int i = 0; i < inst->params.nThreads; i++)
     {
         pthread_join (threads[i], NULL);
         LOG (LOG_LVL_DEBUG, "Distance Matrix Computation: Thread %ld FINISHED", i);
@@ -74,18 +74,18 @@ static void * computeDistMatThread(void* arg)
     ThreadsData *th = (ThreadsData*)arg;
     Instance *inst = th->inst;
 
-    size_t n = inst->nNodes;
+    int n = inst->nNodes;
 
     // initialize mask outside loop to avoid doing it over and over(useless beacuse the compiler should do this automatically but whatever)
     int mask[AVX_VEC_SIZE];
 
     // since it has the same value for each row we can define it here, outside the loops
-    size_t lastVecElemsCount = (n % AVX_VEC_SIZE);
+    int lastVecElemsCount = (n % AVX_VEC_SIZE);
     if (lastVecElemsCount == 0)
         lastVecElemsCount = 8;
-    for (size_t j = 0; j < lastVecElemsCount; j++)
+    for (int j = 0; j < lastVecElemsCount; j++)
         mask[j] = -1; // this row last elements
-    for (size_t j = lastVecElemsCount; j < AVX_VEC_SIZE; j++)
+    for (int j = lastVecElemsCount; j < AVX_VEC_SIZE; j++)
         mask[j] = 0; // next row first elements (DO NOT WRITE THIS IN THE STORE -> so we use maskstore)
 
     while ( (pthread_mutex_lock(&th->mutex) == 0) && (th->nextRow < th->inst->nNodes) )    // lock mutex before checking nextRow
@@ -93,7 +93,7 @@ static void * computeDistMatThread(void* arg)
         // CRITICAL REGION STARTED(INCLUDING WHILE CONDITION) ######################
         // here thread gets it's workspace
 
-        size_t row = th->nextRow;
+        int row = th->nextRow;
         th->nextRow++; // prevent other threads threads to access this thread working row
 
         pthread_mutex_unlock (&th->mutex);
@@ -103,7 +103,7 @@ static void * computeDistMatThread(void* arg)
         __m256 x1 = _mm256_set1_ps(th->inst->X[row]);
         __m256 y1 = _mm256_set1_ps(th->inst->Y[row]);
 
-        size_t i;
+        int i;
         for (i = 0; i < n - AVX_VEC_SIZE; i += AVX_VEC_SIZE)
         {
             __m256 x2 = _mm256_loadu_ps(&th->inst->X[i]);

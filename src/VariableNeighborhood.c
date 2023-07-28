@@ -92,7 +92,7 @@ static inline void _5Kick(Solution *sol)
     
     LOG(LOG_LVL_DEBUG, "_5Kick -> Edges mixed: [%d-%d], [%d-%d], [%d-%d], [%d-%d], [%d-%d]", sol->indexPath[randomEdges[0]], sol->indexPath[randomEdges[0]+1], sol->indexPath[randomEdges[1]], sol->indexPath[randomEdges[1]+1], sol->indexPath[randomEdges[2]], sol->indexPath[randomEdges[2]+1], sol->indexPath[randomEdges[3]], sol->indexPath[randomEdges[3]+1], sol->indexPath[randomEdges[4]], sol->indexPath[randomEdges[4]+1]);
 
-    for(size_t i = 0; i <= sol->instance->nNodes; i++)
+    for(int i = 0; i <= sol->instance->nNodes; i++)
     {
         sol->indexPath[i] = newPath[i];
         sol->X[i] = sol->instance->X[newPath[i]];

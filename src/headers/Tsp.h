@@ -137,14 +137,14 @@ double computeSolutionCostVectorized(Solution *sol);
 * @param indexes Array where to store the sorted indexes of arr. (memory MUST be preallocated (n*sizeof(int)))
 * @param n Amount of elements in arr and indexes
 */
-void argsort(float *arr, int *indexes, size_t n);
+void argsort(float *arr, int *indexes, int n);
 
 /*!
 * @brief Sort arr using quicksort algorithm with random pivot
 * @param arr Floating point array to sort.
 * @param n Amount of elements in arr
 */
-void sort(float *arr, size_t n);
+void sort(float *arr, int n);
 
 //###################################################################################################################################
 // COST_MATRIX
@@ -200,7 +200,7 @@ Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emIn
 * @param emOpt Defines the way in which the first point has to be chosen.
 * @result Number in seconds representing execution time
 */
-void applyExtraMileage(Solution *sol, size_t nCovered, enum EMOptions emOpt, unsigned int *rndState);
+void applyExtraMileage(Solution *sol, int nCovered, enum EMOptions emOpt, unsigned int *rndState);
 
 
 //###################################################################################################################################
