@@ -44,8 +44,9 @@ static void *nnThread(void *arg);
 
 Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, double timeLimit, int nThreads)
 {
-    struct timespec start, finish;
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &start);
+    struct timespec timeStruct;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    double startTime = cvtTimespec2Double(timeStruct);
 
     if ((nThreads < 0) || (nThreads > MAX_THREADS))
         throwError(inst, NULL, "NearestNeighbor: nThreads value is not valid: %d", nThreads);
@@ -58,7 +59,7 @@ Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, do
         .sol = &sol,
         .startOption=startOption,
         .startingNode = 0,
-        .tlim = timeLimit + (double)start.tv_sec + (double)start.tv_nsec / 1000000000.0,
+        .tlim = timeLimit + startTime,
         .nThreads = inst->params.nThreads
     };
 
@@ -86,8 +87,8 @@ Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, do
     pthread_mutex_destroy(&th.getStartNodeMutex);
     pthread_mutex_destroy(&th.saveSolutionMutex);
 
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &finish);
-    sol.execTime = ((finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0);
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    sol.execTime = cvtTimespec2Double(timeStruct) - startTime;
 
     LOG(LOG_LVL_NOTICE, "Total number of iterations: %ld", iterCount);
     LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)iterCount/sol.execTime);
@@ -265,13 +266,12 @@ static void *nnThread(void *arg)
     // Allocate memory to contain the work-in-progress solution
     Solution tempSol = newSolution(inst);
 
-    double t;
-    struct timespec currT;
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-    t = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
+    struct timespec timeStruct;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    double currentTime = cvtTimespec2Double(timeStruct);
 
     // check startingNode even before locking the mutex to avoid useless mutex calls
-    while((thShared->startingNode < inst->nNodes) && (t < thShared->tlim))
+    while((thShared->startingNode < inst->nNodes) && (currentTime < thShared->tlim))
     {
         int iterNode;
         if (thShared->startOption == NN_FIRST_TRYALL)
@@ -315,9 +315,9 @@ static void *nnThread(void *arg)
 
         thSpecific->iterCount++;
 
-        //struct timespec currT;
-        clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-        t = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
+        //struct timespec timeStruct;
+        clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+        currentTime = cvtTimespec2Double(timeStruct);
     }
 
     destroySolution(&tempSol);

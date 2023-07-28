@@ -60,8 +60,9 @@ static void readTspLine(char *line, int length, int index, Instance *inst, int k
 
 double readFile (Instance *inst)
 {
-    struct timespec start, finish;
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &start);
+    struct timespec timeStruct;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    double startTime = cvtTimespec2Double(timeStruct);
 
     FILE *f = fopen(inst->params.inputFile, "r");
 
@@ -199,8 +200,8 @@ double readFile (Instance *inst)
     //for (int i = 0; i < inst->nNodes; i++)
     //    LOG(LOG_LVL_EVERYTHING, "Node %4lu: [%.2e, %.2e]", i+1, inst->X[i], inst->Y[i]);
 
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &finish);
-    return ((finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0);
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    return cvtTimespec2Double(timeStruct) - startTime;
 }
 
 

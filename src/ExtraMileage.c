@@ -49,8 +49,9 @@ static void extraMileageBase(Solution *sol, int nCovered, unsigned int *rndState
 
 Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emInitType, double tlim, int nThreads)
 {
-    struct timespec start, finish;
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &start);
+    struct timespec timeStruct;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    double startTime = cvtTimespec2Double(timeStruct);
 
     if ((nThreads < 0) || (nThreads > MAX_THREADS))
         throwError(inst, NULL, "ExtraMileage: nThreads value is not valid: %d", nThreads);
@@ -86,8 +87,8 @@ Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emIn
 
     pthread_mutex_destroy(&shared.mutex);
 
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &finish);
-    bestSol.execTime = ((finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0);
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    bestSol.execTime = cvtTimespec2Double(timeStruct) - startTime;
 
     LOG(LOG_LVL_NOTICE, "Total number of iterations: %ld", iterCount);
     LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)iterCount/bestSol.execTime);
@@ -97,10 +98,9 @@ Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emIn
 
 static void *runExtraMileage(void * arg)
 {
-    struct timespec currT;
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-    double tStart = currT.tv_sec + currT.tv_nsec / 1000000000.0;
-    double t = tStart;
+    struct timespec timeStruct;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    double startTime = cvtTimespec2Double(timeStruct);
 
     EMThreadsData *th = (EMThreadsData*)arg;
     EMThreadsSharedData *shared = th->shared;
@@ -118,7 +118,8 @@ static void *runExtraMileage(void * arg)
 
     Solution sol = newSolution(inst);
 
-    while (t < tStart + shared->tlim)
+    double currentTime = startTime;
+    while (currentTime < startTime + shared->tlim)
     {
         if (inst->params.emInitOption != EM_INIT_RANDOM)
             cloneSolution(&init, &sol);
@@ -137,8 +138,8 @@ static void *runExtraMileage(void * arg)
 
         th->iterCount++;
 
-        clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-        t = currT.tv_sec + currT.tv_nsec / 1000000000.0;
+        clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+        currentTime = cvtTimespec2Double(timeStruct);
     }
 
     pthread_exit(NULL);

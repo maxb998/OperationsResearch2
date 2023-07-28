@@ -16,21 +16,22 @@ static inline void invertVectorSizeElemsF(float *firstPtr, float *secondPtr);
 static inline void invertVectorSizeElemsD(int *firstPtr, int *secondPtr);
 
 // Basic approach that computes the costs every time, one at a time
-static inline unsigned long _2optBestFixBase(Solution *sol);
+static inline int _2optBestFixBase(Solution *sol);
 
 // Approach that requires to have the precomputed costs
-static inline unsigned long _2optBestFixCostMatrix(Solution *sol);
+static inline int _2optBestFixCostMatrix(Solution *sol);
 
 // Fastest approach since the mutli-threaded variant spends too much time in waiting other threads(probably wakeup from sleep costs more than one full iteration on one thread)
-static inline unsigned long _2OptBestFixAVX(Solution *sol);
+static inline int _2OptBestFixAVX(Solution *sol);
 
 // Faster type of approach that computes costs every time using avx vectorization
-static inline unsigned long _2OptBestFixAVXMultiThread(Solution *sol);
+static inline int _2OptBestFixAVXMultiThread(Solution *sol);
 
 double apply2OptBestFix(Solution *sol, enum _2OptOptions option)
 {
-    struct timespec start, finish;
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &start);
+    struct timespec timeStruct;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    double startTime = cvtTimespec2Double(timeStruct);
 
     Instance *inst = sol->instance;
 
@@ -58,7 +59,7 @@ double apply2OptBestFix(Solution *sol, enum _2OptOptions option)
         }
     }
 
-    unsigned long iterNum = 0;
+    int iterNum = 0;
 
     switch (option)
     {
@@ -79,8 +80,8 @@ double apply2OptBestFix(Solution *sol, enum _2OptOptions option)
         break;
     }
 
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &finish);
-    double elapsed = ((finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0);
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    double elapsed = cvtTimespec2Double(timeStruct) - startTime;
     
     LOG(LOG_LVL_NOTICE, "Total number of iterations: %lu", iterNum);
     LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)iterNum/elapsed);
@@ -180,7 +181,7 @@ static inline void invertVectorSizeElemsD(int *firstPtr, int *secondPtr)
     _mm256_storeu_si256((__m256i *)secondPtr, firstVec);
 }
 
-static inline unsigned long _2optBestFixBase(Solution *sol)
+static inline int _2optBestFixBase(Solution *sol)
 {
     Instance *inst = sol->instance;
 
@@ -189,10 +190,10 @@ static inline unsigned long _2optBestFixBase(Solution *sol)
     enum EdgeWeightType edgeWgtType = inst->params.edgeWeightType;
     bool roundFlag = inst->params.roundWeights;
 
-    struct timespec currT;
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-    double printTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
-    unsigned long iterNum = 0;
+    struct timespec timeStruct;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    double printTimeSec = cvtTimespec2Double(timeStruct);
+    int iterNum = 0;
 
     int finishedFlag = 0;
     while (finishedFlag == 0) // runs 2opt until no more moves are made in one iteration of 2opt
@@ -233,12 +234,12 @@ static inline unsigned long _2optBestFixBase(Solution *sol)
         else
             finishedFlag = 1;
 
-        clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-        double currTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
-        if (currTimeSec - printTimeSec > LOG_INTERVAL)
+        clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+        double currentTime = cvtTimespec2Double(timeStruct);
+        if (currentTime - printTimeSec > LOG_INTERVAL)
         {
             LOG(LOG_LVL_LOG, "Solution optimization in progress: cost is %lf at iteration %4lu with last optimization of %f", sol->cost, iterNum, -bestOffset);
-            printTimeSec = currTimeSec;
+            printTimeSec = currentTime;
         }
         iterNum++;
     }
@@ -246,17 +247,17 @@ static inline unsigned long _2optBestFixBase(Solution *sol)
     return iterNum;
 }
 
-static inline unsigned long _2optBestFixCostMatrix(Solution *sol)
+static inline int _2optBestFixCostMatrix(Solution *sol)
 {
     Instance *inst = sol->instance;
 
     // setup "shortcuts" variables to declutter the code
     int n = inst->nNodes;
 
-    struct timespec currT;
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-    double printTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
-    unsigned long iterNum = 0;
+    struct timespec timeStruct;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    double printTimeSec = cvtTimespec2Double(timeStruct);
+    int iterNum = 0;
 
     int finishedFlag = 0;
     while (finishedFlag == 0) // runs 2opt until no more moves are made in one iteration of 2opt
@@ -294,12 +295,12 @@ static inline unsigned long _2optBestFixCostMatrix(Solution *sol)
         else
             finishedFlag = 1;
 
-        clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-        double currTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
-        if (currTimeSec - printTimeSec > LOG_INTERVAL)
+        clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+        double currentTime = cvtTimespec2Double(timeStruct);
+        if (currentTime - printTimeSec > LOG_INTERVAL)
         {
             LOG(LOG_LVL_LOG, "Solution optimization in progress: cost is %lf at iteration %4lu with last optimization of %f", sol->cost, iterNum, -bestOffset);
-            printTimeSec = currTimeSec;
+            printTimeSec = currentTime;
         }
         iterNum++;
     }
@@ -307,7 +308,7 @@ static inline unsigned long _2optBestFixCostMatrix(Solution *sol)
     return iterNum;
 }
 
-static inline unsigned long _2OptBestFixAVX(Solution *sol)
+static inline int _2OptBestFixAVX(Solution *sol)
 {
     Instance *inst = sol->instance;
 
@@ -319,10 +320,10 @@ static inline unsigned long _2OptBestFixAVX(Solution *sol)
     float vecStore[AVX_VEC_SIZE];
     int idsVecStore[AVX_VEC_SIZE];
 
-    struct timespec currT;
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-    double printTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
-    unsigned long iterNum = 0;
+    struct timespec timeStruct;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    double printTimeSec = cvtTimespec2Double(timeStruct);
+    int iterNum = 0;
 
     int finishedFlag = 0;
     while (finishedFlag == 0) // runs 2opt until no more moves are made in one iteration of 2opt
@@ -387,12 +388,12 @@ static inline unsigned long _2OptBestFixAVX(Solution *sol)
         else
             finishedFlag = 1;
 
-        clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-        double currTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
-        if (currTimeSec - printTimeSec >= LOG_INTERVAL) //(iterNum % (n / 50) == 0)
+        clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+        double currentTime = cvtTimespec2Double(timeStruct);
+        if (currentTime - printTimeSec >= LOG_INTERVAL) //(iterNum % (n / 50) == 0)
         {
             LOG(LOG_LVL_LOG, "Solution optimization in progress: cost is %lf at iteration %4lu with last optimization of %f", sol->cost, iterNum, -bestOffset);
-            printTimeSec = currTimeSec;
+            printTimeSec = currentTime;
         }
 
         iterNum++;
@@ -429,7 +430,7 @@ typedef struct
     pthread_mutex_t mutex;
 
     double printTimeSec;
-    unsigned long iterNum;
+    int iterNum;
 } ThreadsData;
 
 // struct that allows to give a meaningful and unique id to each thread
@@ -442,17 +443,17 @@ typedef struct
 // Function that each threads executes
 static void *_2OptBestFixAVXThread(void *arg);
 
-static inline unsigned long _2OptBestFixAVXMultiThread(Solution *sol)
+static inline int _2OptBestFixAVXMultiThread(Solution *sol)
 {
-    struct timespec currT;
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
+    struct timespec timeStruct;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
 
     ThreadsData th = {
         .sol = sol,
         .nextEdge = 0,
         .finishedFlag = 0,
         .bestOffset = 0,
-        .printTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0,
+        .printTimeSec = cvtTimespec2Double(timeStruct),
         .iterNum = 0};
     Instance *inst = sol->instance;
 
@@ -596,13 +597,13 @@ static void *_2OptBestFixAVXThread(void *arg)
             else
                 th->finishedFlag = 1;
 
-            struct timespec currT;
-            clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-            double currTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
-            if (currTimeSec - th->printTimeSec >= LOG_INTERVAL) //(iterNum % (n / 50) == 0)
+            struct timespec timeStruct;
+            clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+            double currentTime = cvtTimespec2Double(timeStruct);
+            if (currentTime - th->printTimeSec >= LOG_INTERVAL) //(iterNum % (n / 50) == 0)
             {
                 LOG(LOG_LVL_LOG, "Solution optimization in progress: cost is %lf at iteration %4lu with last optimization of %f", sol->cost, th->iterNum, -th->bestOffset);
-                th->printTimeSec = currTimeSec;
+                th->printTimeSec = currentTime;
             }
             th->iterNum++;
 

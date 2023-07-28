@@ -15,9 +15,9 @@ static int PostSolution(CPXCALLBACKCONTEXTptr context, Instance *inst, int ncols
 
 void BranchAndCut(Solution *sol, double tlim)
 {
-	struct timespec currT;
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-    double startTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
+	struct timespec timeStruct;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    double startTime = cvtTimespec2Double(timeStruct);
 
 	Instance *inst = sol->instance;
 
@@ -64,8 +64,8 @@ void BranchAndCut(Solution *sol, double tlim)
 
 	destroyCallbackData(&cbData);
 
-	clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-	sol->execTime += (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0 - startTimeSec;
+	clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+	sol->execTime += cvtTimespec2Double(timeStruct) - startTime;
 }
 
 int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG contextid, void *userhandle ) 

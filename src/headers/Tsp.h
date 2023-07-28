@@ -56,6 +56,8 @@ void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointC
 // Swap elem1 and elem2. Can be done with any type of variable, however a temporary variable "tmp" of the same type of elem1 and elem2 MUST be provided.
 #define swapElems(elem1,elem2,tmp) tmp = elem1; elem1 = elem2; elem2 = tmp
 
+#define cvtTimespec2Double(t) (double)t.tv_sec + (double)t.tv_nsec / 1000000000.0
+
 /*!
 * @brief Generate empty instance
 * @result Empty Instance

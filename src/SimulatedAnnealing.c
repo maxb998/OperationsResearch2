@@ -18,7 +18,7 @@ void SimulatedAnnealing(Solution *sol, double timeLimit)
     // time limit management
     struct timespec timeStruct;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
-    double startTime = timeStruct.tv_sec + timeStruct.tv_nsec / 1000000000.0;
+    double startTime = cvtTimespec2Double(timeStruct);
 
     // check of the input solution
     if (!checkSolution(sol))
@@ -37,7 +37,7 @@ void SimulatedAnnealing(Solution *sol, double timeLimit)
     }
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
-    double currentTime = timeStruct.tv_sec + timeStruct.tv_nsec / 1000000000.0;
+    double currentTime = cvtTimespec2Double(timeStruct);
 
     while (currentTime < startTime + timeLimit)
     {

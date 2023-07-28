@@ -32,8 +32,9 @@ void printCostMatrix(Instance *inst)
 
 double computeCostMatrix(Instance *inst)
 {
-    struct timespec start, finish;
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &start);
+    struct timespec timeStruct;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    double startTime = cvtTimespec2Double(timeStruct);
 
     // first check that distance type is supported
     if (inst->params.edgeWeightType  > ATT)
@@ -62,9 +63,8 @@ double computeCostMatrix(Instance *inst)
         LOG (LOG_LVL_DEBUG, "Distance Matrix Computation: Thread %ld FINISHED", i);
     }
 
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &finish);
-    double elapsed = ((finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0);
-    return elapsed;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    return cvtTimespec2Double(timeStruct) - startTime;
 }
 
 // EUCLIDEAN DISTANCE

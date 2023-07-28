@@ -18,7 +18,7 @@ void VariableNeighborhood(Solution *sol, double timeLimit, int nThreads)
     // time limit management
     struct timespec timeStruct;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
-    double startTime = timeStruct.tv_sec + timeStruct.tv_nsec / 1000000000.0;
+    double startTime = cvtTimespec2Double(timeStruct);
 
     if ((nThreads < 0) || (nThreads > MAX_THREADS))
         throwError(sol->instance, sol, "VariableNeighborhood: nThreads value is not valid: %d", nThreads);
@@ -36,7 +36,7 @@ void VariableNeighborhood(Solution *sol, double timeLimit, int nThreads)
     apply2OptBestFix(sol, _2OPT_AVX_ST);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
-    double currentTime = timeStruct.tv_sec + timeStruct.tv_nsec / 1000000000.0;
+    double currentTime = cvtTimespec2Double(timeStruct);
 
     while (currentTime < startTime + timeLimit)
     {
@@ -44,6 +44,7 @@ void VariableNeighborhood(Solution *sol, double timeLimit, int nThreads)
         apply2OptBestFix(sol, _2OPT_AVX_ST);
 
         clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+        currentTime = cvtTimespec2Double(timeStruct);
     }
 }
 

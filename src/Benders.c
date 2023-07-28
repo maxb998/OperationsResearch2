@@ -9,10 +9,10 @@
 
 void benders(Solution *sol, double tlim)
 {
-	struct timespec currT;
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-    double startTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
-	double currentTimeSec = startTimeSec;
+	struct timespec timeStruct;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    double startTime = cvtTimespec2Double(timeStruct);
+	double currentTime = startTime;
 
 	Instance *inst = sol->instance;
 	int n = inst->nNodes;
@@ -35,14 +35,14 @@ void benders(Solution *sol, double tlim)
 
 	int iterNum = 0;
 
-	while (currentTimeSec - startTimeSec < tlim)
+	while (currentTime - startTime < tlim)
 	{
 		WarmStart(&cpx, bestSuccessorsSol);
 
 		// set time limit as remainig time from starting time
-		clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-    	currentTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
-		CPXsetdblparam(cpx.env, CPX_PARAM_TILIM, currentTimeSec + tlim - startTimeSec);
+		clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    	currentTime = cvtTimespec2Double(timeStruct);
+		CPXsetdblparam(cpx.env, CPX_PARAM_TILIM, currentTime + tlim - startTime);
 
 
 		if (CPXmipopt(cpx.env, cpx.lp))
@@ -112,8 +112,8 @@ void benders(Solution *sol, double tlim)
 	free(bestSuccessorsSol);
 
 	sol->cost = bestCost;
-	clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-    currentTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
-	sol->execTime += currentTimeSec - startTimeSec;
+	clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    currentTime = cvtTimespec2Double(timeStruct);
+	sol->execTime += currentTime - startTime;
 }
 

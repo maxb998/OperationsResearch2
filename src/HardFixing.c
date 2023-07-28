@@ -58,8 +58,8 @@ void HardFixing(Solution *sol, double fixingAmount, enum HardFixPolicy policy, d
 {
     struct timespec currT;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-    double startTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
-	double currentTimeSec = startTimeSec;
+    double startTime = cvtTimespec2Double(currT);
+	double currentTime = startTime;
 
     Instance *inst = sol->instance;
     int errCode = 0;
@@ -73,10 +73,10 @@ void HardFixing(Solution *sol, double fixingAmount, enum HardFixPolicy policy, d
         throwHardFixError(&hfAlloc, sol, "HardFix: CPXcallbacksetfunc failed with code %d", errCode);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-    currentTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
+    currentTime = cvtTimespec2Double(currT);
 
     int iterCount = 0;
-    while (currentTimeSec < startTimeSec + tlim)
+    while (currentTime < startTime + tlim)
     {
         iterCount++;
 
@@ -98,7 +98,7 @@ void HardFixing(Solution *sol, double fixingAmount, enum HardFixPolicy policy, d
         LOG(LOG_LVL_DEBUG, "HardFix: Bounds were fixed");
 
         // update time limit
-        double remainingTime = startTimeSec + tlim - currentTimeSec;
+        double remainingTime = startTime + tlim - currentTime;
         if ((errCode = CPXsetdblparam(hfAlloc.cpx.env, CPX_PARAM_TILIM, remainingTime)) != 0)
             throwHardFixError(&hfAlloc, sol, "HardFix: CPXsetdblparam failed with code %d", errCode);
 
@@ -127,7 +127,7 @@ void HardFixing(Solution *sol, double fixingAmount, enum HardFixPolicy policy, d
             throwHardFixError(&hfAlloc, sol, "HardFix: resetBounds failed with code %d", errCode);
 
         clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-        currentTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
+        currentTime = cvtTimespec2Double(currT);
     }
     
     // update sol if necessary(very likely)
@@ -142,8 +142,8 @@ void HardFixing(Solution *sol, double fixingAmount, enum HardFixPolicy policy, d
     destroyHardfixAllocatedMem(&hfAlloc);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-    currentTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
-    sol->execTime += currentTimeSec - startTimeSec;
+    currentTime = cvtTimespec2Double(currT);
+    sol->execTime += currentTime - startTime;
 }
 
 static HardfixAllocatedMem initHardfixAllocatedMem(Solution *sol)
