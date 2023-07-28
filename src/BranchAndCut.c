@@ -119,7 +119,11 @@ int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG co
 	{
 		int *temp;
 		swapElems(cbData->bestSuccessors, sub.successors, temp);
-		LOG(LOG_LVL_NOTICE, "Branch & Cut: Incumbent updated -> cost = %lf", cost);
+
+		enum LogLevel lvl = LOG_LVL_NOTICE;
+		if (inst->params.mode != MODE_BRANCH_CUT) lvl = LOG_LVL_LOG;
+		LOG(lvl, "Branch & Cut: Incumbent updated -> cost = %lf", cost);
+
 		cbData->bestCost = cost;
 
 		// post solution to cplex

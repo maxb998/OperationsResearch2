@@ -29,8 +29,6 @@
 
 #define SUBOPT_HARDFIX_RANDOM "random"
 #define SUBOPT_HARDFIX_SMALL "small"
-#define SUBOPT_HARDFIX_PROB "prob"
-#define SUBOPT_HARDFIX_MIXED "mixed"
 
 #define SUBOPT_LOG_ERROR "error"
 #define SUBOPT_LOG_CRITICAL "critical"
@@ -119,11 +117,9 @@ DOC_NN DOC_EM DOC_TABU DOC_VNS DOC_ANNEALING DOC_GENETIC
 #define HARDFIX_POLICY_DOC "\
 Specify the type of policy Hard Fixing should use when fixing edges\n" \
 SUBOPT_BLANKSPACE SUBOPT_HARDFIX_RANDOM "   : Fix random edges\n" \
-SUBOPT_BLANKSPACE SUBOPT_HARDFIX_SMALL "    : Fix edges with smallest cost in solution\n" \
-SUBOPT_BLANKSPACE SUBOPT_HARDFIX_PROB "     : Fix edges with probability inversely proportional to their cost\n" \
-SUBOPT_BLANKSPACE SUBOPT_HARDFIX_MIXED "    : Use a mix of the policies above\n"
+SUBOPT_BLANKSPACE SUBOPT_HARDFIX_SMALL "    : Fix edges with smallest cost in solution\n"
 
-static const char *hardFixPolicyStrings[] = { SUBOPT_HARDFIX_RANDOM, SUBOPT_HARDFIX_SMALL, SUBOPT_HARDFIX_PROB, SUBOPT_HARDFIX_MIXED };
+static const char *hardFixPolicyStrings[] = { SUBOPT_HARDFIX_RANDOM, SUBOPT_HARDFIX_SMALL };
 static const int hardfixOptionsCount = sizeof(hardFixPolicyStrings)/sizeof(*hardFixPolicyStrings);
 
 #define LOG_LEVEL_DOC "\

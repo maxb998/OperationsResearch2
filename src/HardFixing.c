@@ -11,8 +11,6 @@
 #define MIN_UNFIX 150
 // Minimum amount of edges of the solution to fix(it doesn't make much sense fixing only 1 node, if nNodes = 151 then 50 nodes will be fixed and 101 will be free)
 #define MIN_FIX 50
-// Maximum amount of unfixed/free edges.
-#define MAX_UNFIX 300
 // Incremental/Decremental step in fixAmount during computation
 #define FIX_OFFSET 10
 // Number of non-improving iterations before fixAmount is increased
@@ -24,7 +22,7 @@ typedef struct
 
     CallbackData cbData;
 
-    size_t fixAmount;
+    int fixAmount;
 
     // Bounds Value
     double *bVal;
@@ -77,8 +75,11 @@ void HardFixing(Solution *sol, double fixingAmount, enum HardFixPolicy policy, d
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
     currentTimeSec = (double)currT.tv_sec + (double)currT.tv_nsec / 1000000000.0;
 
+    int iterCount = 0;
     while (currentTimeSec < startTimeSec + tlim)
     {
+        iterCount++;
+
         if (hfAlloc.fixAmount > 0)
         {
             switch (policy)
@@ -90,10 +91,6 @@ void HardFixing(Solution *sol, double fixingAmount, enum HardFixPolicy policy, d
             case HARDFIX_POLICY_SMALLEST:
                 if ((errCode = smallestFix(&hfAlloc)) != 0)
                     throwHardFixError(&hfAlloc, sol, "HardFix: smallestFix failed with code %d", errCode);
-                break;
-            case HARDFIX_POLICY_PROBABILITY:
-                break;
-            case HARDFIX_POLICY_MIXED:
                 break;
             }
         }
@@ -112,6 +109,7 @@ void HardFixing(Solution *sol, double fixingAmount, enum HardFixPolicy policy, d
         LOG(LOG_LVL_DEBUG, "HardFix: WarmStart was set");
 
         // run cplex
+        LOG(LOG_LVL_NOTICE, "HardFix: Iteration %4d, running Branch&Cut method with %lu fixed edges", iterCount, hfAlloc.fixAmount);
         if ((errCode = CPXmipopt(hfAlloc.cpx.env, hfAlloc.cpx.lp)) != 0)
             throwHardFixError(&hfAlloc, sol, "HardFix: CPXmipopt failed with code %d", errCode);
 
@@ -182,6 +180,10 @@ static void destroyHardfixAllocatedMem(HardfixAllocatedMem *hfAlloc)
     free(hfAlloc->bVal);
     free(hfAlloc->bType);
     free(hfAlloc->indexes);
+
+    hfAlloc->bVal = NULL;
+    hfAlloc->bType = NULL;
+    hfAlloc->indexes = NULL;
 }
 
 static void throwHardFixError(HardfixAllocatedMem *hfAlloc, Solution *sol, char *msg, ...)
@@ -211,29 +213,25 @@ static void updateFixAmount(HardfixAllocatedMem *hfAlloc)
 
     size_t n = hfAlloc->cpx.inst->nNodes;
 
-    if (hfAlloc->fixAmount == n - MAX_UNFIX) // fixAmount == 0 is handled in HardFix method since it is a special case(opt sol)
-        return;
-
     if (oldCost <= hfAlloc->cbData.bestCost)
     {
         staticCostCount = 0;
         oldCost = hfAlloc->cbData.bestCost;
     }
-    else if (staticCostCount >= STATIC_COST_THRESHOLD)
+    else
+        staticCostCount++;
+    
+    if ((staticCostCount >= STATIC_COST_THRESHOLD) || ((staticCostCount > 0) && (hfAlloc->cpx.inst->params.hardFixPolicy == HARDFIX_POLICY_SMALLEST)))
     {
         hfAlloc->fixAmount -= FIX_OFFSET;
 
         if (hfAlloc->fixAmount > n) // overflow of unsigned operation (fixAmount is way too big) -> set fixAmount to 0
             hfAlloc->fixAmount = 0;
-        
-        if ((n > MAX_UNFIX) && (hfAlloc->fixAmount < n - MAX_UNFIX))
-            hfAlloc->fixAmount = n - MAX_UNFIX;
 
         LOG(LOG_LVL_LOG, "Decreasing the amount of fixed edges to %lu", hfAlloc->fixAmount);
         staticCostCount = 0; //(n - fixAmount - MIN_UNFIX) / FIX_OFFSET;
     }
-    else
-        staticCostCount++;
+    
 }
 
 static int resetBounds(HardfixAllocatedMem *hfAlloc)
