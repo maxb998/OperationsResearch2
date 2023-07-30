@@ -13,23 +13,23 @@
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
                 "--file", "data/a280.tsp",
-                "--mode", "hardfix",
+                "--mode", "em",
 
-                "--grasp", "random(0.05)",
+                "--grasp", "almostbest(0.05)",
                 "--2opt",
-                "--tlim", "100",
+                "--tlim", "5",
 
                 //"--nn-opt", "tryall",
-                "--em-opt", "random",
+                //"--em-opt", "random",
 
                 //"--metaheur-init-mode", "em",
                 //"--matheur-init-mode", "nn",
                 //"--warm-start-mode", "tabu",
 
-                "--hardfix-policy", "small",
+                //"--hardfix-policy", "small",
 
                 //"--seed", "2023",
-                "--threads", "8",
+                "--threads", "1",
                 "--roundcosts",
                 "--plot", 
                 //"--save",
@@ -44,12 +44,12 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/x64/main",
             "args": [
-                "--file", "data/a280.tsp",
+                "--file", "data/rl5915.tsp",
                 "--mode", "em",
 
-                "--grasp", "almostbest(0.1)",
+                "--grasp", "random(0.01)",
                 "--2opt",
-                "--tlim", "30",
+                "--tlim", "120",
 
                 //"--nn-opt", "tryall",
                 //"--em-opt", "random",
@@ -58,10 +58,10 @@
                 //"--matheur-init-mode", "vns",
                 //"--warm-start-mode", "tabu",
 
-                "--hardfix-policy", "small",
+                //"--hardfix-policy", "small",
 
-                //"--seed", "102563",
-                "--threads", "8",
+                "--seed", "2023",
+                //"--threads", "20",
                 "--roundcosts",
                 "--plot", 
                 //"--save",

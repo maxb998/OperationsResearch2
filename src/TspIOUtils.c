@@ -411,6 +411,9 @@ void saveSolution(Solution *sol, int argc, char *argv[])
 
 void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointColor, const char * tourPointColor, const int pointSize, const bool printIndex)
 {
+    Instance *inst = sol->instance;
+    int n = inst->nNodes;
+
     // creating the pipeline for gnuplot
     FILE *gnuplotPipe = popen("gnuplot -persistent", "w");
 
@@ -425,23 +428,23 @@ void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointC
 
     // assign number to points
     if (printIndex)
-        for (int i = 0; i < sol->instance->nNodes; i++)
-            fprintf(gnuplotPipe, "set label \"%d\" at %f,%f\n", i, sol->instance->X[i], sol->instance->Y[i]);
+        for (int i = 0; i < n; i++)
+            fprintf(gnuplotPipe, "set label \"%d\" at %f,%f\n", i, inst->X[i], inst->Y[i]);
 
     // populating the plot
     
     fprintf(gnuplotPipe, "plot '-' with point linestyle 1, '-' with linespoint linestyle 2\n");
 
     // first plot only the points
-    for (int i = 0; i < sol->instance->nNodes; i++)
-        fprintf(gnuplotPipe, "%f %f\n", sol->instance->X[i], sol->instance->Y[i]);
+    for (int i = 0; i < n; i++)
+        fprintf(gnuplotPipe, "%f %f\n", inst->X[i], inst->Y[i]);
     fprintf(gnuplotPipe, "e\n");
 
     // second print the tour
-    for (int i = 0; i <= sol->instance->nNodes; i++)
-    {
-        fprintf(gnuplotPipe, "%f %f\n", sol->X[i], sol->Y[i]);
-    }
+    for (int i = 0; i < n; i++)
+        fprintf(gnuplotPipe, "%f %f\n", inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]]);
+    fprintf(gnuplotPipe, "%f %f\n", inst->X[sol->indexPath[0]], inst->Y[sol->indexPath[0]]);
+    
     fprintf(gnuplotPipe, "e\n");
 
     // force write on stream

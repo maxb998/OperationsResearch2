@@ -13,6 +13,14 @@
 #define SMALLX 1e-6
 #define EPSILON 1e-9
 
+enum ComputationType {
+    COMPUTE_OPTION_AVX,
+    COMPUTE_OPTION_BASE,
+    COMPUTE_OPTION_USE_COST_MATRIX
+};
+
+#define COMPUTATION_TYPE COMPUTE_OPTION_AVX	
+
 enum LogLevel{
 	LOG_LVL_ERROR,
 	LOG_LVL_CRITICAL,
@@ -66,22 +74,8 @@ enum NNFirstNodeOptions{
 
 enum EMInitType {
     EM_INIT_RANDOM,
-    EM_INIT_FARTHEST_POINTS,
-    EM_INIT_HULL // won't be working for now
-};
-
-enum EMOptions {
-    EM_OPTION_AVX,
-    EM_OPTION_BASE,
-    EM_OPTION_USE_COST_MATRIX
-};
-
-enum _2OptOptions
-{
-    _2OPT_AVX_ST,
-    _2OPT_BASE,
-    _2OPT_PRECOMPUTED_COSTS,
-    _2OPT_AVX_MT
+    EM_INIT_FARTHEST_POINTS
+    //EM_INIT_HULL // won't be working for now
 };
 
 enum HardFixPolicy {
@@ -139,9 +133,6 @@ typedef struct
 
 	double execTime;
 
-	// the solution
-	float *X;
-	float *Y;
 	// Stores in order of visit along the path, the original indexes (the ones contained in the Instance pointed by instance) of the points
 	int *indexPath;
 

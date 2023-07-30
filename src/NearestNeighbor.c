@@ -8,7 +8,7 @@
 
 typedef struct
 {
-    Solution *sol;
+    Solution bestSol;
     
     enum NNFirstNodeOptions startOption;
 
@@ -16,31 +16,78 @@ typedef struct
     pthread_mutex_t saveSolutionMutex;
     int startingNode;
 
-    double tlim;
-    int nThreads;
+    double timeLimit;
+    double startTime;
 
-}NNThreadsSharedData;
+} ThreadSharedData;
+
+static ThreadSharedData initThreadSharedData (Instance *inst, enum NNFirstNodeOptions startOption, double timeLimit)
+{
+    ThreadSharedData thShared = {
+        .startOption = startOption,
+        .startingNode = 0,
+        .timeLimit = timeLimit
+    };
+
+    if (startOption == NN_FIRST_TRYALL)
+        if (pthread_mutex_init(&thShared.getStartNodeMutex, NULL)) throwError(inst, NULL, "NearestNeighbor -> initThreadSharedData: Failed to initialize getStartNodeMutex");
+    if (pthread_mutex_init(&thShared.saveSolutionMutex, NULL)) throwError(inst, NULL, "NearestNeighbor -> initThreadSharedData: Failed to initialize saveSolutionMutex");
+
+    thShared.bestSol = newSolution(inst);
+
+    return thShared;
+}
+
+static void destroyThreadSharedData (ThreadSharedData *thShared)
+{
+    if (thShared->startOption == NN_FIRST_TRYALL)
+        if (pthread_mutex_init(&thShared->getStartNodeMutex, NULL)) throwError(thShared->bestSol.instance, &thShared->bestSol, "NearestNeighbor -> destroyThreadSharedData: Failed to destroy getStartNodeMutex");
+    if (pthread_mutex_init(&thShared->saveSolutionMutex, NULL)) throwError(thShared->bestSol.instance, &thShared->bestSol, "NearestNeighbor -> destroyThreadSharedData: Failed to destroy saveSolutionMutex");
+
+    destroySolution(&thShared->bestSol);
+}
 
 typedef struct
 {
-    NNThreadsSharedData *thShared;
+    ThreadSharedData *thShared;
     unsigned int rndState;
-    unsigned long iterCount;
-} NNThreadsDataRnd;
+    int iterCount;
 
+    float *X;
+    float *Y;
+    Solution workingSol;
 
-static inline void swapElementsInSolution(Solution *sol, int pos1, int pos2);
+} ThreadSpecificData;
 
-// finds the closest unvisited node (pathCost is also updated in this method)
-static inline int findSuccessorID(Solution *sol, int iterNum, double *pathCost, unsigned int *state);
+static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, unsigned int rndState)
+{
+    ThreadSpecificData thSpecific = {
+        .thShared=thShared,
+        .rndState=rndState,
+        .iterCount=0
+    };
 
-static void applyNearestNeighbor(Solution *sol, int startingNodeIndex, unsigned int *state);
+    Instance *inst = thShared->bestSol.instance;
+    thSpecific.workingSol=newSolution(inst);
 
-static void updateBestSolutionNN(Solution *bestSol, Solution *newBest);
+    thSpecific.X = malloc((inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float));
+    if (!thSpecific.X)
+        throwError(inst, &thSpecific.workingSol, "NearestNeighbor -> initThreadSpecificData: Failed to allocate memory");
+    thSpecific.Y = &thSpecific.X[inst->nNodes + AVX_VEC_SIZE];
 
+    return thSpecific;
+}
 
-static void *nnThread(void *arg);
+static void destroyThreadSpecificData(ThreadSpecificData *thSpecific)
+{
+    destroySolution(&thSpecific->workingSol);
 
+    free(thSpecific->X);
+    thSpecific->X = thSpecific->Y = NULL;
+}
+
+// Executes Nearest Neighbor algorithm multiple times until time limit (designed to work in parallel)
+static void *loopNearestNeighbor(void *arg);
 
 Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, double timeLimit, int nThreads)
 {
@@ -53,82 +100,202 @@ Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, do
     else if (nThreads == 0)
         nThreads = inst->params.nThreads;
 
-    Solution sol = newSolution(inst);
+    ThreadSharedData thShared = initThreadSharedData(inst, startOption, startTime + timeLimit);
 
-    NNThreadsSharedData th = {
-        .sol = &sol,
-        .startOption=startOption,
-        .startingNode = 0,
-        .tlim = timeLimit + startTime,
-        .nThreads = inst->params.nThreads
-    };
-
-    unsigned long iterCount = 0;
-
-    pthread_mutex_init(&th.getStartNodeMutex, NULL);
-    pthread_mutex_init(&th.saveSolutionMutex, NULL);
-
-    NNThreadsDataRnd data[MAX_THREADS];
+    ThreadSpecificData thSpecifics[MAX_THREADS];
     pthread_t threads[MAX_THREADS];
-    for (int i = 0; i < th.nThreads; i++)
+    for (int i = 0; i < nThreads; i++)
     {
-        data[i].thShared = &th;
-        data[i].rndState = rand();
-        data[i].iterCount = 0;
-        pthread_create(&threads[i], NULL, nnThread, (void *)&data);
+        thSpecifics[i] = initThreadSpecificData(&thShared, rand());
+        pthread_create(&threads[i], NULL, loopNearestNeighbor, (void *)&thSpecifics[i]);
     }
 
-    for (int i = 0; i < inst->params.nThreads; i++)
+    int iterCount = 0;
+    for (int i = 0; i < nThreads; i++)
     {
         pthread_join(threads[i], NULL);
-        iterCount += data[i].iterCount;
+        iterCount += thSpecifics[i].iterCount;
+        destroyThreadSpecificData(&thSpecifics[i]);
     }
 
-    pthread_mutex_destroy(&th.getStartNodeMutex);
-    pthread_mutex_destroy(&th.saveSolutionMutex);
+    Solution outputSol = newSolution(inst);
+    cloneSolution(&thShared.bestSol, &outputSol);
+
+    destroyThreadSharedData(&thShared);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
-    sol.execTime = cvtTimespec2Double(timeStruct) - startTime;
+    outputSol.execTime = cvtTimespec2Double(timeStruct) - thShared.startTime;
 
     LOG(LOG_LVL_NOTICE, "Total number of iterations: %ld", iterCount);
-    LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)iterCount/sol.execTime);
+    LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)iterCount/outputSol.execTime);
 
-    return sol;
+    return outputSol;
 }
 
-static inline void swapElementsInSolution(Solution *sol, int pos1, int pos2)
+// select node to use as starting point for a Nearest Neighbor iteration depending on startOption
+static inline int getStartingNode(ThreadSpecificData *thSpecific);
+
+// Apply Nearest Neighbor algorithm to a solution that has the starting node in the first position and all others next
+static void applyNearestNeighbor(ThreadSpecificData *thSpecific, int firstNode);
+
+// Update thShared->bestSol when a better solution is found
+static void updateBestSolution(ThreadSpecificData *thSpecific);
+
+static void *loopNearestNeighbor(void *arg)
 {
-    register float tempf;
-    swapElems(sol->X[pos1], sol->X[pos2], tempf);
-    swapElems(sol->Y[pos1], sol->Y[pos2], tempf);
-    register int tempi;
-    swapElems(sol->indexPath[pos1], sol->indexPath[pos2], tempi);
+    ThreadSpecificData *thSpecific = (ThreadSpecificData*)arg;
+    ThreadSharedData *thShared = thSpecific->thShared;
+    Instance *inst = thSpecific->workingSol.instance;
+    int n = inst->nNodes;
+
+    struct timespec timeStruct;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    double currentTime = cvtTimespec2Double(timeStruct);
+
+    // check startingNode even before locking the mutex to avoid useless mutex calls
+    while((thShared->startingNode < n) && (currentTime < thShared->timeLimit))
+    {
+        int startNode = getStartingNode(thSpecific);
+        
+        applyNearestNeighbor(thSpecific, startNode);
+
+        // check cost first to avoid excessive amount of mutex calls
+        if (thShared->bestSol.cost > thSpecific->workingSol.cost)
+        {
+            pthread_mutex_lock(&thShared->saveSolutionMutex);
+
+            // recheck while having lock on mutex (for syncronization purposes)
+            if (thShared->bestSol.cost > thSpecific->workingSol.cost)
+                updateBestSolution(thSpecific);
+            
+            pthread_mutex_unlock(&thShared->saveSolutionMutex);
+        }
+
+        thSpecific->iterCount++;
+
+        //struct timespec timeStruct;
+        clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+        currentTime = cvtTimespec2Double(timeStruct);
+    }
+    
+    return NULL;
 }
 
-static inline int findSuccessorID(Solution *sol, int iterNum, double *pathCost, unsigned int *state)
+static inline int getStartingNode(ThreadSpecificData *thSpecific)
 {
-    Instance *inst = sol->instance;
+    ThreadSharedData *thShared = thSpecific->thShared;
+    Instance *inst = thShared->bestSol.instance;
+    int n = inst->nNodes;
+
+    int iterNode;
+    if (thShared->startOption == NN_FIRST_TRYALL)
+    {
+        pthread_mutex_lock(&thShared->getStartNodeMutex);
+
+        if (thShared->startingNode >= n)
+        {
+            if (inst->params.graspType == GRASP_NONE) // tested all options -> quit
+                return -1;
+            else // if grasp is being used then start again from first node until time limit is hit
+                thShared->startingNode = 0;
+        }
+
+        iterNode = thShared->startingNode;
+        thShared->startingNode++;
+
+        pthread_mutex_unlock(&thShared->getStartNodeMutex);
+    }
+    else
+        iterNode = genRandom(&thSpecific->rndState, 0, n);
+    
+    return iterNode;
+}
+
+// Swap elements in thSpecific.X, thSpecific.Y and thSpecific.workingSol.indexPath
+static inline void swapElemsInThSpecific(ThreadSpecificData *thSpecific, int pos1, int pos2);
+
+// finds the closest unvisited node (pathCost is also updated in this method)
+static inline int findSuccessorID(ThreadSpecificData *thSpecific, int lastPos);
+
+static void applyNearestNeighbor(ThreadSpecificData *thSpecific, int firstNode)
+{
+    Instance *inst = thSpecific->workingSol.instance;
+    int n = inst->nNodes;
     enum EdgeWeightType ewt = inst->params.edgeWeightType ;
     bool roundFlag = inst->params.roundWeights;
 
-    float minVecStore[AVX_VEC_SIZE];
-    int minIDsVecStore[AVX_VEC_SIZE];
+    // Reset thSpecific->[X,Y,workingSol]
+    for (int i = 0; i < (n + AVX_VEC_SIZE) * 2; i++)
+        thSpecific->X[i] = inst->X[i];
+    for (int i = 0; i < n + AVX_VEC_SIZE; i++)
+        thSpecific->workingSol.indexPath[i] = i;
+
+    // set first node
+    swapElemsInThSpecific(thSpecific, 0, firstNode);
+
+    // reset cost
+    thSpecific->workingSol.cost = 0;
+
+    int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
+    for (int i = 0; i < n-2; i++)
+    {
+        int successor;
+
+        if ((inst->params.graspType == GRASP_RANDOM) && (rand_r(&thSpecific->rndState) < graspThreshold))
+        {
+            successor = genRandom(&thSpecific->rndState, (i+1), n);
+            thSpecific->workingSol.cost += computeEdgeCost(thSpecific->X[i], thSpecific->Y[i], thSpecific->X[successor], thSpecific->Y[successor], ewt, roundFlag);
+        }
+        else
+            successor = findSuccessorID(thSpecific, i);
+
+        if ((successor >= n) || (successor < 0))
+            throwError(inst, &thSpecific->workingSol, "applyNearestNeighbor: Value of successor isn't applicable: %d (startNode=%d)", successor, firstNode);
+        
+        // update solution
+        swapElemsInThSpecific(thSpecific, i+1, successor);
+    }
+
+    // add cost of the second to last edge
+    thSpecific->workingSol.cost += computeEdgeCost(thSpecific->X[n-2], thSpecific->Y[n-2], thSpecific->X[n-1], thSpecific->Y[n-1], ewt, roundFlag);
+
+    // add last edge (close the tour)
+    //thSpecific->workingSol.indexPath[n] = thSpecific->workingSol.indexPath[0];
+    thSpecific->workingSol.cost += computeEdgeCost(thSpecific->X[n-1], thSpecific->Y[n-1], thSpecific->X[0], thSpecific->Y[0], ewt, roundFlag);
+}
+
+static inline void swapElemsInThSpecific(ThreadSpecificData *thSpecific, int pos1, int pos2)
+{
+    register float tempFloat;
+    swapElems(thSpecific->X[pos1], thSpecific->X[pos2], tempFloat);
+    swapElems(thSpecific->Y[pos1], thSpecific->Y[pos2], tempFloat);
+    register int tempInt;
+    swapElems(thSpecific->workingSol.indexPath[pos1], thSpecific->workingSol.indexPath[pos2], tempInt);
+}
+
+static inline int findSuccessorID(ThreadSpecificData *thSpecific, int lastAddedPos)
+{
+    Instance *inst = thSpecific->workingSol.instance;
+    enum EdgeWeightType ewt = inst->params.edgeWeightType ;
+    bool roundFlag = inst->params.roundWeights;
 
     // to keep track of the first best distance
     __m256 minVec = _mm256_set1_ps(INFINITY);
     __m256i minIDsVec = _mm256_set1_epi32(-1);
 
     __m256i ids = _mm256_setr_epi32(0,1,2,3,4,5,6,7), increment = _mm256_set1_epi32(AVX_VEC_SIZE);
-    __m256 x1 = _mm256_set1_ps(sol->X[iterNum-1]), y1 = _mm256_set1_ps(sol->Y[iterNum-1]);
+    __m256 x1 = _mm256_broadcast_ss(&thSpecific->X[lastAddedPos]), y1 = _mm256_broadcast_ss(&thSpecific->Y[lastAddedPos]);
     
+    int posToAdd = lastAddedPos + 1;
+
     // set ids to right starting position
-    ids = _mm256_add_epi32(ids, _mm256_set1_epi32(iterNum));
+    ids = _mm256_add_epi32(ids, _mm256_set1_epi32(posToAdd));
 
     // check if we are working with rounded weights
-    for (int i = iterNum; i < inst->nNodes; i += AVX_VEC_SIZE)
+    for (int i = posToAdd; i < inst->nNodes; i += AVX_VEC_SIZE)
     {
         // get distance first
-        __m256 x2 = _mm256_loadu_ps(&sol->X[i]), y2 = _mm256_loadu_ps(&sol->Y[i]);
+        __m256 x2 = _mm256_loadu_ps(&thSpecific->X[i]), y2 = _mm256_loadu_ps(&thSpecific->Y[i]);
         __m256 dist = computeEdgeCost_VEC(x1, y1, x2, y2, ewt, roundFlag);
 
         // get first minimum
@@ -141,192 +308,47 @@ static inline int findSuccessorID(Solution *sol, int iterNum, double *pathCost, 
     }
 
     // store vectors
+    float minVecStore[AVX_VEC_SIZE];
+    int minIDsVecStore[AVX_VEC_SIZE];
     _mm256_storeu_ps(minVecStore, minVec);
     _mm256_storeu_si256((__m256i*)minIDsVecStore, minIDsVec);
 
-    // sort arrays in ascendant order (size is fixed to 8 so this computation count as linear)
-    for (int i = 0; i < AVX_VEC_SIZE-1; i++)
-    {
-        for (int j = i+1; j < AVX_VEC_SIZE; j++)
-        {
-            if (minVecStore[j] < minVecStore[i])
-            {
-                register float tempf;
-                swapElems(minVecStore[i], minVecStore[j], tempf);
-                register int tempi;
-                swapElems(minIDsVecStore[i], minIDsVecStore[j], tempi);
-            }
-        }
-    }
+    // argsort for grasp and get minium(since they are only 8 elements it's fast)
+    int sortedArgs[AVX_VEC_SIZE];
+    argsort(minVecStore, sortedArgs, AVX_VEC_SIZE);
 
     // choose successor
     int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
-    int successor = minIDsVecStore[0];
-    float pathCostIncrement = minVecStore[0];
+    int successorSubIndex = sortedArgs[0];
 
-    if ((inst->params.graspType != GRASP_NONE) && (rand_r(state) < graspThreshold) && (inst->nNodes - iterNum > 8))
+    if ((inst->params.graspType == GRASP_ALMOSTBEST) && (rand_r(&thSpecific->rndState) < graspThreshold) && (inst->nNodes - posToAdd > AVX_VEC_SIZE))
     {
-        switch (inst->params.graspType)
-        {
-        case GRASP_NONE: break; // Prevents warning in compilation
+        int rndIdx = 1;
+        for (; rndIdx < AVX_VEC_SIZE - 1; rndIdx++)
+            if (rand_r(&thSpecific->rndState) > RAND_MAX / 2)
+                break;
 
-        case GRASP_RANDOM:
-            successor = iterNum + (rand_r(state) % (inst->nNodes - iterNum));
-            pathCostIncrement = computeEdgeCost(sol->X[iterNum - 1], sol->Y[iterNum - 1], sol->X[successor], sol->Y[successor], ewt, roundFlag);
-            break;
-
-        case GRASP_ALMOSTBEST:
-        {
-            int rndIdx = 1;
-            for (; rndIdx < AVX_VEC_SIZE-1; rndIdx++)
-                if (rand_r(state) > RAND_MAX / 2)
-                    break;
-
-            successor = minIDsVecStore[rndIdx];
-            pathCostIncrement = minVecStore[rndIdx];
-            break;
-        }
-        }
+        successorSubIndex = sortedArgs[rndIdx];
     }
 
-    *pathCost += pathCostIncrement;
-    return successor;
+    thSpecific->workingSol.cost += minVecStore[successorSubIndex];
+    return minIDsVecStore[successorSubIndex];
 }
 
-static void applyNearestNeighbor(Solution *sol, int startingNodeIndex, unsigned int *state)
+static void updateBestSolution(ThreadSpecificData *thSpecific)
 {
-    Instance *inst = sol->instance;
-    int n = inst->nNodes;
-    enum EdgeWeightType ewt = inst->params.edgeWeightType ;
-    bool roundFlag = inst->params.roundWeights;
+    Solution *bestSol = &thSpecific->thShared->bestSol;
+    Solution *newBest = &thSpecific->workingSol;
 
-    // set first node
-    swapElementsInSolution(sol, 0, startingNodeIndex);
-
-    // reset cost
-    sol->cost = 0;
-
-    for (int i = 1; i < n-1; i++)
-    {
-        int successorIndex = findSuccessorID(sol, i, &sol->cost, state);
-
-        if (successorIndex >= n)
-            throwError(inst, sol, "applyNearestNeighbor: Value of successor isn't applicable: %lu (startNode=%lu)", successorIndex, startingNodeIndex);
-        
-        // update solution
-        swapElementsInSolution(sol, i, successorIndex);
-    }
-
-    // add cost of the second to last edge
-    sol->cost += computeEdgeCost(sol->X[n-2], sol->Y[n-2], sol->X[n-1], sol->Y[n-1], ewt, roundFlag);
-
-    // add last edge (close the tour)
-    sol->X[n] = sol->X[0];
-    sol->Y[n] = sol->Y[0];
-    sol->indexPath[n] = sol->indexPath[0];
-    sol->cost += computeEdgeCost(sol->X[n-1], sol->Y[n-1], sol->X[n], sol->Y[n], ewt, roundFlag);
-}
-
-static void updateBestSolutionNN(Solution *bestSol, Solution *newBest)
-{
     // check solution when debugging
-    if (bestSol->instance->params.logLevel >= LOG_LVL_EVERYTHING)
+    if (bestSol->instance->params.logLevel >= LOG_LVL_DEBUG)
         if (!checkSolution(newBest))
-        {
-            destroySolution(bestSol);
 		    throwError(newBest->instance, newBest, "updateBestSolutionNN: newBest Solution is not valid");
-        }
 
-    LOG(LOG_LVL_LOG, "Found better solution: New cost: %f   Old cost: %f", newBest->cost, bestSol->cost);
+    LOG(LOG_LVL_LOG, "Found better solution: cost = %f", newBest->cost);
 
     bestSol->cost = newBest->cost;
 
-    { // swap pointers with macro
-        register float *temp;
-        swapElems(bestSol->X, newBest->X, temp);
-        swapElems(bestSol->Y, newBest->Y, temp);
-    }
-    {
-        register int *temp;
-        swapElems(bestSol->indexPath, newBest->indexPath, temp);
-    }
+    register int *temp;
+    swapElems(bestSol->indexPath, newBest->indexPath, temp);
 }
-
-
-
-
-static void *nnThread(void *arg)
-{
-    NNThreadsDataRnd *thSpecific = (NNThreadsDataRnd*)arg;
-    NNThreadsSharedData *thShared = thSpecific->thShared;
-    unsigned int state = thSpecific->rndState;
-    Solution *sol = thShared->sol;
-    Instance *inst = sol->instance;
-
-    // Allocate memory to contain the work-in-progress solution
-    Solution tempSol = newSolution(inst);
-
-    struct timespec timeStruct;
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
-    double currentTime = cvtTimespec2Double(timeStruct);
-
-    // check startingNode even before locking the mutex to avoid useless mutex calls
-    while((thShared->startingNode < inst->nNodes) && (currentTime < thShared->tlim))
-    {
-        int iterNode;
-        if (thShared->startOption == NN_FIRST_TRYALL)
-        {
-            pthread_mutex_lock(&thShared->getStartNodeMutex);
-
-            if (thShared->startingNode >= inst->nNodes)
-            {
-                pthread_mutex_unlock(&thShared->getStartNodeMutex);
-                break;
-            }
-
-            iterNode = thShared->startingNode;
-            thShared->startingNode++;
-
-            pthread_mutex_unlock(&thShared->getStartNodeMutex);
-        }
-        else
-            iterNode = rand_r(&state) % inst->nNodes;
-
-        // copy all the nodes in the original order from instance into tempSol.X/Y (Take advantage of the way the memory is allocated for the best and current sol)
-        for (int i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
-            tempSol.X[i] = inst->X[i];
-
-        for (int i = 0; i < inst->nNodes + 1; i++)
-            tempSol.indexPath[i] = i;
-        
-        applyNearestNeighbor(&tempSol, iterNode, &state);
-
-        // check cost first to avoid excessive amount of mutex calls
-        if (sol->cost > tempSol.cost)
-        {
-            pthread_mutex_lock(&thShared->saveSolutionMutex);
-
-            // recheck while having lock on mutex (for syncronization purposes)
-            if (sol->cost > tempSol.cost)
-                updateBestSolutionNN(thShared->sol, &tempSol);
-            
-            pthread_mutex_unlock(&thShared->saveSolutionMutex);
-        }
-
-        thSpecific->iterCount++;
-
-        //struct timespec timeStruct;
-        clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
-        currentTime = cvtTimespec2Double(timeStruct);
-    }
-
-    destroySolution(&tempSol);
-
-    // avoid closing thread if working in single thread mode
-    if (thShared->nThreads == 1)
-        return NULL;
-    
-    pthread_exit(NULL);
-}
-
-

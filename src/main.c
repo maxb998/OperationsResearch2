@@ -35,13 +35,16 @@ int main (int argc, char *argv[])
     LOG (LOG_LVL_NOTICE, "file %s has been loaded succesfully in %lf milliseconds", inst.params.inputFile, fileReadTime * 1000.);
     printf("\n");
     
-    /*
-    double computeMatrixTime = computeCostMatrix(&inst);
-    LOG(LOG_LVL_NOTICE, "Distance Matrix done in %lf seconds", computeMatrixTime);
-    */
+    if (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+    {
+        printf(SEPARATOR_STR);
+        double computeMatrixTime = computeCostMatrix(&inst);
+        LOG(LOG_LVL_NOTICE, "Distance Matrix done in %lf seconds", computeMatrixTime);
+        printf(SEPARATOR_STR"\n");
+    }
 
     // initializing pointers to null to avoid possible errors on destruction of sol at the end of main
-    Solution sol = { .indexPath = NULL, .X = NULL, .Y = NULL };
+    Solution sol = { .indexPath = NULL };
 
     double tlim = inst.params.tlim;
     enum Mode m = inst.params.mode;
@@ -89,7 +92,7 @@ int main (int argc, char *argv[])
         run2Opt(&sol);
 
     if (inst.params.showPlot)
-        plotSolution(&sol, "1000,600", "green", "black", 1, false);
+        plotSolution(&sol, "1920,1080", "green", "black", 1, false);
     
     if (inst.params.saveSolution)
         saveSolution(&sol, argc, argv);
@@ -122,7 +125,7 @@ static Solution runHeuristic(Instance *inst, enum Mode mode, double tlim)
     case MODE_EM:
         printf("Extra Mileage starting...\n");
 
-        sol = ExtraMileage(inst, 0, inst->params.emInitOption, tlim, 0);
+        sol = ExtraMileage(inst, inst->params.emInitOption, tlim, 0);
 
         printf("Extra Mileage finished in %lf seconds\n", sol.execTime);
         printf("Solution Cost = %lf\n", sol.cost);
@@ -240,10 +243,9 @@ static void run2Opt(Solution *sol)
     printf(SEPARATOR_STR);
     printf("2Opt starting...\n");
 
-    double optTime = apply2OptBestFix(sol, _2OPT_AVX_ST);
-    sol->execTime += optTime;
+    apply2OptBestFix(sol);
 
-    printf("2Opt finished in %lf seconds\n", optTime);
+    printf("2Opt finished in %lf seconds\n", sol->execTime);
     printf("Solution Cost = %lf\n", sol->cost);
     printf(SEPARATOR_STR);
     printf("\n");

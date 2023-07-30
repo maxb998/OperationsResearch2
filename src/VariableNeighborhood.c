@@ -33,7 +33,7 @@ void VariableNeighborhood(Solution *sol, double timeLimit, int nThreads)
     if (!checkSolution(sol))
         throwError(inst, sol, "VariableNeighborhood: Input solution is not valid");
 
-    apply2OptBestFix(sol, _2OPT_AVX_ST);
+    apply2OptBestFix(sol);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double currentTime = cvtTimespec2Double(timeStruct);
@@ -41,7 +41,7 @@ void VariableNeighborhood(Solution *sol, double timeLimit, int nThreads)
     while (currentTime < startTime + timeLimit)
     {
         _5Kick(sol);
-        apply2OptBestFix(sol, _2OPT_AVX_ST);
+        apply2OptBestFix(sol);
 
         clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
         currentTime = cvtTimespec2Double(timeStruct);
@@ -96,8 +96,6 @@ static inline void _5Kick(Solution *sol)
     for(int i = 0; i <= sol->instance->nNodes; i++)
     {
         sol->indexPath[i] = newPath[i];
-        sol->X[i] = sol->instance->X[newPath[i]];
-        sol->Y[i] = sol->instance->Y[newPath[i]];
     }
     
     sol->cost = computeSolutionCost(sol);

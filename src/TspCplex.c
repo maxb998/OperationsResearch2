@@ -157,21 +157,11 @@ void cvtSuccessorsToSolution(int *successors, Solution *sol)
 	
 	// start from 0
 	sol->indexPath[0] = 0;
-	sol->X[0] = inst->X[0];
-	sol->Y[0] = inst->Y[0];
 
-	for (int i = successors[0], pos = 1; i != 0; i = successors[i])
-	{
+	for (int i = successors[0], pos = 1; i != 0; i = successors[i], pos++)
 		sol->indexPath[pos] = i;
-		sol->X[pos] = inst->X[i];
-		sol->Y[pos] = inst->Y[i];
-
-		pos++;
-	}
 
 	sol->indexPath[n] = 0;
-	sol->X[n] = inst->X[0];
-	sol->Y[n] = inst->Y[0];
 }
 
 void cvtSolutionToSuccessors(Solution *sol, int* successors)

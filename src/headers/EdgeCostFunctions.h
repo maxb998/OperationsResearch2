@@ -12,7 +12,7 @@ enum costComputationType
 	SLOW_EXACT			// use standard square root function (basically accurate)
 };
 
-#define COMPUTATION_TYPE SLOW_EXACT
+#define COST_COMPUTATION_TYPE SLOW_EXACT
 
 
 
@@ -114,7 +114,7 @@ static inline float roundEdgeCost(float edgeCost, enum EdgeWeightType edgeWgtTyp
 static inline float computeEdgeCost (float x1, float y1, float x2, float y2, enum EdgeWeightType edgeWgtType, bool roundFlag)
 {
 	register float cost;
-	switch (COMPUTATION_TYPE)
+	switch (COST_COMPUTATION_TYPE)
 	{
 	case FAST_SQUARED:
 		cost = squaredEdgeCost (x1, y1, x2, y2, edgeWgtType);
@@ -295,7 +295,7 @@ static inline __m256 roundEdgeCost_VEC (__m256 costs, enum EdgeWeightType edgeWg
 static inline __m256 computeEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2, __m256 y2, enum EdgeWeightType edgeWgtType, bool roundFlag)
 {
 	register __m256 costVec;
-	switch (COMPUTATION_TYPE)
+	switch (COST_COMPUTATION_TYPE)
 	{
 	case FAST_SQUARED:
 		costVec = squaredEdgeCost_VEC (x1, y1, x2, y2, edgeWgtType);

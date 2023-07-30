@@ -56,7 +56,11 @@ void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointC
 // Swap elem1 and elem2. Can be done with any type of variable, however a temporary variable "tmp" of the same type of elem1 and elem2 MUST be provided.
 #define swapElems(elem1,elem2,tmp) tmp = elem1; elem1 = elem2; elem2 = tmp
 
+// Convert timespec struct to a double time in seconds
 #define cvtTimespec2Double(t) (double)t.tv_sec + (double)t.tv_nsec / 1000000000.0
+
+// Use rand_r to generate a random integer in the range [min,max) while avoiding low entropy bits (statiscally better than doing "rand() % (n+1)") https://codereview.stackexchange.com/questions/159604/uniform-random-numbers-in-an-integer-interval-in-c
+#define genRandom(rndStatePtr,min,max) (int)((long)rand_r(rndStatePtr) * (long)(max-min) / (RAND_MAX + 1L)) + min
 
 /*!
 * @brief Generate empty instance
@@ -188,21 +192,18 @@ Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, do
 /*!
 * @brief Find a the best Solution using Extra Mileage Heuristic withing a specified time limit.
 * @param inst Instance to solve.
-* @param emOpt Defines the way in which the first point has to be chosen.
 * @param emInitType Defines the way in which the Solution is initialized.
 * @param tlim Time limit.
 * @result Solution obtained using Extra Mileage.
 */
-Solution ExtraMileage(Instance *inst, enum EMOptions emOpt, enum EMInitType emInitType, double timeLimit, int nThreads);
+Solution ExtraMileage(Instance *inst, enum EMInitType emInitType, double timeLimit, int nThreads);
 
 /*!
 * @brief Applies Extra Mileage heuristic on a solution that is already not empty.
-* @param sol Solution with first batch already inserted up to nCovered.
+* @param sol Pointer to a solution with first batch already inserted up to nCovered.
 * @param nCovered Number of elements representing the first part of the tour inside sol. The function will add all remaning nodes.
-* @param emOpt Defines the way in which the first point has to be chosen.
-* @result Number in seconds representing execution time
 */
-void applyExtraMileage(Solution *sol, int nCovered, enum EMOptions emOpt, unsigned int *rndState);
+void applyExtraMileage(Solution *sol, int nCovered, unsigned int *rndState);
 
 
 //###################################################################################################################################
@@ -212,10 +213,9 @@ void applyExtraMileage(Solution *sol, int nCovered, enum EMOptions emOpt, unsign
 /*!
 * @brief  Applies 2Opt solution optimizer to sol.
 * @param sol Solution to optimize.
-* @param option Type of algorithm to use. Only affects speed of computation. To use the fastest one set to 0.
 * @result Number in seconds representing execution time
 */
-double apply2OptBestFix(Solution *sol, enum _2OptOptions option);
+void apply2OptBestFix(Solution *sol);
 
 
 //###################################################################################################################################

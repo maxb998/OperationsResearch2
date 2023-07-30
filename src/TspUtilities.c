@@ -73,12 +73,9 @@ static inline int nProcessors()
 Solution newSolution (Instance *inst)
 {
     Solution s = { .cost = INFINITY, .execTime = 0., .instance = inst };
-
-    // allocate memory (consider locality). Also leave place at the end to repeat the first element of the solution(some algoritms benefits from it)
-    s.X = malloc((inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float) + (inst->nNodes + AVX_VEC_SIZE) * sizeof(int));
-    s.Y = &s.X[inst->nNodes + AVX_VEC_SIZE];
-    s.indexPath = (int*)&s.Y[inst->nNodes + AVX_VEC_SIZE];
-
+    s.indexPath = malloc((inst->nNodes + AVX_VEC_SIZE) * sizeof(int));
+    if (!s.indexPath)
+        throwError(inst, NULL, "newSolution: Failed to allocate memory");
     return s;
 }
 
@@ -88,18 +85,14 @@ void destroyInstance (Instance *inst)
     free(inst->X);
     free(inst->edgeCostMat);
 
-    // reset pointers to NULL
-    inst->X = inst->Y = inst->edgeCostMat = NULL;
+    inst->X = NULL;
+    inst->Y = NULL;
+    inst->edgeCostMat = NULL;
 }
 
 void destroySolution (Solution *sol)
 {
-    // memory has been allocated to X, no need to free Y or indexPath
-    free(sol->X);
-    //free(sol->indexPath);
-
-    // reset pointers to NULL
-    sol->X = sol->Y = NULL;
+    free(sol->indexPath);
     sol->indexPath = NULL;
 }
 
@@ -113,9 +106,6 @@ void cloneSolution(Solution *src, Solution *dst)
     dst->cost = src->cost;
     dst->instance = src->instance;
     dst->execTime = src->execTime;
-
-    for (int i = 0; i < ((dst->instance->nNodes + AVX_VEC_SIZE) * 2); i++)
-        dst->X[i] = src->X[i];
     
     for (int i = 0; i < dst->instance->nNodes + 1; i++)
         dst->indexPath[i] = src->indexPath[i];
@@ -172,22 +162,17 @@ void throwError (Instance *inst, Solution *sol, char * line, ...)
 bool checkSolution(Solution *sol)
 {
     Instance *inst = sol->instance;
+    int n = inst->nNodes;
 
     char * coveredNodes = calloc(sol->instance->nNodes, sizeof(char));
 
-    // First and last node must be equal (the circuit is closed)
-    if (sol->indexPath[0] != sol->indexPath[sol->instance->nNodes])
-    { LOG(LOG_LVL_CRITICAL, "SolutionCheck: first and last node in sol.indexPath should coincide, but they do not"); return false; }
-    // also check for sol.X and sol.Y
-    if (sol->X[0] != sol->X[inst->nNodes])
-    { LOG(LOG_LVL_CRITICAL, "SolutionCheck: first and last node in sol.X should coincide, but they do not"); return false; }
-    if (sol->Y[0] != sol->Y[inst->nNodes])
-    { LOG(LOG_LVL_CRITICAL, "SolutionCheck: first and last node in sol.Y should coincide, but they do not"); return false; }
-
     // Populate uncoveredNodes array, here we check if a node is repeated along the path
-    for (int i = 0; i < inst->nNodes; i++)
+    for (int i = 0; i < n; i++)
     {
         int currentNode = sol->indexPath[i];
+
+        if ((currentNode < 0) || (currentNode > n))
+        { LOG(LOG_LVL_CRITICAL, "SolutionCheck: iterpath[%d]=%d is not both >= 0 and < nNodes", i, currentNode); return false; }
 
         if(coveredNodes[currentNode] == 1)
         { LOG(LOG_LVL_CRITICAL, "SolutionCheck: node %d repeated in the solution. Loop iteration %d", currentNode, i); return false; }
@@ -201,16 +186,7 @@ bool checkSolution(Solution *sol)
         { LOG(LOG_LVL_CRITICAL, "SolutionCheck: node %d is not in the path", i); return false; }
     free(coveredNodes);
 
-    // Check sol.X and sol.Y if they correspond correctly to inst.X and inst.Y given the indexes in sol.indexPath
-    for (int i = 0; i < inst->nNodes; i++)
-    {
-        if (sol->X[i] != inst->X[sol->indexPath[i]])
-        { LOG(LOG_LVL_CRITICAL, "SolutionCheck: sol.X[sol.indexPath[%ld]] = %.3e and does not correspond with inst.X[%ld] = %.3e", i, inst->X[sol->indexPath[i]], i, sol->X[i]); return false; }
-        if (sol->Y[i] != inst->Y[sol->indexPath[i]])
-        { LOG(LOG_LVL_CRITICAL, "SolutionCheck: sol.Y[sol.indexPath[%ld]] = %.3e and does not correspond with inst.Y[%ld] = %.3e", i, inst->Y[sol->indexPath[i]], i, sol->Y[i]); return false; }
-    }
-
-    double recomputedCost = computeSolutionCost(sol);//computeSolutionCostVectorized(sol);
+    double recomputedCost = computeSolutionCost(sol);
 
     if (recomputedCost != sol->cost)
     { LOG(LOG_LVL_CRITICAL, "SolutionCheck: Error in the computation of the pathCost. Recomputed Cost: %lf Cost in Solution: %lf", recomputedCost, sol->cost); return false; }
@@ -218,70 +194,19 @@ bool checkSolution(Solution *sol)
     return true;
 }
 
-double computeSolutionCostVectorized(Solution *sol)
-{
-    int n = sol->instance->nNodes;
-    enum EdgeWeightType ewt = sol->instance->params.edgeWeightType ;
-    bool roundFlag = sol->instance->params.roundWeights;
-
-    __m256d costVec = _mm256_setzero_pd();
-    int i = 0;
-    while (i < n) //- AVX_VEC_SIZE)
-    {
-        __m256 x1, x2, y1, y2;
-
-        x1 = _mm256_loadu_ps(&sol->X[i]);
-        y1 = _mm256_loadu_ps(&sol->Y[i]);
-        x2 = _mm256_loadu_ps(&sol->X[i+1]);
-        y2 = _mm256_loadu_ps(&sol->Y[i+1]);
-
-        if ((i > n - AVX_VEC_SIZE) && (n % AVX_VEC_SIZE != 0))
-        {
-            int loadMask[AVX_VEC_SIZE] = { 0 };
-            for (int j = 0; j < n % AVX_VEC_SIZE; j++)
-                loadMask[j] = -1;
-            __m256i mask = _mm256_loadu_si256((__m256i_u*)loadMask);
-            
-            x1 = _mm256_maskload_ps(&sol->X[i], mask);
-            y1 = _mm256_maskload_ps(&sol->Y[i], mask);
-            x2 = _mm256_maskload_ps(&sol->X[i+1], mask);
-            y2 = _mm256_maskload_ps(&sol->Y[i+1], mask);
-        }
-
-        __m256 costVecFloat = computeEdgeCost_VEC(x1, y1, x2, y2, ewt, roundFlag);
-
-        // convert vector of floats into 2 vectors of doubles and add them to the total cost
-        // first half of the vector
-        __m128 partOfCostVecFloat = _mm256_extractf128_ps(costVecFloat, 0);
-        __m256d partOfCostVecDouble = _mm256_cvtps_pd(partOfCostVecFloat);
-        costVec = _mm256_add_pd(costVec, partOfCostVecDouble);
-        // second half of the vector
-        partOfCostVecFloat = _mm256_extractf128_ps(costVecFloat, 1);
-        partOfCostVecDouble = _mm256_cvtps_pd(partOfCostVecFloat);
-        costVec = _mm256_add_pd(costVec, partOfCostVecDouble);
-
-        i += AVX_VEC_SIZE;
-    }
-
-    double vecStore[4];
-    _mm256_storeu_pd(vecStore, costVec);
-    
-    double totalCost = 0;
-    for (int i = 0; i < 4; i++)
-        totalCost += vecStore[i];
-    
-    return totalCost;
-}
-
 double computeSolutionCost(Solution *sol)
 {
-    enum EdgeWeightType ewt = sol->instance->params.edgeWeightType ;
-    bool roundFlag = sol->instance->params.roundWeights;
+    Instance *inst = sol->instance;
+    int n = inst->nNodes;
+    enum EdgeWeightType ewt = inst->params.edgeWeightType ;
+    bool roundFlag = inst->params.roundWeights;
 
     double cost = 0;
-    for (int i = 0; i < sol->instance->nNodes; i++)
-        cost += (double)computeEdgeCost(sol->X[i], sol->Y[i], sol->X[i+1], sol->Y[i+1], ewt, roundFlag);
+    for (int i = 0; i < n - 1; i++)
+        cost += (double)computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i+1]], inst->Y[sol->indexPath[i+1]], ewt, roundFlag);
     
+    cost += (double)computeEdgeCost(inst->X[sol->indexPath[n-1]], inst->Y[sol->indexPath[n-1]], inst->X[sol->indexPath[0]], inst->Y[sol->indexPath[0]], ewt, roundFlag);
+
     return cost;
 }
 
