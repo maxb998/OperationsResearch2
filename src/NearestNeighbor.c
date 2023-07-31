@@ -17,7 +17,6 @@ typedef struct
     int startingNode;
 
     double timeLimit;
-    double startTime;
 
 } ThreadSharedData;
 
@@ -124,7 +123,7 @@ Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, do
     destroyThreadSharedData(&thShared);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
-    outputSol.execTime = cvtTimespec2Double(timeStruct) - thShared.startTime;
+    outputSol.execTime = cvtTimespec2Double(timeStruct) - startTime;
 
     LOG(LOG_LVL_NOTICE, "Total number of iterations: %ld", iterCount);
     LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)iterCount/outputSol.execTime);

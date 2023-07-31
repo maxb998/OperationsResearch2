@@ -12,15 +12,21 @@ typedef struct
     float costOffset;
     int edge0;
     int edge1;
-} BestFixData;
+} _2optMoveData;
+
+static bool printPerformanceLog = false;
+
+void set2OptPerformanceBenchmarkLog(bool val)
+{
+    printPerformanceLog = val;
+}
 
 
-static inline void updateSolution(Solution *sol, BestFixData bestFix, float *X, float *Y);
+static inline void updateSolution(Solution *sol, _2optMoveData bestFix, float *X, float *Y);
 
-static inline BestFixData _2optBestFixBase(Solution *sol, bool useCostMatrix);
+static inline _2optMoveData _2optBestFixBase(Solution *sol, bool useCostMatrix);
 
-static inline BestFixData _2OptBestFixAVX(Solution *sol, float *X, float *Y);
-
+static inline _2optMoveData _2OptBestFixAVX(Solution *sol, float *X, float *Y);
 
 void apply2OptBestFix(Solution *sol)
 {
@@ -55,6 +61,8 @@ void apply2OptBestFix(Solution *sol)
 
     float *X = NULL, *Y = NULL;
 
+    sol->indexPath[n] = sol->indexPath[0];
+
     if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
     {
         X = malloc((n + AVX_VEC_SIZE) * 2 * sizeof(float));
@@ -68,7 +76,6 @@ void apply2OptBestFix(Solution *sol)
         }
         X[n] = X[0];
         Y[n] = Y[0];
-        sol->indexPath[n] = sol->indexPath[0];
         for (int i = n + 1; i < n + AVX_VEC_SIZE; i++)
         {
             X[i] = INFINITY;
@@ -80,7 +87,7 @@ void apply2OptBestFix(Solution *sol)
     while (notFinishedFlag) // runs 2opt until no more moves are made in one iteration of 2opt
     {
         // setup local values to avoid calling mutex too often
-        BestFixData bestFix;
+        _2optMoveData bestFix;
 
         switch (COMPUTATION_TYPE)
         {
@@ -116,14 +123,16 @@ void apply2OptBestFix(Solution *sol)
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double elapsed = cvtTimespec2Double(timeStruct) - startTime;
-    
-    LOG(LOG_LVL_NOTICE, "Total number of iterations: %lu", iterNum);
-    LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)iterNum/elapsed);
+    if (printPerformanceLog)
+    {
+        LOG(LOG_LVL_NOTICE, "Total number of iterations: %lu", iterNum);
+        LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)iterNum/elapsed);
+    }
 
-    sol->cost += elapsed;
+    sol->execTime += elapsed;
 }
 
-static inline void updateSolution(Solution *sol, BestFixData bestFix, float *X, float *Y)
+static inline void updateSolution(Solution *sol, _2optMoveData bestFix, float *X, float *Y)
 {
     // update cost
     sol->cost += (double)bestFix.costOffset;
@@ -141,7 +150,7 @@ static inline void updateSolution(Solution *sol, BestFixData bestFix, float *X, 
 
     int smallID = bestFix.edge0 + 1, bigID = bestFix.edge1;
 
-    static int updateCount = 0;
+    static int updateCount = 0; // can generate issues with vns
     updateCount++;
 
     LOG(LOG_LVL_EVERYTHING, "2Opt: [%d] Updating solution by switching edge (%d,%d) with edge (%d,%d) improving cost by %f", updateCount,
@@ -165,16 +174,16 @@ static inline void updateSolution(Solution *sol, BestFixData bestFix, float *X, 
     }
 }
 
-static inline BestFixData _2optBestFixBase(Solution *sol, bool useCostMatrix)
+static inline _2optMoveData _2optBestFixBase(Solution *sol, bool useCostMatrix)
 {
     Instance *inst = sol->instance;
     int n = inst->nNodes;
     enum EdgeWeightType ewt = inst->params.edgeWeightType;
     bool roundW = inst->params.roundWeights;
 
-    BestFixData bestFix = { .costOffset=0 };
+    _2optMoveData bestFix = { .costOffset=0 };
 
-    for (BestFixData currFix = { .edge0=0 }; currFix.edge0 < n - 1; currFix.edge0++) // check for one edge at a time every other edge(except already checked)
+    for (_2optMoveData currFix = { .edge0=0 }; currFix.edge0 < n - 1; currFix.edge0++) // check for one edge at a time every other edge(except already checked)
     {
         float partSolEdgeWgt;
         if (useCostMatrix)
@@ -208,14 +217,14 @@ static inline BestFixData _2optBestFixBase(Solution *sol, bool useCostMatrix)
     return bestFix;
 }
 
-static inline BestFixData _2OptBestFixAVX(Solution *sol, float *X, float *Y)
+static inline _2optMoveData _2OptBestFixAVX(Solution *sol, float *X, float *Y)
 {
     Instance *inst = sol->instance;
     int n = inst->nNodes;
     enum EdgeWeightType ewt = inst->params.edgeWeightType;
     bool roundW = inst->params.roundWeights;
 
-    BestFixData bestFix = { .costOffset=0 };
+    _2optMoveData bestFix = { .costOffset=0 };
 
     for (int edge0 = 0; edge0 < n - 1; edge0++) // check for one edge at a time every other edge(except already checked)
     {

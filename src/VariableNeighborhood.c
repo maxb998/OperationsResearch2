@@ -5,132 +5,248 @@
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 #include <stdio.h>
 
+#define MAX_KICK_MAGNITUDE 20
+#define MIN_KICK_MAGNITUDE 5
+#define PERMUTATION_THRESHOLD (MAX_KICK_MAGNITUDE * 2)
+#define N_PERMUTATION(nNodes) (nNodes * 4)
 
-// Returns 5 random different integers in [0,nNodes) making sure they differ of more than 1 unit
-static inline int * random5Edges(int nNodes, Solution * sol);
-
-static inline void _5Kick(Solution *sol);
-
-static inline void sort5int(int * array);
-
-void VariableNeighborhood(Solution *sol, double timeLimit, int nThreads)
+typedef struct
 {
+    Solution bestSol;
+
+    pthread_mutex_t mutex;
+
+    double timeLimit;
+
+} ThreadSharedData;
+
+static ThreadSharedData initThreadSharedData (Solution *sol, double timeLimit)
+{
+    ThreadSharedData thShared = { .timeLimit = timeLimit, .bestSol=*sol };
+
+    if (pthread_mutex_init(&thShared.mutex, NULL)) throwError(sol->instance, sol, "VariableNeighborhoodSearch -> initThreadSharedData: Failed to initialize mutex");
+
+    return thShared;
+}
+
+static void destroyThreadSharedData (ThreadSharedData *thShared)
+{
+    if (pthread_mutex_init(&thShared->mutex, NULL)) throwError(thShared->bestSol.instance, &thShared->bestSol, "VariableNeighborhoodSearch -> destroyThreadSharedData: Failed to destroy mutex");
+}
+
+typedef struct
+{
+    ThreadSharedData *thShared;
+    unsigned int rndState;
+    int iterCount;
+
+    int maxKickMagnitude;
+    int *nodesToKick;
+
+    Solution workingSol;
+
+} ThreadSpecificData;
+
+static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, unsigned int rndState)
+{
+    ThreadSpecificData thSpecific = {
+        .thShared=thShared,
+        .rndState=rndState,
+        .iterCount=0
+    };
+
+    Instance *inst = thShared->bestSol.instance;
+    thSpecific.workingSol=newSolution(inst);
+
+    if (MAX_KICK_MAGNITUDE > inst->nNodes)
+        thSpecific.maxKickMagnitude = inst->nNodes;
+
+    // allocate more memory if permutations are necessary
+    if (PERMUTATION_THRESHOLD < inst->nNodes)
+        thSpecific.nodesToKick = malloc(inst->nNodes + thSpecific.maxKickMagnitude * sizeof(int));
+    else
+        thSpecific.nodesToKick = malloc((inst->nNodes - 1) * sizeof(int));
+    
+    if (!thSpecific.nodesToKick)
+        throwError(inst, &thSpecific.workingSol, "NearestNeighbor -> initThreadSpecificData: Failed to allocate memory");
+
+    return thSpecific;
+}
+
+static void destroyThreadSpecificData(ThreadSpecificData *thSpecific)
+{
+    destroySolution(&thSpecific->workingSol);
+
+    free(thSpecific->nodesToKick);
+    thSpecific->nodesToKick = NULL;
+}
+
+
+static void *runVns(void* arg);
+
+void VariableNeighborhoodSearch(Solution *sol, double timeLimit, int nThreads)
+{
+    Instance *inst = sol->instance;
+
     // time limit management
     struct timespec timeStruct;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double startTime = cvtTimespec2Double(timeStruct);
 
+    // reset seed if debugging
+    if (inst->params.logLevel == LOG_LVL_DEBUG)
+        srand(inst->params.randomSeed);
+
     if ((nThreads < 0) || (nThreads > MAX_THREADS))
         throwError(sol->instance, sol, "VariableNeighborhood: nThreads value is not valid: %d", nThreads);
     else if (nThreads == 0)
-        nThreads = sol->instance->params.nThreads;
-
-    Instance *inst = sol->instance;
-
-    if(inst->nNodes <= 9)
-        throwError(inst, sol, "VariableNeighborhood: number of nodes too low to run VNS. #Nodes: ", inst->nNodes);
+        nThreads = inst->params.nThreads;
 
     if (!checkSolution(sol))
         throwError(inst, sol, "VariableNeighborhood: Input solution is not valid");
 
     apply2OptBestFix(sol);
 
+    ThreadSharedData thShared = initThreadSharedData(sol, startTime + timeLimit);
+    ThreadSpecificData thSpecifics[MAX_THREADS];
+    pthread_t threads[MAX_THREADS];
+    for (int i = 0; i < nThreads; i++)
+    {
+        thSpecifics[i] = initThreadSpecificData(&thShared, (unsigned int)rand());
+        pthread_create(&threads[i], NULL, runVns, &thSpecifics[i]);
+    }
+
+    int iterCount = 0;
+    for (int i = 0; i < nThreads; i++)
+    {
+        pthread_join(threads[i], NULL);
+        iterCount += thSpecifics[i].iterCount;
+        destroyThreadSpecificData(&thSpecifics[i]);
+    }
+
+    *sol = thShared.bestSol;
+
+    destroyThreadSharedData(&thShared);    
+
+    LOG(LOG_LVL_NOTICE, "Total number of iterations: %ld", iterCount);
+    LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)iterCount/sol->execTime);
+}
+
+static void kick(ThreadSpecificData *thSpecific);
+
+static void *runVns(void *arg)
+{
+    ThreadSpecificData *thSpecific = (ThreadSpecificData*)arg;
+    ThreadSharedData *thShared = thSpecific->thShared;
+    Instance *inst = thSpecific->workingSol.instance;
+
+    struct timespec timeStruct;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double currentTime = cvtTimespec2Double(timeStruct);
 
-    while (currentTime < startTime + timeLimit)
+    cloneSolution(&thShared->bestSol, &thSpecific->workingSol);
+
+    // init nodesToKick if using permutations to kick
+    if (inst->nNodes < PERMUTATION_THRESHOLD)
+        for (int i = 0; i < inst->nNodes-1; i++)
+            thSpecific->nodesToKick[i] = i+1;
+
+    while (currentTime < thShared->timeLimit)
     {
-        _5Kick(sol);
-        apply2OptBestFix(sol);
+        kick(thSpecific);
+
+        if (!checkSolution(&thSpecific->workingSol))
+            throwError(inst, &thSpecific->workingSol, "runVns: Solution after kick is incorrect (iteration = %d)", thSpecific->iterCount);
+
+        apply2OptBestFix(&thSpecific->workingSol);
+
+        if (thSpecific->workingSol.cost < thShared->bestSol.cost)
+        {
+            pthread_mutex_lock(&thShared->mutex);
+            if (thSpecific->workingSol.cost < thShared->bestSol.cost)
+            {
+                LOG(LOG_LVL_LOG, "Found better solution: cost = %f", thSpecific->workingSol.cost);
+                Solution temp;
+                swapElems(thSpecific->workingSol, thShared->bestSol, temp);
+            }
+            pthread_mutex_unlock(&thShared->mutex);
+        }
+
+        thSpecific->iterCount++;
 
         clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
         currentTime = cvtTimespec2Double(timeStruct);
     }
+    
+    return NULL;
 }
 
-static inline void _5Kick(Solution *sol)
+
+static void kick(ThreadSpecificData *thSpecific)
 {
-
-    // Contains the index to 5 random non consecutive edges, sorted from smaller index to larger
-    int * randomEdges = random5Edges((int)sol->instance->nNodes, sol);
-    sort5int(randomEdges);
-
-    int * newPath = malloc((sol->instance->nNodes+1)*sizeof(int));
-    int index = 0;
-
-    newPath[index] = sol->indexPath[randomEdges[0]];
-    index++;
-    for(int i = randomEdges[1]+1; i <= randomEdges[2]; i++)
-    {
-        newPath[index] = sol->indexPath[i];
-        index++;
-    }
-    for(int i = randomEdges[3]+1; i <= randomEdges[4]; i++)
-    {
-        newPath[index] = sol->indexPath[i];
-        index++;
-    }
-    for(int i = randomEdges[0]+1; i <= randomEdges[1]; i++)
-    {
-        newPath[index] = sol->indexPath[i];
-        index++;
-    }
-    for(int i = randomEdges[2]+1; i <= randomEdges[3]; i++)
-    {
-        newPath[index] = sol->indexPath[i];
-        index++;
-    }
-    for(int i = randomEdges[4]+1; i <= sol->instance->nNodes; i++)
-    {
-        newPath[index] = sol->indexPath[i];
-        index++;
-    }
-    for(int i = 1; i <= randomEdges[0]; i++)
-    {
-        newPath[index] = sol->indexPath[i];
-        index++;
-    }
+    Instance *inst = thSpecific->workingSol.instance;
+    int n = inst->nNodes;
+    int *nodesToKick = thSpecific->nodesToKick;
     
-    LOG(LOG_LVL_DEBUG, "_5Kick -> Edges mixed: [%d-%d], [%d-%d], [%d-%d], [%d-%d], [%d-%d]", sol->indexPath[randomEdges[0]], sol->indexPath[randomEdges[0]+1], sol->indexPath[randomEdges[1]], sol->indexPath[randomEdges[1]+1], sol->indexPath[randomEdges[2]], sol->indexPath[randomEdges[2]+1], sol->indexPath[randomEdges[3]], sol->indexPath[randomEdges[3]+1], sol->indexPath[randomEdges[4]], sol->indexPath[randomEdges[4]+1]);
+    // decide how much this kick magnitude will be and which nodes it will affect(saved into thSpecific.nodesToKick)
 
-    for(int i = 0; i <= sol->instance->nNodes; i++)
+    int currentKickMagnitude;
+
+    if (n < PERMUTATION_THRESHOLD)
     {
-        sol->indexPath[i] = newPath[i];
-    }
-    
-    sol->cost = computeSolutionCost(sol);
+        currentKickMagnitude = n-1;
 
-    free(randomEdges);
-    free(newPath);
-}
-
-static inline int * random5Edges(int nNodes, Solution * sol)
-{
-    int * randomEdges = malloc(5*sizeof(int));
-    for(int i = 0; i < 5; i++)
-    {
-        randomEdges[i] = rand()%nNodes;
-        for(int j = 0; j < i; j++)
+        for (int i = 0; i < N_PERMUTATION(n); i++)
         {
-            if((randomEdges[i] == randomEdges[j]) || (abs(randomEdges[i] - randomEdges[j]) == 1) || (abs(randomEdges[i] - randomEdges[j]) == sol->instance->nNodes-1)) 
-            {
-                i--;
-                break;            
-            }
+            // get permutation indexes
+            int rndIndex0 = genRandom(&thSpecific->rndState, 0, n-1), rndIndex1 = genRandom(&thSpecific->rndState, 0, n-1);
+            while (rndIndex0 == rndIndex1) rndIndex1 = genRandom(&thSpecific->rndState, 0, n-1);
+
+            register int temp;
+            swapElems(nodesToKick[rndIndex0], nodesToKick[rndIndex1], temp);
         }
     }
-    return randomEdges;
+    else
+    {
+        currentKickMagnitude = genRandom(&thSpecific->rndState, MIN_KICK_MAGNITUDE, MAX_KICK_MAGNITUDE);
+
+        int i = 0;
+        while (i < currentKickMagnitude)
+        {
+            nodesToKick[i] = genRandom(&thSpecific->rndState, 1, n);
+
+            // check if any is equal
+            for (int j = 0; j < i; j++)
+                if (nodesToKick[i] == nodesToKick[j])
+                    continue;
+            i++;
+        }
+    }
+
+    // perform kick
+    enum EdgeWeightType ewt = inst->params.edgeWeightType;
+    bool roundW = inst->params.roundWeights;
+    int *path = thSpecific->workingSol.indexPath;
+    
+    int first = path[nodesToKick[0]];
+
+    for (int i = 0; i < currentKickMagnitude; i++)
+    {
+        // subtract old cost
+        thSpecific->workingSol.cost -= (computeEdgeCost(inst->X[path[nodesToKick[i]-1]], inst->Y[path[nodesToKick[i]-1]], inst->X[path[nodesToKick[i]]],   inst->Y[path[nodesToKick[i]]],   ewt, roundW) +
+                                        computeEdgeCost(inst->X[path[nodesToKick[i]]],   inst->Y[path[nodesToKick[i]]],   inst->X[path[nodesToKick[i]+1]], inst->Y[path[nodesToKick[i]+1]], ewt, roundW));
+
+        int next;
+        if (i < currentKickMagnitude-1)
+            next = path[nodesToKick[i+1]];
+        else
+            next = first;
+
+        path[nodesToKick[i]] = next;
+
+        // add new cost
+        thSpecific->workingSol.cost += computeEdgeCost(inst->X[path[nodesToKick[i]-1]], inst->Y[path[nodesToKick[i]-1]], inst->X[path[nodesToKick[i]]],   inst->Y[path[nodesToKick[i]]],   ewt, roundW) +
+                                       computeEdgeCost(inst->X[path[nodesToKick[i]]],   inst->Y[path[nodesToKick[i]]],   inst->X[path[nodesToKick[i]+1]], inst->Y[path[nodesToKick[i]+1]], ewt, roundW);
+    }
 }
 
-static inline void sort5int(int * array)
-{	
-	for(int j = 0; j < 4; j++)
-	{
-		int min = j;
-		for(int i = j+1; i < 5; i++)
-			if(array[i] < array[min])
-                min = i;
-		register int temp;
-        swapElems(array[j], array[min], temp);
-	}
-}

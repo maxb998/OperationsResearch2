@@ -60,7 +60,7 @@ void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointC
 #define cvtTimespec2Double(t) (double)t.tv_sec + (double)t.tv_nsec / 1000000000.0
 
 // Use rand_r to generate a random integer in the range [min,max) while avoiding low entropy bits (statiscally better than doing "rand() % (n+1)") https://codereview.stackexchange.com/questions/159604/uniform-random-numbers-in-an-integer-interval-in-c
-#define genRandom(rndStatePtr,min,max) (int)((long)rand_r(rndStatePtr) * (long)(max-min) / (RAND_MAX + 1L)) + min
+#define genRandom(rndStatePtr,min,max) (int)((long)rand_r(rndStatePtr) * (long)((max)-(min)) / (RAND_MAX + 1L)) + (min)
 
 /*!
 * @brief Generate empty instance
@@ -209,6 +209,11 @@ void applyExtraMileage(Solution *sol, int nCovered, unsigned int *rndState);
 //###################################################################################################################################
 // 2OPT
 //###################################################################################################################################
+/*!
+* @brief Set the option to view performance related statistics on 2opt runs
+# @param val True to enable, false to disable
+*/
+void set2OptPerformanceBenchmarkLog(bool val);
 
 /*!
 * @brief  Applies 2Opt solution optimizer to sol.
@@ -227,7 +232,7 @@ void apply2OptBestFix(Solution *sol);
 * @param sol Starting point solution for the VNS algorithm.
 * @param timeLimit Time limit.
 */
-void VariableNeighborhood(Solution *sol, double timeLimit, int nThreads);
+void VariableNeighborhoodSearch(Solution *sol, double timeLimit, int nThreads);
 
 
 #endif //TSP_FUNCTIONS_H

@@ -134,8 +134,7 @@ static Solution runHeuristic(Instance *inst, enum Mode mode, double tlim)
     default: throwError(inst, NULL, "runHeuristic: specified mode must be in [MODE_NN, MODE_EM]"); break;
     }
 
-    printf(SEPARATOR_STR);
-    printf("\n");
+    printf(SEPARATOR_STR"\n");
 
     return sol;
 }
@@ -155,7 +154,7 @@ static void runMetaheuristic(Solution *sol, enum Mode mode, double tlim)
     case MODE_VNS:
         printf("Variable Neighborhood Search Starting...\n");
 
-        VariableNeighborhood(sol, tlim, 0);
+        VariableNeighborhoodSearch(sol, tlim, 0);
 
         printf("Variable Neighborhood Search finished in %lf second\n", sol->execTime);
         printf("Solution Cost = %lf\n", sol->cost);
@@ -176,8 +175,7 @@ static void runMetaheuristic(Solution *sol, enum Mode mode, double tlim)
     default: throwError(sol->instance, sol, "runMetaheuristic: specified mode must be in [MODE_TABU, MODE_VNS, MODE_ANNEALING, MODE_GENETIC]"); break;
     }
 
-    printf(SEPARATOR_STR);
-    printf("\n");
+    printf(SEPARATOR_STR"\n");
 }
 
 static void runExactSolver(Solution *sol, enum Mode mode, double tlim)
@@ -206,8 +204,7 @@ static void runExactSolver(Solution *sol, enum Mode mode, double tlim)
     default: throwError(sol->instance, sol, "runMetaheuristic: specified mode must be in [MODE_BENDERS, MODE_BRANCH_CUT]"); break;
     }
 
-    printf(SEPARATOR_STR);
-    printf("\n");
+    printf(SEPARATOR_STR"\n");
 }
 
 static void runMatheuristic (Solution *sol, enum Mode mode, double tlim)
@@ -234,8 +231,7 @@ static void runMatheuristic (Solution *sol, enum Mode mode, double tlim)
     default: throwError(sol->instance, sol, "runMetaheuristic: specified mode must be in [MODE_HARDFIX, MODE_LOCAL_BRANCHING]"); break;
     }
 
-    printf(SEPARATOR_STR);
-    printf("\n");
+    printf(SEPARATOR_STR"\n");
 }
 
 static void run2Opt(Solution *sol)
@@ -243,11 +239,12 @@ static void run2Opt(Solution *sol)
     printf(SEPARATOR_STR);
     printf("2Opt starting...\n");
 
+    set2OptPerformanceBenchmarkLog(true);
     apply2OptBestFix(sol);
+    set2OptPerformanceBenchmarkLog(false);
 
     printf("2Opt finished in %lf seconds\n", sol->execTime);
     printf("Solution Cost = %lf\n", sol->cost);
-    printf(SEPARATOR_STR);
-    printf("\n");
+    printf(SEPARATOR_STR"\n");
 }
 

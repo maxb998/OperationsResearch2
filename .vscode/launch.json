@@ -12,12 +12,12 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
-                "--file", "data/a280.tsp",
-                "--mode", "em",
+                "--file", "data/att48.tsp",
+                "--mode", "vns",
 
-                "--grasp", "almostbest(0.05)",
+                "--grasp", "random(0.5)",
                 "--2opt",
-                "--tlim", "5",
+                "--tlim", "20",
 
                 //"--nn-opt", "tryall",
                 //"--em-opt", "random",
@@ -45,11 +45,11 @@
             "program": "${workspaceFolder}/bin/x64/main",
             "args": [
                 "--file", "data/rl5915.tsp",
-                "--mode", "em",
+                "--mode", "nn",
 
-                "--grasp", "random(0.01)",
-                "--2opt",
-                "--tlim", "120",
+                "--grasp", "random(0.1)",
+                //"--2opt",
+                "--tlim", "2",
 
                 //"--nn-opt", "tryall",
                 //"--em-opt", "random",
