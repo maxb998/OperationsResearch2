@@ -5,7 +5,6 @@
 #include <stdbool.h>
 
 #define MAX_THREADS 64
-#define USE_APPROXIMATED_DISTANCES 1
 
 // size of avx vector. 4 is vector of doubles 64bits, 8 is vector of floats 32bits
 #define AVX_VEC_SIZE 8
@@ -20,6 +19,10 @@ enum ComputationType {
 };
 
 #define COMPUTATION_TYPE COMPUTE_OPTION_AVX	
+
+// Amount of "best" elements to save when using grasp almostbest option and NOT using COMPUTE_OPTION_AVX
+#define BASE_GRASP_BEST_SAVE_BUFFER_SIZE 4
+
 
 enum LogLevel{
 	LOG_LVL_ERROR,

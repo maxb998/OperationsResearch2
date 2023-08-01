@@ -588,7 +588,6 @@ static SuccessorData findSuccessorVectorized(ThreadSpecificData *thSpecific, int
     return retVal;
 }
 
-#define BASE_GRASP_BEST_SAVE_BUFFER_SIZE 4
 static SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, int nCovered, bool useCostMatrix)
 {
     // shortcuts/decluttering

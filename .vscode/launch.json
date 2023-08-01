@@ -13,17 +13,17 @@
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
                 "--file", "data/a280.tsp",
-                "--mode", "local-branching",
+                "--mode", "nn",
 
-                "--grasp", "almostbest(0.1)",
+                "--grasp", "almostbest(0.02)",
                 //"--2opt",
-                "--tlim", "120",
+                "--tlim", "10",
 
                 //"--nn-opt", "tryall",
                 //"--em-opt", "random",
 
                 //"--metaheur-init-mode", "em",
-                "--matheur-init-mode", "em",
+                //"--matheur-init-mode", "em",
                 //"--warm-start-mode", "em",
 
                 //"--hardfix-policy", "small",
@@ -33,7 +33,7 @@
                 "--roundcosts",
                 "--plot", 
                 //"--save",
-                "--loglvl", "log"
+                "--loglvl", "debug"
             ],
             "cwd": "${workspaceFolder}"
        },
@@ -45,24 +45,24 @@
             "program": "${workspaceFolder}/bin/x64/main",
             "args": [
                 "--file", "data/a280.tsp",
-                "--mode", "local-branching",
+                "--mode", "nn",
 
-                "--grasp", "almostbest(0.1)",
+                "--grasp", "random(0.01)",
                 "--2opt",
-                "--tlim", "500",
+                "--tlim", "10",
 
                 //"--nn-opt", "tryall",
                 //"--em-opt", "random",
 
-                "--metaheur-init-mode", "nn",
-                "--matheur-init-mode", "vns",
+                //"--metaheur-init-mode", "nn",
+                //"--matheur-init-mode", "vns",
                 //"--warm-start-mode", "tabu",
 
                 //"--hardfix-policy", "small",
 
-                //"--seed", "2023",
-                //"--threads", "8",
-                "--roundcosts",
+                "--seed", "2023",
+                "--threads", "8",
+                //"--roundcosts",
                 "--plot", 
                 //"--save",
                 "--loglvl", "log"

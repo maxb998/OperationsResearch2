@@ -113,7 +113,7 @@ void apply2OptBestFix(Solution *sol)
         double currentTime = cvtTimespec2Double(timeStruct);
         if (currentTime - printTimeSec > LOG_INTERVAL)
         {
-            LOG(LOG_LVL_LOG, "Solution optimization in progress: cost is %lf at iteration %4lu with last optimization of %f", sol->cost, iterNum, -bestFix.costOffset);
+            LOG(LOG_LVL_LOG, "2Opt running: cost is %lf at iteration %4lu with last optimization of %f", sol->cost, iterNum, -bestFix.costOffset);
             printTimeSec = currentTime;
         }
         iterNum++;

@@ -5,16 +5,6 @@
 #include <math.h>
 #include <immintrin.h>
 
-enum costComputationType
-{
-	FAST_SQUARED,		// use squared weight when possible (avoids square root function which takes a lot of computing power)
-	MODERATE_APPROX,	// use square root approximation (approximation error of less than 0.1% (max error at around 0.073%))
-	SLOW_EXACT			// use standard square root function (basically accurate)
-};
-
-#define COST_COMPUTATION_TYPE SLOW_EXACT
-
-
 
 static inline float euclideanCostSquared2D(float x1, float y1, float x2, float y2)
 {
@@ -57,23 +47,18 @@ static inline float squaredEdgeCost (float x1, float y1, float x2, float y2, enu
 	{
 	case EUC_2D:
 		return euclideanCostSquared2D(x1, y1, x2, y2);
-		break;
 	
 	case MAN_2D:
 		return manhattanCost2D(x1, y1, x2, y2);
-		break;
 
 	case MAX_2D:
 		return maximumCost2D(x1, y1, x2, y2);
-		break;
 
 	case ATT:
 		return attCostSquared2D(x1, y1, x2, y2);
-		break;
 	
 	default:  // euclidean 2D if cost is not known
 		return euclideanCostSquared2D(x1, y1, x2, y2);
-		break;
 	}
 }
 
@@ -83,23 +68,18 @@ static inline float exactEdgeCost (float x1, float y1, float x2, float y2, enum 
 	{
 	case EUC_2D:
 		return euclideanCost2D(x1, y1, x2, y2);
-		break;
 	
 	case MAN_2D:
 		return manhattanCost2D(x1, y1, x2, y2);
-		break;
 
 	case MAX_2D:
 		return maximumCost2D(x1, y1, x2, y2);
-		break;
 
 	case ATT:
 		return attCost2D(x1, y1, x2, y2);
-		break;
 	
 	default:  // euclidean 2D if cost is not known
 		return euclideanCost2D(x1, y1, x2, y2);
-		break;
 	}
 }
 
@@ -111,25 +91,21 @@ static inline float roundEdgeCost(float edgeCost, enum EdgeWeightType edgeWgtTyp
 		return floorf(edgeCost);
 }
 
-static inline float computeEdgeCost (float x1, float y1, float x2, float y2, enum EdgeWeightType edgeWgtType, bool roundFlag)
+static inline float computeSquaredEdgeCost (float x1, float y1, float x2, float y2, enum EdgeWeightType edgeWgtType, bool roundWeights)
 {
-	register float cost;
-	switch (COST_COMPUTATION_TYPE)
-	{
-	case FAST_SQUARED:
-		cost = squaredEdgeCost (x1, y1, x2, y2, edgeWgtType);
-		break;
+	register float cost = squaredEdgeCost (x1, y1, x2, y2, edgeWgtType);
+
+	if (roundWeights)
+		cost = roundEdgeCost (cost, edgeWgtType);
 	
-	case MODERATE_APPROX:
-		cost = exactEdgeCost (x1, y1, x2, y2, edgeWgtType);
-		break;
+	return cost;
+}
 
-	case SLOW_EXACT:
-		cost = exactEdgeCost (x1, y1, x2, y2, edgeWgtType);
-		break;
-	}
+static inline float computeEdgeCost (float x1, float y1, float x2, float y2, enum EdgeWeightType edgeWgtType, bool roundWeights)
+{
+	register float cost = exactEdgeCost (x1, y1, x2, y2, edgeWgtType);
 
-	if (roundFlag)
+	if (roundWeights)
 		cost = roundEdgeCost (cost, edgeWgtType);
 	
 	return cost;
@@ -154,11 +130,6 @@ static inline __m256 euclideanCostSquared2D_VEC(__m256 x1, __m256 y1, __m256 x2,
 static inline __m256 euclideanCost2D_VEC(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
 {
     return _mm256_sqrt_ps(euclideanCostSquared2D_VEC(x1,y1,x2,y2));
-}
-// Return vector containig the approximations of euclidean costs. Maximum relative error is 3*2^-12. Fast euclidean cost
-static inline __m256 euclideanCost2DFastApprox_VEC(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
-{
-    return _mm256_rcp_ps(_mm256_rsqrt_ps(euclideanCostSquared2D_VEC(x1,y1,x2,y2)));
 }
 
 // https://stackoverflow.com/questions/63599391/find-fabsfolute-in-avx
@@ -199,11 +170,6 @@ static inline __m256 attCost2D_VEC(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
     return _mm256_sqrt_ps(attCostSquared2D_VEC(x1,y1,x2,y2));
 }
 
-static inline __m256 attCost2DFastApprox_VEC(__m256 x1, __m256 y1, __m256 x2, __m256 y2)
-{
-    return _mm256_rcp_ps(_mm256_rsqrt_ps(attCostSquared2D_VEC(x1,y1,x2,y2)));
-}
-
 // ###########################################################################################################
 
 static inline __m256 squaredEdgeCost_VEC (__m256 x1, __m256 y1, __m256 x2, __m256 y2, enum EdgeWeightType edgeWgtType)
@@ -212,23 +178,18 @@ static inline __m256 squaredEdgeCost_VEC (__m256 x1, __m256 y1, __m256 x2, __m25
 	{
 	case EUC_2D:
 		return euclideanCostSquared2D_VEC(x1, y1, x2, y2);
-		break;
 	
 	case MAN_2D:
 		return manhattanCost2D_VEC(x1, y1, x2, y2);
-		break;
 
 	case MAX_2D:
 		return maximumCost2D_VEC(x1, y1, x2, y2);
-		break;
 
 	case ATT:
 		return attCostSquared2D_VEC(x1, y1, x2, y2);
-		break;
 	
 	default:  // euclidean 2D if cost is not known
 		return euclideanCostSquared2D_VEC(x1, y1, x2, y2);
-		break;
 	}
 }
 
@@ -238,49 +199,18 @@ static inline __m256 exactEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2, __m256
 	{
 	case EUC_2D:
 		return euclideanCost2D_VEC(x1, y1, x2, y2);
-		break;
 	
 	case MAN_2D:
 		return manhattanCost2D_VEC(x1, y1, x2, y2);
-		break;
 
 	case MAX_2D:
 		return maximumCost2D_VEC(x1, y1, x2, y2);
-		break;
 
 	case ATT:
 		return attCost2D_VEC(x1, y1, x2, y2);
-		break;
 	
 	default:  // euclidean 2D if cost is not known
 		return euclideanCost2D_VEC(x1, y1, x2, y2);
-		break;
-	}
-}
-
-static inline __m256 fastEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2, __m256 y2, enum EdgeWeightType edgeWgtType)
-{
-	switch (edgeWgtType)
-	{
-	case EUC_2D:
-		return euclideanCost2DFastApprox_VEC(x1, y1, x2, y2);
-		break;
-	
-	case MAN_2D:
-		return manhattanCost2D_VEC(x1, y1, x2, y2);
-		break;
-
-	case MAX_2D:
-		return maximumCost2D_VEC(x1, y1, x2, y2);
-		break;
-
-	case ATT:
-		return attCost2DFastApprox_VEC(x1, y1, x2, y2);
-		break;
-	
-	default:  // euclidean 2D if cost is not known
-		return euclideanCost2DFastApprox_VEC(x1, y1, x2, y2);
-		break;
 	}
 }
 
@@ -292,25 +222,21 @@ static inline __m256 roundEdgeCost_VEC (__m256 costs, enum EdgeWeightType edgeWg
 		return _mm256_floor_ps(costs);
 }
 
-static inline __m256 computeEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2, __m256 y2, enum EdgeWeightType edgeWgtType, bool roundFlag)
+static inline __m256 computeSquaredEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2, __m256 y2, enum EdgeWeightType edgeWgtType, bool roundWeights)
 {
-	register __m256 costVec;
-	switch (COST_COMPUTATION_TYPE)
-	{
-	case FAST_SQUARED:
-		costVec = squaredEdgeCost_VEC (x1, y1, x2, y2, edgeWgtType);
-		break;
-	
-	case MODERATE_APPROX:
-		costVec = fastEdgeCost_VEC (x1, y1, x2, y2, edgeWgtType);
-		break;
-	
-	case SLOW_EXACT:
-		costVec = exactEdgeCost_VEC (x1, y1, x2, y2, edgeWgtType);
-		break;
-	}
+	register __m256 costVec = squaredEdgeCost_VEC (x1, y1, x2, y2, edgeWgtType);
 
-	if (roundFlag)
+	if (roundWeights)
+		costVec = roundEdgeCost_VEC(costVec, edgeWgtType);
+	
+	return costVec;
+}
+
+static inline __m256 computeEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2, __m256 y2, enum EdgeWeightType edgeWgtType, bool roundWeights)
+{
+	register __m256 costVec = exactEdgeCost_VEC (x1, y1, x2, y2, edgeWgtType);
+
+	if (roundWeights)
 		costVec = roundEdgeCost_VEC(costVec, edgeWgtType);
 	
 	return costVec;
