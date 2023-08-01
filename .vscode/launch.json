@@ -12,23 +12,23 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
-                "--file", "data/att48.tsp",
-                "--mode", "vns",
+                "--file", "data/a280.tsp",
+                "--mode", "local-branching",
 
-                "--grasp", "random(0.5)",
-                "--2opt",
-                "--tlim", "20",
+                "--grasp", "almostbest(0.1)",
+                //"--2opt",
+                "--tlim", "120",
 
                 //"--nn-opt", "tryall",
                 //"--em-opt", "random",
 
                 //"--metaheur-init-mode", "em",
-                //"--matheur-init-mode", "nn",
-                //"--warm-start-mode", "tabu",
+                "--matheur-init-mode", "em",
+                //"--warm-start-mode", "em",
 
                 //"--hardfix-policy", "small",
 
-                //"--seed", "2023",
+                "--seed", "2023",
                 "--threads", "1",
                 "--roundcosts",
                 "--plot", 
@@ -44,24 +44,24 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/x64/main",
             "args": [
-                "--file", "data/rl5915.tsp",
-                "--mode", "nn",
+                "--file", "data/a280.tsp",
+                "--mode", "local-branching",
 
-                "--grasp", "random(0.1)",
-                //"--2opt",
-                "--tlim", "2",
+                "--grasp", "almostbest(0.1)",
+                "--2opt",
+                "--tlim", "500",
 
                 //"--nn-opt", "tryall",
                 //"--em-opt", "random",
 
-                //"--metaheur-init-mode", "em",
-                //"--matheur-init-mode", "vns",
+                "--metaheur-init-mode", "nn",
+                "--matheur-init-mode", "vns",
                 //"--warm-start-mode", "tabu",
 
                 //"--hardfix-policy", "small",
 
-                "--seed", "2023",
-                //"--threads", "20",
+                //"--seed", "2023",
+                //"--threads", "8",
                 "--roundcosts",
                 "--plot", 
                 //"--save",

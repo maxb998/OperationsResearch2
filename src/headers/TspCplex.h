@@ -188,10 +188,22 @@ void destroyCallbackData(CallbackData *cbData);
 //###################################################################################################################################
 
 /*!
-* @brief 
+* @brief Run Hard Fixing matheuristic on sol
 * @param sol Feasible solution to optimize with Hard-Fixing
 * @param tlim Time limit
 */
-void HardFixing(Solution *sol, double fixingAmount, enum HardFixPolicy policy, double tlim);
+void HardFixing(Solution *sol, enum HardFixPolicy policy, double tlim);
+
+
+//###################################################################################################################################
+// LOCAL_BRANCHING
+//###################################################################################################################################
+
+/*!
+* @brief Run Local Branching matheuristic on sol
+* @param sol Pointer to feasible solution to optimize
+* @param timeLimit Time limit
+*/
+void LocalBranching(Solution *sol, double timeLimit);
 
 #endif // TSP_CPLEX

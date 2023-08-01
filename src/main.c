@@ -76,7 +76,7 @@ int main (int argc, char *argv[])
         else 
         {
             sol = runHeuristic(&inst, inst.params.metaheurInitMode, tlim * METAHEUR_INIT_RATIO);
-            runMetaheuristic(&sol, m, tlim * (1 - METAHEUR_INIT_RATIO));
+            runMetaheuristic(&sol, inst.params.matheurInitMode, tlim * MATHEUR_INIT_RATIO);
             run2Opt(&sol);
             remainingTime -= tlim * METAHEUR_INIT_RATIO;
         }
@@ -141,6 +141,8 @@ static Solution runHeuristic(Instance *inst, enum Mode mode, double tlim)
 
 static void runMetaheuristic(Solution *sol, enum Mode mode, double tlim)
 {
+    double startTime = sol->execTime;
+
     printf(SEPARATOR_STR);
 
     switch (mode)
@@ -148,7 +150,7 @@ static void runMetaheuristic(Solution *sol, enum Mode mode, double tlim)
     case MODE_TABU:
         printf("Tabu Search Starting...\n");
 
-        printf("Tabu Search finished in %lf second\n", sol->execTime);
+        printf("Tabu Search finished in %lf second\n", sol->execTime - startTime);
         printf("Solution Cost = %lf\n", sol->cost);
         break;
     case MODE_VNS:
@@ -156,19 +158,19 @@ static void runMetaheuristic(Solution *sol, enum Mode mode, double tlim)
 
         VariableNeighborhoodSearch(sol, tlim, 0);
 
-        printf("Variable Neighborhood Search finished in %lf second\n", sol->execTime);
+        printf("Variable Neighborhood Search finished in %lf second\n", sol->execTime - startTime);
         printf("Solution Cost = %lf\n", sol->cost);
         break;
     case MODE_ANNEALING:
         printf("Simulated Annealing Starting...\n");
 
-        printf("Simulated Annealing finished in %lf second\n", sol->execTime);
+        printf("Simulated Annealing finished in %lf second\n", sol->execTime - startTime);
         printf("Solution Cost = %lf\n", sol->cost);
         break;
     case MODE_GENETIC:
         printf("Genetic Search Starting...\n");
 
-        printf("Genetic Search finished in %lf second\n", sol->execTime);
+        printf("Genetic Search finished in %lf second\n", sol->execTime - startTime);
         printf("Solution Cost = %lf\n", sol->cost);
         break;
 
@@ -180,6 +182,8 @@ static void runMetaheuristic(Solution *sol, enum Mode mode, double tlim)
 
 static void runExactSolver(Solution *sol, enum Mode mode, double tlim)
 {
+    double startTime = sol->execTime;
+
     printf(SEPARATOR_STR);
 
     switch (mode)
@@ -189,7 +193,7 @@ static void runExactSolver(Solution *sol, enum Mode mode, double tlim)
 
         benders(sol, tlim);
 
-        printf("Benders finished in %lf second\n", sol->execTime);
+        printf("Benders finished in %lf second\n", sol->execTime - startTime);
         printf("Solution Cost = %lf\n", sol->cost);
         break;
     case MODE_BRANCH_CUT:
@@ -197,7 +201,7 @@ static void runExactSolver(Solution *sol, enum Mode mode, double tlim)
 
         BranchAndCut(sol, tlim);
 
-        printf("Branch & Cut finished in %lf second\n", sol->execTime);
+        printf("Branch & Cut finished in %lf second\n", sol->execTime - startTime);
         printf("Solution Cost = %lf\n", sol->cost);
         break;
 
@@ -209,6 +213,8 @@ static void runExactSolver(Solution *sol, enum Mode mode, double tlim)
 
 static void runMatheuristic (Solution *sol, enum Mode mode, double tlim)
 {
+    double startTime = sol->execTime;
+
     printf(SEPARATOR_STR);
 
     switch (mode)
@@ -216,15 +222,17 @@ static void runMatheuristic (Solution *sol, enum Mode mode, double tlim)
     case MODE_HARDFIX:
         printf("Hard Fixing Starting...\n");
 
-        HardFixing(sol, 0.5, sol->instance->params.hardFixPolicy, tlim);
+        HardFixing(sol, sol->instance->params.hardFixPolicy, tlim);
 
-        printf("Hard Fixing finished in %lf second\n", sol->execTime);
+        printf("Hard Fixing finished in %lf second\n", sol->execTime - startTime);
         printf("Solution Cost = %lf\n", sol->cost);
         break;
     case MODE_LOCAL_BRANCHING:
         printf("Local Branching Starting...\n");
 
-        printf("Local Branching finished in %lf second\n", sol->execTime);
+        LocalBranching(sol, tlim);
+
+        printf("Local Branching finished in %lf second\n", sol->execTime - startTime);
         printf("Solution Cost = %lf\n", sol->cost);
         break;
 
@@ -239,11 +247,12 @@ static void run2Opt(Solution *sol)
     printf(SEPARATOR_STR);
     printf("2Opt starting...\n");
 
+    double startTime = sol->execTime;
     set2OptPerformanceBenchmarkLog(true);
     apply2OptBestFix(sol);
     set2OptPerformanceBenchmarkLog(false);
 
-    printf("2Opt finished in %lf seconds\n", sol->execTime);
+    printf("2Opt finished in %lf seconds\n", sol->execTime - startTime);
     printf("Solution Cost = %lf\n", sol->cost);
     printf(SEPARATOR_STR"\n");
 }

@@ -3,7 +3,7 @@
 
 #include <cplex.h>
 #include <stdio.h>
-#include <stdarg.h> // used for logger va_list
+#include <stdarg.h> // used for va_list
 #include <time.h>
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
@@ -54,12 +54,11 @@ static int randomFix(HardfixAllocatedMem *hfAlloc);
 static int smallestFix(HardfixAllocatedMem *hfAlloc);
 
 
-void HardFixing(Solution *sol, double fixingAmount, enum HardFixPolicy policy, double tlim)
+void HardFixing(Solution *sol, enum HardFixPolicy policy, double tlim)
 {
     struct timespec currT;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
     double startTime = cvtTimespec2Double(currT);
-	double currentTime = startTime;
 
     Instance *inst = sol->instance;
     int errCode = 0;
@@ -73,7 +72,7 @@ void HardFixing(Solution *sol, double fixingAmount, enum HardFixPolicy policy, d
         throwHardFixError(&hfAlloc, sol, "HardFix: CPXcallbacksetfunc failed with code %d", errCode);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
-    currentTime = cvtTimespec2Double(currT);
+    double currentTime = cvtTimespec2Double(currT);
 
     int iterCount = 0;
     while (currentTime < startTime + tlim)
@@ -143,7 +142,11 @@ void HardFixing(Solution *sol, double fixingAmount, enum HardFixPolicy policy, d
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
     currentTime = cvtTimespec2Double(currT);
+
     sol->execTime += currentTime - startTime;
+
+    LOG(LOG_LVL_NOTICE, "Total number of iterations: %ld", iterCount);
+    LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)iterCount/sol->execTime);
 }
 
 static HardfixAllocatedMem initHardfixAllocatedMem(Solution *sol)
