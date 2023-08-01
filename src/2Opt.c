@@ -14,18 +14,23 @@ typedef struct
     int edge1;
 } _2optMoveData;
 
-static bool printPerformanceLog = false;
 
+// Decides whether to print LOG_LVL_NOTICE benchmarking information(n° of iterations and iter/sec) at the end of the run -> Used because when a metaheuristic calls 2opt a lot those lines really clutter a lot the console
+static bool printPerformanceLog = false;
+// Set global varaible
 void set2OptPerformanceBenchmarkLog(bool val)
 {
     printPerformanceLog = val;
 }
 
 
+// Perform solution update accordingly (invert part of the solution between selected indexes(edge0,edge1) of the bestFix)
 static inline void updateSolution(Solution *sol, _2optMoveData bestFix, float *X, float *Y);
 
-static inline _2optMoveData _2optBestFixBase(Solution *sol, bool useCostMatrix);
+// Search for best possible 2opt move in sol using normal(SISD) instructions
+static inline _2optMoveData _2optBestFixBase(Solution *sol);
 
+// Search for best possible 2opt move in sol using vectorized(SIMD) instructions
 static inline _2optMoveData _2OptBestFixAVX(Solution *sol, float *X, float *Y);
 
 void apply2OptBestFix(Solution *sol)
@@ -37,16 +42,6 @@ void apply2OptBestFix(Solution *sol)
     struct timespec timeStruct;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double startTime = cvtTimespec2Double(timeStruct);
-
-    /*if (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-    {
-        if (inst->edgeCostMat == NULL)
-        {
-            LOG(LOG_LVL_WARNING, "2Opt: edgeCostMat has not been detected. Computing it now");
-            double costMatTime = computeCostMatrix(inst);
-            LOG(LOG_LVL_WARNING, "2Opt: edgeCostMat computation took: %lf seconds", costMatTime);
-        }
-    }*/
 
     // check integrity if debugging
     if (inst->params.logLevel >= LOG_LVL_DEBUG)
@@ -96,11 +91,8 @@ void apply2OptBestFix(Solution *sol)
             break;
 
         case COMPUTE_OPTION_BASE:
-            bestFix = _2optBestFixBase(sol, false);
-            break;
-
         case COMPUTE_OPTION_USE_COST_MATRIX:
-            bestFix = _2optBestFixBase(sol, true);
+            bestFix = _2optBestFixBase(sol);
             break;
         }
 
@@ -174,7 +166,7 @@ static inline void updateSolution(Solution *sol, _2optMoveData bestFix, float *X
     }
 }
 
-static inline _2optMoveData _2optBestFixBase(Solution *sol, bool useCostMatrix)
+static inline _2optMoveData _2optBestFixBase(Solution *sol)
 {
     Instance *inst = sol->instance;
     int n = inst->nNodes;
@@ -186,26 +178,26 @@ static inline _2optMoveData _2optBestFixBase(Solution *sol, bool useCostMatrix)
     for (_2optMoveData currFix = { .edge0=0 }; currFix.edge0 < n - 1; currFix.edge0++) // check for one edge at a time every other edge(except already checked)
     {
         float partSolEdgeWgt;
-        if (useCostMatrix)
-            partSolEdgeWgt = inst->edgeCostMat[sol->indexPath[currFix.edge0] * n + sol->indexPath[currFix.edge0 + 1]];
-        else
+        if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
             partSolEdgeWgt = computeEdgeCost(inst->X[sol->indexPath[currFix.edge0]], inst->Y[sol->indexPath[currFix.edge0]], inst->X[sol->indexPath[currFix.edge0 + 1]], inst->Y[sol->indexPath[currFix.edge0 + 1]], ewt, roundW);
+        else
+            partSolEdgeWgt = inst->edgeCostMat[sol->indexPath[currFix.edge0] * n + sol->indexPath[currFix.edge0 + 1]];
 
         for (currFix.edge1 = 2 + currFix.edge0; (currFix.edge1 < n - 1) || ((currFix.edge1 < n) && (currFix.edge0 > 0)); currFix.edge1++)
         {
             float solEdgeWgt;
-            if (useCostMatrix)
-                solEdgeWgt = partSolEdgeWgt + inst->edgeCostMat[sol->indexPath[currFix.edge1] * n + sol->indexPath[currFix.edge1 + 1]];
-            else
+            if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
                 solEdgeWgt = partSolEdgeWgt + computeEdgeCost(inst->X[sol->indexPath[currFix.edge1]], inst->Y[sol->indexPath[currFix.edge1]], inst->X[sol->indexPath[currFix.edge1 + 1]], inst->Y[sol->indexPath[currFix.edge1 + 1]], ewt, roundW);
+            else
+                solEdgeWgt = partSolEdgeWgt + inst->edgeCostMat[sol->indexPath[currFix.edge1] * n + sol->indexPath[currFix.edge1 + 1]];
 
             // check the combined weight other combination of edges
             float altEdgeWgt;
-            if (useCostMatrix)
-                altEdgeWgt = inst->edgeCostMat[sol->indexPath[currFix.edge0] * n + sol->indexPath[currFix.edge1]] + inst->edgeCostMat[sol->indexPath[currFix.edge1 + 1] * n + sol->indexPath[currFix.edge0 + 1]];
-            else
+            if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
                 altEdgeWgt = computeEdgeCost(inst->X[sol->indexPath[currFix.edge0]], inst->Y[sol->indexPath[currFix.edge0]], inst->X[sol->indexPath[currFix.edge1]], inst->Y[sol->indexPath[currFix.edge1]], ewt, roundW) + 
                              computeEdgeCost(inst->X[sol->indexPath[currFix.edge0 + 1]], inst->Y[sol->indexPath[currFix.edge0 + 1]], inst->X[sol->indexPath[currFix.edge1 + 1]], inst->Y[sol->indexPath[currFix.edge1 + 1]], ewt, roundW);
+            else
+                altEdgeWgt = inst->edgeCostMat[sol->indexPath[currFix.edge0] * n + sol->indexPath[currFix.edge1]] + inst->edgeCostMat[sol->indexPath[currFix.edge1 + 1] * n + sol->indexPath[currFix.edge0 + 1]];
 
             currFix.costOffset = altEdgeWgt - solEdgeWgt;
             // update local best if current one is better

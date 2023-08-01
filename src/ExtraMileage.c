@@ -16,31 +16,13 @@ typedef struct
     double timeLimit;
 } ThreadSharedData;
 
-static ThreadSharedData initThreadSharedData (Instance *inst, enum EMInitType startOption, double timeLimit)
-{
-    ThreadSharedData thShared = {
-        .startOption = startOption,
-        .timeLimit = timeLimit
-    };
-
-    if (pthread_mutex_init(&thShared.mutex, NULL)) throwError(inst, NULL, "ExtraMileage -> initThreadSharedData: Failed to initialize mutex");
-
-    thShared.bestSol = newSolution(inst);
-
-    return thShared;
-}
-
-static void destroyThreadSharedData (ThreadSharedData *thShared)
-{
-    if (pthread_mutex_init(&thShared->mutex, NULL)) throwError(thShared->bestSol.instance, &thShared->bestSol, "ExtraMileage -> destroyThreadSharedData: Failed to destroy mutex");
-    destroySolution(&thShared->bestSol);
-}
-
 typedef struct
 {
     ThreadSharedData *thShared;
     unsigned int rndState;
     int iterCount;
+
+    int initIndexes[2];
 
     float *X;
     float *Y;
@@ -48,44 +30,56 @@ typedef struct
 
 } ThreadSpecificData;
 
-static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, unsigned int rndState)
+typedef struct 
 {
-    ThreadSpecificData thSpecific = {
-        .thShared=thShared,
-        .rndState=rndState,
-        .iterCount=0
-    };
-
-    Instance *inst = thShared->bestSol.instance;
-    thSpecific.workingSol=newSolution(inst);
-
-    thSpecific.X = malloc((inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(int));
-    if (!thSpecific.X)
-        throwError(inst, &thSpecific.workingSol, "ExtraMileage -> initThreadSpecificData: Failed to allocate memory");
-    thSpecific.Y = &thSpecific.X[inst->nNodes + AVX_VEC_SIZE];
-
-    return thSpecific;
-}
-
-static void destroyThreadSpecificData(ThreadSpecificData *thSpecific)
-{
-    destroySolution(&thSpecific->workingSol);
-
-    free(thSpecific->X);
-    thSpecific->X = thSpecific->Y = NULL;
-}
-
-static inline void swapElemsInThSpecific(ThreadSpecificData *thSpecific, int pos1, int pos2)
-{
-    register float tempFloat;
-    swapElems(thSpecific->X[pos1], thSpecific->X[pos2], tempFloat);
-    swapElems(thSpecific->Y[pos1], thSpecific->Y[pos2], tempFloat);
-    register int tempInt;
-    swapElems(thSpecific->workingSol.indexPath[pos1], thSpecific->workingSol.indexPath[pos2], tempInt);
-}
+    int node;
+    int anchor;
+    float extraCost;
+} SuccessorData;
 
 
+// Setup internal variables and initializes mutex
+static ThreadSharedData initThreadSharedData (Instance *inst, enum EMInitType startOption, double timeLimit);
+
+// Destroy mutex
+static void destroyThreadSharedData (ThreadSharedData *thShared);
+
+// Setup internal variables and allocate memory in thSpecific.X/Y if using COMPUTE_OPTION_AVX
+static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, unsigned int rndState);
+
+// Deallocate memory pointed by thSpecific.X/Y if necessary
+static void destroyThreadSpecificData(ThreadSpecificData *thSpecific);
+
+// Swap elements in thSpecific.workingSol.indexPath and hSpecific.X, thSpecific.Y if COMPUTE_OPTION_AVX
+static inline void swapElemsInThSpecific(ThreadSpecificData *thSpecific, int pos1, int pos2);
+
+// Method called by possibly multiple threads to run extra mileage until time limit. arg is a pointer to a ThreadSpecificData initialized struct
 static void *runExtraMileage(void *arg);
+
+// Applies extra mileage to correctly initialized solution(that is thSpecific.workingSol)
+static void applyExtraMileage_Internal(ThreadSpecificData *thSpecific, int nCovered);
+
+// Initializes a solution in either a randomized way or by selecting the farthest points
+static void initialization(ThreadSpecificData *thSpecific);
+
+// Swap structures thSpecific.thShared.bestSol with thSpecific.workingSol and prints a notification message
+static void updateBestSolution(ThreadSpecificData *thSpecific);
+
+// Called by initializations, does exactly what its name says
+static void farthestPointsInit(ThreadSpecificData *thSpecific);
+
+// Check whether solution is correctly structured to run extra mileage(after initialization or when initialized solution comes from outside)
+static bool checkSolutionIntegrity(ThreadSpecificData *thSpecific);
+
+// Add node specified in succ into the tour(from 0 to nCovered) inside thSpecific.workingSol without compromising integrity of the solution
+static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCovered, SuccessorData succ);
+
+// Find successor using vectorized(SIMD) instructions
+static SuccessorData findSuccessorVectorized(ThreadSpecificData *thSpecific, int nCovered);
+
+// Find successor using normal(SISD) instructions
+static SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, int nCovered);
+
 
 Solution ExtraMileage(Instance *inst, enum EMInitType startOption, double timeLimit, int nThreads)
 {
@@ -93,17 +87,13 @@ Solution ExtraMileage(Instance *inst, enum EMInitType startOption, double timeLi
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double startTime = cvtTimespec2Double(timeStruct);
 
-    /*if ((COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX) && (inst->edgeCostMat == NULL))
-    {
-        LOG(LOG_LVL_WARNING, "ExtraMileage: edgeCostMat has not been detected. Computing it now");
-        double costMatTime = computeCostMatrix(inst);
-        LOG(LOG_LVL_WARNING, "ExtraMileage: edgeCostMat computation took: %lf seconds", costMatTime);
-    }*/
-
     if ((nThreads < 0) || (nThreads > MAX_THREADS))
         throwError(inst, NULL, "ExtraMileage: nThreads value is not valid: %d", nThreads);
     else if (nThreads == 0)
         nThreads = inst->params.nThreads;
+    
+    if ((inst->params.graspType == GRASP_NONE) && (startOption == EM_INIT_FARTHEST_POINTS)) // only one solution exists with these settings so only need one thread working
+        nThreads = 1;
 
     // apply extra mileage
     ThreadSharedData thShared = initThreadSharedData(inst, startOption, startTime + timeLimit);
@@ -138,9 +128,6 @@ Solution ExtraMileage(Instance *inst, enum EMInitType startOption, double timeLi
     return outputSol;
 }
 
-
-static void applyExtraMileage_Internal(ThreadSpecificData *thSpecific, int nCovered);
-
 void applyExtraMileage(Solution *sol, int nCovered, unsigned int *rndState)
 {
     Instance *inst = sol->instance;
@@ -173,8 +160,9 @@ void applyExtraMileage(Solution *sol, int nCovered, unsigned int *rndState)
     ThreadSpecificData thSpecific = initThreadSpecificData(&unallocatedThShared, *rndState);
 
     cloneSolution(sol, &thSpecific.workingSol);
-    for (int i = 0; i < (n + AVX_VEC_SIZE) * 2; i++)
-        thSpecific.X[i] = inst->X[sol->indexPath[i]];
+    if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        for (int i = 0; i < (n + AVX_VEC_SIZE) * 2; i++)
+            thSpecific.X[i] = inst->X[sol->indexPath[i]];
 
     applyExtraMileage_Internal(&thSpecific, nCovered);
 
@@ -185,9 +173,68 @@ void applyExtraMileage(Solution *sol, int nCovered, unsigned int *rndState)
 }
 
 
-static int initialization(ThreadSpecificData *thSpecific);
+static ThreadSharedData initThreadSharedData (Instance *inst, enum EMInitType startOption, double timeLimit)
+{
+    ThreadSharedData thShared = {
+        .startOption = startOption,
+        .timeLimit = timeLimit
+    };
 
-static void updateBestSolution(ThreadSpecificData *thSpecific);
+    if (pthread_mutex_init(&thShared.mutex, NULL)) throwError(inst, NULL, "ExtraMileage -> initThreadSharedData: Failed to initialize mutex");
+
+    thShared.bestSol = newSolution(inst);
+
+    return thShared;
+}
+
+static void destroyThreadSharedData (ThreadSharedData *thShared)
+{
+    if (pthread_mutex_init(&thShared->mutex, NULL)) throwError(thShared->bestSol.instance, &thShared->bestSol, "ExtraMileage -> destroyThreadSharedData: Failed to destroy mutex");
+    destroySolution(&thShared->bestSol);
+}
+
+static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, unsigned int rndState)
+{
+    ThreadSpecificData thSpecific = {
+        .thShared=thShared,
+        .rndState=rndState,
+        .iterCount=0,
+        .initIndexes={-1,-1}
+    };
+
+    Instance *inst = thShared->bestSol.instance;
+    thSpecific.workingSol=newSolution(inst);
+
+    if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+    {
+        thSpecific.X = malloc((inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(int));
+        if (!thSpecific.X)
+            throwError(inst, &thSpecific.workingSol, "ExtraMileage -> initThreadSpecificData: Failed to allocate memory");
+        thSpecific.Y = &thSpecific.X[inst->nNodes + AVX_VEC_SIZE];
+    }
+
+    return thSpecific;
+}
+
+static void destroyThreadSpecificData(ThreadSpecificData *thSpecific)
+{
+    destroySolution(&thSpecific->workingSol);
+
+    free(thSpecific->X);
+    thSpecific->X = thSpecific->Y = NULL;
+}
+
+static inline void swapElemsInThSpecific(ThreadSpecificData *thSpecific, int pos1, int pos2)
+{
+    if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+    {
+        register float tempFloat;
+        swapElems(thSpecific->X[pos1], thSpecific->X[pos2], tempFloat);
+        swapElems(thSpecific->Y[pos1], thSpecific->Y[pos2], tempFloat);
+    }
+    register int tempInt;
+    swapElems(thSpecific->workingSol.indexPath[pos1], thSpecific->workingSol.indexPath[pos2], tempInt);
+}
 
 static void *runExtraMileage(void * arg)
 {
@@ -195,27 +242,15 @@ static void *runExtraMileage(void * arg)
     ThreadSharedData *thShared = thSpecific->thShared;
     Instance *inst = thSpecific->workingSol.instance;
 
-    // optimization: save initialization if it is the same for every run (if init mode is random then it must be generated every time so no optimization)
-    Solution init;
-    int nCovered;
-    if (thShared->startOption != EM_INIT_RANDOM)
-    {
-        init = newSolution(inst);
-        nCovered = initialization(thSpecific);
-    }
-
     struct timespec timeStruct;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double currentTime = cvtTimespec2Double(timeStruct);
 
     while (currentTime < thShared->timeLimit)
     {
-        if (thShared->startOption != EM_INIT_RANDOM)
-            cloneSolution(&init, &thSpecific->workingSol);
-        else
-            nCovered = initialization(thSpecific);
-        
-        applyExtraMileage_Internal(thSpecific, nCovered);
+        initialization(thSpecific);
+
+        applyExtraMileage_Internal(thSpecific, 2);
 
         if (thSpecific->workingSol.cost < thShared->bestSol.cost)
         {
@@ -227,6 +262,9 @@ static void *runExtraMileage(void * arg)
 
         thSpecific->iterCount++;
 
+        if ((inst->params.graspType == GRASP_NONE) && (thShared->startOption == EM_INIT_FARTHEST_POINTS)) // if true only this solution will be found so we can exit
+            break;
+
         clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
         currentTime = cvtTimespec2Double(timeStruct);
     }
@@ -234,120 +272,146 @@ static void *runExtraMileage(void * arg)
     return NULL;
 }
 
-static void farthestPointsInit(ThreadSpecificData *thSpecific);
-
-static int initialization(ThreadSpecificData *thSpecific)
+static void initialization(ThreadSpecificData *thSpecific)
 {
     ThreadSharedData *thShared = thSpecific->thShared;
     Instance *inst = thSpecific->workingSol.instance;
-    
-    //thSpecific->workingSol.cost = 0;
+    int *indexPath = thSpecific->workingSol.indexPath;
 
     // Set data for solution (copy coords from distance and create index path as 0,1,2,...,n-1)
-    for (int i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
-        thSpecific->X[i] = inst->X[i];
+    if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        for (int i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
+            thSpecific->X[i] = inst->X[i];
     for (int i = 0; i < inst->nNodes + AVX_VEC_SIZE; i++)
-        thSpecific->workingSol.indexPath[i] = i;
-
-    int nCovered;
+        indexPath[i] = i;
 
     switch (thShared->startOption)
     {
     case EM_INIT_RANDOM:
         {
         // select two random nodes
-        int rndIndex0 = genRandom(&thSpecific->rndState, 0, inst->nNodes), rndIndex1 = genRandom(&thSpecific->rndState, 0, inst->nNodes);
-        while (abs(rndIndex1 - rndIndex0) <= 1)
-            rndIndex1 = genRandom(&thSpecific->rndState, 0, inst->nNodes);
-
-        // add the two nodes to the solution (order does not matter)
-        swapElemsInThSpecific(thSpecific, 0, rndIndex0);
-        swapElemsInThSpecific(thSpecific, 1, rndIndex1);
-
-        // update cost
-        thSpecific->workingSol.cost = computeEdgeCost(thSpecific->X[0], thSpecific->Y[0], thSpecific->X[1], thSpecific->Y[1], inst->params.edgeWeightType , inst->params.roundWeights) * 2.;
-
-        //LOG(LOG_LVL_DEBUG, "ExtraMileage-InitializationRandom: Randomly chosen edge is edge e = (%d, %d)", rndIndex0, rndIndex1);
-
-        nCovered = 2;
+        thSpecific->initIndexes[0] = genRandom(&thSpecific->rndState, 0, inst->nNodes), thSpecific->initIndexes[1] = genRandom(&thSpecific->rndState, 0, inst->nNodes);
+        while (thSpecific->initIndexes[0] == thSpecific->initIndexes[1])
+            thSpecific->initIndexes[1] = genRandom(&thSpecific->rndState, 0, inst->nNodes);
         }
         break;
 
     case EM_INIT_FARTHEST_POINTS:
-        farthestPointsInit(thSpecific);
-
-        // update cost
-        thSpecific->workingSol.cost = computeEdgeCost(thSpecific->X[0], thSpecific->Y[0], thSpecific->X[1], thSpecific->Y[1], inst->params.edgeWeightType , inst->params.roundWeights) * 2.;
-
-        nCovered = 2;
+        if (thSpecific->initIndexes[0] == -1)
+            farthestPointsInit(thSpecific);
         break;
     }
 
-    return nCovered;
+    // add the two nodes to the solution (order does not matter)
+    swapElemsInThSpecific(thSpecific, 0, thSpecific->initIndexes[0]);
+    swapElemsInThSpecific(thSpecific, 1, thSpecific->initIndexes[1]);
+
+    // update cost
+    if (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+        thSpecific->workingSol.cost = inst->edgeCostMat[indexPath[0] * inst->nNodes + indexPath[1]] * 2;
+    else
+        thSpecific->workingSol.cost = computeEdgeCost(inst->X[indexPath[0]], inst->Y[indexPath[0]], inst->X[indexPath[1]], inst->Y[indexPath[1]], inst->params.edgeWeightType , inst->params.roundWeights) * 2.;
 }
 
-static void farthestPointsInit(ThreadSpecificData *thSpecific)
+static inline void farthestPointsInit(ThreadSpecificData *thSpecific)
 {
     Instance *inst = thSpecific->workingSol.instance;
     int n = inst->nNodes;
 
-    __m256 maxCostVec = _mm256_set1_ps(0), rowMaxCostVec = _mm256_set1_ps(0); // cost is always positive
-    __m256i maxIndexVec1 = _mm256_set1_epi32(0), maxIndexVec2 = _mm256_set1_epi32(0);
-    __m256i incrementVec = _mm256_set1_epi32(AVX_VEC_SIZE), ones = _mm256_set1_epi32(1);
-    
-
-    __m256i rowIDsVec = _mm256_set1_epi32(0); // the content of this are always all i
-    for (int i = 0; i < n-1; i++, rowIDsVec = _mm256_add_epi32(rowIDsVec, ones))
+    switch (COMPUTATION_TYPE)
     {
-        __m256i colIDsVec = _mm256_set_epi32( 8+i, 7+i, 6+i, 5+i, 4+i, 3+i, 2+i, 1+i );
-        __m256 x1 = _mm256_broadcast_ss(&inst->X[i]), y1 = _mm256_broadcast_ss(&inst->Y[i]);
-        
-        for (int j = i+1; j < n; j += AVX_VEC_SIZE, colIDsVec = _mm256_add_epi32(colIDsVec, incrementVec))
+    case COMPUTE_OPTION_AVX:
         {
-            if (j > n - AVX_VEC_SIZE)
+            __m256 maxCostVec = _mm256_set1_ps(0), rowMaxCostVec = _mm256_set1_ps(0); // cost is always positive
+            __m256i maxIndexVec1 = _mm256_set1_epi32(0), maxIndexVec2 = _mm256_set1_epi32(0);
+            __m256i incrementVec = _mm256_set1_epi32(AVX_VEC_SIZE), ones = _mm256_set1_epi32(1);
+
+            __m256i rowIDsVec = _mm256_set1_epi32(0); // the content of this are always all i
+            for (int i = 0; i < n - 1; i++, rowIDsVec = _mm256_add_epi32(rowIDsVec, ones))
             {
-                colIDsVec = _mm256_sub_epi32(colIDsVec, _mm256_set1_epi32(AVX_VEC_SIZE - n % AVX_VEC_SIZE));
-                j = n - AVX_VEC_SIZE; // subtract AVX_VEC_SIZE one extra time to compensate the increment of the loop
+                __m256i colIDsVec = _mm256_set_epi32(8 + i, 7 + i, 6 + i, 5 + i, 4 + i, 3 + i, 2 + i, 1 + i);
+                __m256 x1 = _mm256_broadcast_ss(&inst->X[i]), y1 = _mm256_broadcast_ss(&inst->Y[i]);
+
+                for (int j = i + 1; j < n; j += AVX_VEC_SIZE, colIDsVec = _mm256_add_epi32(colIDsVec, incrementVec))
+                {
+                    if (j > n - AVX_VEC_SIZE)
+                    {
+                        colIDsVec = _mm256_sub_epi32(colIDsVec, _mm256_set1_epi32(AVX_VEC_SIZE - n % AVX_VEC_SIZE));
+                        j = n - AVX_VEC_SIZE; // subtract AVX_VEC_SIZE one extra time to compensate the increment of the loop
+                    }
+
+                    __m256 x2 = _mm256_loadu_ps(&inst->X[j]), y2 = _mm256_loadu_ps(&inst->Y[j]);
+                    __m256 costVec = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType, inst->params.roundWeights);
+
+                    // check if there are costier connections in this iteration and save results
+                    __m256 mask = _mm256_cmp_ps(costVec, rowMaxCostVec, _CMP_GT_OQ);
+                    rowMaxCostVec = _mm256_blendv_ps(rowMaxCostVec, costVec, mask);
+                    maxIndexVec1 = _mm256_blendv_epi8(maxIndexVec1, colIDsVec, _mm256_castps_si256(mask));
+                }
+
+                __m256 mask = _mm256_cmp_ps(rowMaxCostVec, maxCostVec, _CMP_GT_OQ);
+                maxCostVec = _mm256_blendv_ps(maxCostVec, rowMaxCostVec, mask);
+                maxIndexVec2 = _mm256_blendv_epi8(maxIndexVec2, rowIDsVec, _mm256_castps_si256(mask));
             }
 
-            __m256 x2 = _mm256_loadu_ps(&inst->X[j]), y2 = _mm256_loadu_ps(&inst->Y[j]);
-            __m256 costVec = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType , inst->params.roundWeights);
+            float maxCosts[AVX_VEC_SIZE];
+            _mm256_storeu_ps(maxCosts, maxCostVec);
+            int maxIndex = 0;
+            for (int i = 1; i < AVX_VEC_SIZE; i++)
+                if (maxCosts[maxIndex] < maxCosts[i])
+                    maxIndex = i;
 
-            // check if there are costier connections in this iteration and save results
-            __m256 mask = _mm256_cmp_ps(costVec, rowMaxCostVec, _CMP_GT_OQ);
-            rowMaxCostVec = _mm256_blendv_ps(rowMaxCostVec, costVec, mask);
-            maxIndexVec1 = _mm256_blendv_epi8(maxIndexVec1, colIDsVec, _mm256_castps_si256(mask));
+            int maxIndexes[AVX_VEC_SIZE];
+            _mm256_storeu_si256((__m256i_u *)maxIndexes, maxIndexVec1);
+            thSpecific->initIndexes[0] = maxIndexes[maxIndex];
+            _mm256_storeu_si256((__m256i_u *)maxIndexes, maxIndexVec2);
+            thSpecific->initIndexes[1] = maxIndexes[maxIndex];
         }
-        
-        __m256 mask = _mm256_cmp_ps(rowMaxCostVec, maxCostVec, _CMP_GT_OQ);
-        maxCostVec = _mm256_blendv_ps(maxCostVec, rowMaxCostVec, mask);
-        maxIndexVec2 = _mm256_blendv_epi8(maxIndexVec2, rowIDsVec, _mm256_castps_si256(mask));
+        break;
+    case COMPUTE_OPTION_BASE:
+    case COMPUTE_OPTION_USE_COST_MATRIX:
+        {
+            float maxCost = 0;
+            for (int i = 0; i < n - 1; i++)
+            {
+                // hope the compiler loads into the registers these variables that are accessed every time in the loop
+                float x1, y1;
+                if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+                {
+                    x1 = inst->X[i];
+                    y1 = inst->Y[i];
+                }
+
+                for (int j = i + 1; j < n; j ++)
+                {
+                    float currentCost;
+                    if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+                        currentCost = computeSquaredEdgeCost(x1, y1, inst->X[j], inst->Y[j], inst->params.edgeWeightType, inst->params.roundWeights);
+                    else
+                        currentCost = inst->edgeCostMat[i * n + j];
+                    
+                    if (currentCost > maxCost)
+                    {
+                        maxCost = currentCost;
+                        thSpecific->initIndexes[0] = i;
+                        thSpecific->initIndexes[1] = j;
+                    }
+                }
+            }
+        }
+        break;
     }
 
-    float maxCosts[AVX_VEC_SIZE];
-    _mm256_storeu_ps(maxCosts, maxCostVec);
-    int maxIndex = 0;
-    for (int i = 1; i < AVX_VEC_SIZE; i++)
-        if (maxCosts[maxIndex] < maxCosts[i])
-            maxIndex = i;
-
-    int maxIndexes[AVX_VEC_SIZE];
-    _mm256_storeu_si256((__m256i_u*)maxIndexes, maxIndexVec1);
-    int maxIndex1 = maxIndexes[maxIndex];
-    _mm256_storeu_si256((__m256i_u*)maxIndexes, maxIndexVec2);
-    int maxIndex2 = maxIndexes[maxIndex];
-
-    LOG(LOG_LVL_DEBUG, "Extra Mileage EM_INIT_FARTHEST_POINTS: maximum cost found is %f between nodes %d and %d", *(float*)&maxCosts[maxIndex], maxIndex1, maxIndex2);
-
-    // initialize solution
-    swapElemsInThSpecific(thSpecific, 0, maxIndex1);
-    swapElemsInThSpecific(thSpecific, 1, maxIndex2);
+    LOG(LOG_LVL_DEBUG, "Extra Mileage EM_INIT_FARTHEST_POINTS: maximum cost found between nodes %d and %d", thSpecific->initIndexes[0], thSpecific->initIndexes[1]);
 }
 
 static void updateBestSolution(ThreadSpecificData *thSpecific)
 {
     Solution *bestSol = &thSpecific->thShared->bestSol;
     Solution *newBest = &thSpecific->workingSol;
+
+    // swap cost before anything else to avoid making threads wait mutex more than they should
+    bestSol->cost = newBest->cost;
 
     // check solution when debugging
     if (bestSol->instance->params.logLevel >= LOG_LVL_DEBUG)
@@ -359,27 +423,9 @@ static void updateBestSolution(ThreadSpecificData *thSpecific)
     
     LOG(LOG_LVL_LOG, "Found better solution: cost = %f", newBest->cost);
 
-    bestSol->cost = newBest->cost;
-
     register int *temp;
     swapElems(bestSol->indexPath, newBest->indexPath, temp);
 }
-
-
-static bool checkSolutionIntegrity(ThreadSpecificData *thSpecific);
-
-typedef struct 
-{
-    int node;
-    int anchor;
-    float extraCost;
-} SuccessorData;
-
-static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCovered, SuccessorData succ);
-
-static SuccessorData findSuccessorVectorized(ThreadSpecificData *thSpecific, int nCovered);
-
-static SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, int nCovered, bool useCostMatrix);
 
 static void applyExtraMileage_Internal(ThreadSpecificData *thSpecific, int nCovered)
 {
@@ -390,13 +436,19 @@ static void applyExtraMileage_Internal(ThreadSpecificData *thSpecific, int nCove
         throwError(inst, &thSpecific->workingSol, "applyExtraMileage_Internal: thSpecific.workingSol is not consistent");
 
     // save element to last position
-    thSpecific->X[n] = thSpecific->X[nCovered];
-    thSpecific->Y[n] = thSpecific->Y[nCovered];
+    if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+    {
+        thSpecific->X[n] = thSpecific->X[nCovered];
+        thSpecific->Y[n] = thSpecific->Y[nCovered];
+    }
     thSpecific->workingSol.indexPath[n] = thSpecific->workingSol.indexPath[nCovered];
 
     // close the tour at index nCovered
-    thSpecific->X[nCovered] = thSpecific->X[0];
-    thSpecific->Y[nCovered] = thSpecific->Y[0];
+    if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+    {
+        thSpecific->X[nCovered] = thSpecific->X[0];
+        thSpecific->Y[nCovered] = thSpecific->Y[0];
+    }
     thSpecific->workingSol.indexPath[nCovered] = thSpecific->workingSol.indexPath[0];
 
     int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
@@ -411,9 +463,27 @@ static void applyExtraMileage_Internal(ThreadSpecificData *thSpecific, int nCove
             bool roundW = thSpecific->workingSol.instance->params.roundWeights;
             succ.node = genRandom(&thSpecific->rndState, (nCovered + 1), (n + 1));
             succ.anchor = genRandom(&thSpecific->rndState, 0, nCovered);
-            succ.extraCost = computeEdgeCost(thSpecific->X[succ.anchor], thSpecific->Y[succ.anchor], thSpecific->X[succ.node],       thSpecific->Y[succ.node],       ewt, roundW) +
-                             computeEdgeCost(thSpecific->X[succ.node],   thSpecific->Y[succ.node],   thSpecific->X[succ.anchor + 1], thSpecific->Y[succ.anchor + 1], ewt, roundW) -
-                             computeEdgeCost(thSpecific->X[succ.anchor], thSpecific->Y[succ.anchor], thSpecific->X[succ.anchor + 1], thSpecific->Y[succ.anchor + 1], ewt, roundW);
+
+            int *indexPath = thSpecific->workingSol.indexPath;
+
+            switch (COMPUTATION_TYPE)
+            {
+            case COMPUTE_OPTION_AVX:
+                succ.extraCost = computeEdgeCost(thSpecific->X[succ.anchor], thSpecific->Y[succ.anchor], thSpecific->X[succ.node],       thSpecific->Y[succ.node],       ewt, roundW) +
+                                computeEdgeCost(thSpecific->X[succ.node],   thSpecific->Y[succ.node],   thSpecific->X[succ.anchor + 1], thSpecific->Y[succ.anchor + 1], ewt, roundW) -
+                                computeEdgeCost(thSpecific->X[succ.anchor], thSpecific->Y[succ.anchor], thSpecific->X[succ.anchor + 1], thSpecific->Y[succ.anchor + 1], ewt, roundW);
+                break;
+            case COMPUTE_OPTION_BASE:
+                succ.extraCost = computeEdgeCost(inst->X[indexPath[succ.anchor]], inst->Y[indexPath[succ.anchor]], inst->X[indexPath[succ.node    ]], inst->Y[indexPath[succ.node    ]], ewt, roundW) +
+                                 computeEdgeCost(inst->X[indexPath[succ.node  ]], inst->Y[indexPath[succ.node  ]], inst->X[indexPath[succ.anchor+1]], inst->Y[indexPath[succ.anchor+1]], ewt, roundW) -
+                                 computeEdgeCost(inst->X[indexPath[succ.anchor]], inst->Y[indexPath[succ.anchor]], inst->X[indexPath[succ.anchor+1]], inst->Y[indexPath[succ.anchor+1]], ewt, roundW);
+                break;
+            case COMPUTE_OPTION_USE_COST_MATRIX:
+                succ.extraCost = inst->edgeCostMat[indexPath[succ.anchor] * n + indexPath[succ.node    ]] +
+                                 inst->edgeCostMat[indexPath[succ.node  ] * n + indexPath[succ.anchor+1]] -
+                                 inst->edgeCostMat[indexPath[succ.anchor] * n + indexPath[succ.anchor+1]];
+                break;
+            }
         }
         else
         {
@@ -423,10 +493,8 @@ static void applyExtraMileage_Internal(ThreadSpecificData *thSpecific, int nCove
                 succ = findSuccessorVectorized(thSpecific, nCovered);
                 break;
             case COMPUTE_OPTION_BASE:
-                succ = findSuccessorBase(thSpecific, nCovered, false);
-                break;
             case COMPUTE_OPTION_USE_COST_MATRIX:
-                succ = findSuccessorBase(thSpecific, nCovered, true);
+                succ = findSuccessorBase(thSpecific, nCovered);
                 break;
             }
         }
@@ -448,10 +516,13 @@ static bool checkSolutionIntegrity(ThreadSpecificData *thSpecific)
             LOG(LOG_LVL_CRITICAL, "checkSolutionIntegrity: workingSol.indexPath[%lu] = %d which is not within the limits", i, index);
             return false;
         }
-        if ((thSpecific->X[i] != inst->X[index]) || (thSpecific->Y[i] != inst->Y[index]))
+        if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
         {
-            LOG(LOG_LVL_CRITICAL, "checkSolutionIntegrity: Mismatch at index %lu in solution", i);
-            return false;
+            if ((thSpecific->X[i] != inst->X[index]) || (thSpecific->Y[i] != inst->Y[index]))
+            {
+                LOG(LOG_LVL_CRITICAL, "checkSolutionIntegrity: Mismatch at index %lu in solution", i);
+                return false;
+            }
         }
     }
 
@@ -467,41 +538,57 @@ static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCov
     thSpecific->workingSol.cost += succ.extraCost;
 
     // save best value
-    float bestX = thSpecific->X[succ.node];
-    float bestY = thSpecific->Y[succ.node];
+    float bestX, bestY;
+    if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+    {
+        bestX = thSpecific->X[succ.node];
+        bestY = thSpecific->Y[succ.node];
+    }
     int bestIndex = thSpecific->workingSol.indexPath[succ.node];
 
     // place elements to insert in the tour at the end of the covered nodes "set"
-    thSpecific->X[succ.node] = thSpecific->X[nCovered];
-    thSpecific->Y[succ.node] = thSpecific->Y[nCovered];
+    if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+    {
+        thSpecific->X[succ.node] = thSpecific->X[nCovered];
+        thSpecific->Y[succ.node] = thSpecific->Y[nCovered];
+    }
     thSpecific->workingSol.indexPath[succ.node] = thSpecific->workingSol.indexPath[nCovered];
 
     int i = nCovered;
 
-    // shift elements forward of 1 position iteratively with avx until vector is too big for the amount of elements to shift (do AVX_VEC_SIZE elements per iteration)
-    for (i -= AVX_VEC_SIZE; i > succ.anchor; i -= AVX_VEC_SIZE)
+    if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
     {
-        __m256 xVec = _mm256_loadu_ps(&thSpecific->X[i]);
-        __m256 yVec = _mm256_loadu_ps(&thSpecific->Y[i]);
-        __m256i indexVec = _mm256_loadu_si256((__m256i_u*)&thSpecific->workingSol.indexPath[i]);
-        _mm256_storeu_ps(&thSpecific->X[i + 1], xVec);
-        _mm256_storeu_ps(&thSpecific->Y[i + 1], yVec);
-        _mm256_storeu_si256((__m256i_u*)&thSpecific->workingSol.indexPath[i + 1], indexVec);
+        // shift elements forward of 1 position iteratively with avx until vector is too big for the amount of elements to shift (do AVX_VEC_SIZE elements per iteration)
+        for (i -= AVX_VEC_SIZE; i > succ.anchor; i -= AVX_VEC_SIZE)
+        {
+            __m256 xVec = _mm256_loadu_ps(&thSpecific->X[i]);
+            __m256 yVec = _mm256_loadu_ps(&thSpecific->Y[i]);
+            __m256i indexVec = _mm256_loadu_si256((__m256i_u*)&thSpecific->workingSol.indexPath[i]);
+            _mm256_storeu_ps(&thSpecific->X[i + 1], xVec);
+            _mm256_storeu_ps(&thSpecific->Y[i + 1], yVec);
+            _mm256_storeu_si256((__m256i_u*)&thSpecific->workingSol.indexPath[i + 1], indexVec);
+        }
+        i += AVX_VEC_SIZE;
     }
-    i += AVX_VEC_SIZE;
 
     // shift elements forward one at a time
     for (i--; i > succ.anchor; i--)
     {
-        thSpecific->X[i+1] = thSpecific->X[i];
-        thSpecific->Y[i+1] = thSpecific->Y[i];
+        if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        {
+            thSpecific->X[i+1] = thSpecific->X[i];
+            thSpecific->Y[i+1] = thSpecific->Y[i];
+        }
         thSpecific->workingSol.indexPath[i+1] = thSpecific->workingSol.indexPath[i];
     }
 
     i++;
 
-    thSpecific->X[i] = bestX;
-    thSpecific->Y[i] = bestY;
+    if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+    {
+        thSpecific->X[i] = bestX;
+        thSpecific->Y[i] = bestY;
+    }
     thSpecific->workingSol.indexPath[i] = bestIndex;
 
     LOG(LOG_LVL_EVERYTHING, "Extra Mileage Solution Update: Node %d added to solution between nodes %d and %d", thSpecific->workingSol.indexPath[i], thSpecific->workingSol.indexPath[i-1], thSpecific->workingSol.indexPath[i+1]);
@@ -588,11 +675,12 @@ static SuccessorData findSuccessorVectorized(ThreadSpecificData *thSpecific, int
     return retVal;
 }
 
-static SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, int nCovered, bool useCostMatrix)
+static SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, int nCovered)
 {
     // shortcuts/decluttering
     Instance *inst = thSpecific->workingSol.instance;
     int n = inst->nNodes;
+    int *indexPath = thSpecific->workingSol.indexPath;
     enum EdgeWeightType ewt = inst->params.edgeWeightType ;
     bool roundW = inst->params.roundWeights;
     int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
@@ -605,21 +693,21 @@ static SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, int nCove
     {
         // cost of edge already in solution [i,j]
         float currEdgeCost;
-        if (useCostMatrix)
-            currEdgeCost = inst->edgeCostMat[thSpecific->workingSol.indexPath[anchor] * n + thSpecific->workingSol.indexPath[anchor + 1]];
+        if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+            currEdgeCost = computeEdgeCost(inst->X[indexPath[anchor]], inst->Y[indexPath[anchor]], inst->X[indexPath[anchor+1]], inst->Y[indexPath[anchor+1]], ewt, roundW);
         else
-            currEdgeCost = computeEdgeCost(thSpecific->X[anchor], thSpecific->Y[anchor], thSpecific->X[anchor + 1], thSpecific->Y[anchor + 1], ewt, roundW);
+            currEdgeCost = inst->edgeCostMat[indexPath[anchor] * n + indexPath[anchor + 1]];
 
         for (int node = nCovered+1; node < n + 1; node++) // covered node i from 0 to posCovered
         {
             // sum of cost of edge [i,u] and edge [u,j]
             float altEdgeCost;
-            if (useCostMatrix)
-                altEdgeCost = inst->edgeCostMat[thSpecific->workingSol.indexPath[node] * n + thSpecific->workingSol.indexPath[anchor]] + 
-                              inst->edgeCostMat[thSpecific->workingSol.indexPath[node] * n + thSpecific->workingSol.indexPath[anchor + 1]];
+            if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+                altEdgeCost = computeEdgeCost(inst->X[indexPath[node]], inst->Y[indexPath[node]], inst->X[indexPath[anchor  ]], inst->Y[indexPath[anchor  ]], ewt, roundW) + 
+                              computeEdgeCost(inst->X[indexPath[node]], inst->Y[indexPath[node]], inst->X[indexPath[anchor+1]], inst->Y[indexPath[anchor+1]], ewt, roundW);
             else
-                altEdgeCost = computeEdgeCost(thSpecific->X[node], thSpecific->Y[node], thSpecific->X[anchor], thSpecific->Y[anchor], ewt, roundW) + 
-                              computeEdgeCost(thSpecific->X[node], thSpecific->Y[node], thSpecific->X[anchor + 1], thSpecific->Y[anchor + 1], ewt, roundW);
+                altEdgeCost = inst->edgeCostMat[indexPath[node] * n + indexPath[anchor]] + 
+                              inst->edgeCostMat[indexPath[node] * n + indexPath[anchor + 1]];
 
             SuccessorData currSucc = { .node=node, .anchor=anchor, .extraCost = altEdgeCost - currEdgeCost };
 
@@ -645,3 +733,4 @@ static SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, int nCove
 
     return bestSuccs[chosedNodeSubIndex];
 }
+

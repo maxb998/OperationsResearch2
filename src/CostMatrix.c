@@ -52,16 +52,10 @@ double computeCostMatrix(Instance *inst)
     // start threads
     pthread_t threads[MAX_THREADS];
     for (int i = 0; i < inst->params.nThreads; i++)
-    {
         pthread_create (&threads[i], NULL, computeDistMatThread, &thInst);
-        LOG (LOG_LVL_DEBUG, "Distance Matrix Computation: Thread %ld CREATED", i);
-    }
 
     for (int i = 0; i < inst->params.nThreads; i++)
-    {
         pthread_join (threads[i], NULL);
-        LOG (LOG_LVL_DEBUG, "Distance Matrix Computation: Thread %ld FINISHED", i);
-    }
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     return cvtTimespec2Double(timeStruct) - startTime;
