@@ -9,6 +9,15 @@
 
 typedef struct
 {
+    Solution *sol;
+    float *X;
+    float *Y;
+    int iter;
+} _2optData;
+
+
+typedef struct
+{
     float costOffset;
     int edge0;
     int edge1;
@@ -25,36 +34,20 @@ void set2OptPerformanceBenchmarkLog(bool val)
 
 
 // Perform solution update accordingly (invert part of the solution between selected indexes(edge0,edge1) of the bestFix)
-static inline void updateSolution(Solution *sol, _2optMoveData bestFix, float *X, float *Y);
+static inline void updateSolution(_2optData *data, _2optMoveData bestFix);
 
 #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
 // Search for best possible 2opt move in sol using vectorized(SIMD) instructions
-static inline _2optMoveData _2OptBestFixAVX(Solution *sol, float *X, float *Y);
+static inline _2optMoveData _2OptBestFixAVX(_2optData *data);
 #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
 // Search for best possible 2opt move in sol using normal(SISD) instructions
-static inline _2optMoveData _2optBestFixBase(Solution *sol);
+static inline _2optMoveData _2optBestFixBase(_2optData *data);
 #endif
 
 void apply2OptBestFix(Solution *sol)
 {
     Instance *inst = sol->instance;
     int n = inst->nNodes;
-    int iterNum = 0;
-
-    struct timespec timeStruct;
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
-    double startTime = cvtTimespec2Double(timeStruct);
-
-    // check integrity if debugging
-    if (inst->params.logLevel >= LOG_LVL_DEBUG)
-    {
-        // always check solution
-        if (!checkSolution(sol))
-            throwError(inst, sol, "apply2OptBestFix: Input solution is not valid");
-    }
-
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
-    double printTimeSec = cvtTimespec2Double(timeStruct);
 
     float *X = NULL, *Y = NULL;
 
@@ -79,6 +72,38 @@ void apply2OptBestFix(Solution *sol)
         }
     #endif
 
+    apply2OptBestFix_fastIteratively(sol, X, Y);
+
+    free(X);
+}
+
+void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y)
+{
+    Instance *inst = sol->instance;
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        int n = inst->nNodes;
+    #endif
+
+    struct timespec timeStruct;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    double startTime = cvtTimespec2Double(timeStruct);
+    double printTimeSec = startTime;
+
+    // check solution correspondence with X and Y when debugging
+    if (inst->params.logLevel >= LOG_LVL_DEBUG)
+    {
+        if (!checkSolution(sol))
+            throwError(inst, sol, "apply2OptBestFix: Input solution is not valid");
+        
+        #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+            for (int i = 0; i <= n; i++)
+                if ((inst->X[sol->indexPath[i]] != X[i]) || (inst->Y[sol->indexPath[i]] != Y[i]))
+                    throwError(inst, sol, "apply2OptBestFix_fastIteratively: input mismatch between inst.X/Y[%d] = [%f, %f] and X/Y[indexPath[%d]] = [%f, %f]", i, inst->X[sol->indexPath[i]], X[i], i, inst->Y[sol->indexPath[i]], Y[i]);
+        #endif
+    }
+
+    _2optData data = { .sol=sol, .X=X, .Y=Y, .iter=0 };
+
     bool notFinishedFlag = true;
     while (notFinishedFlag) // runs 2opt until no more moves are made in one iteration of 2opt
     {
@@ -86,41 +111,41 @@ void apply2OptBestFix(Solution *sol)
         _2optMoveData bestFix;
 
         #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-            bestFix = _2OptBestFixAVX(sol, X, Y);
+            bestFix = _2OptBestFixAVX(&data);
         #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
-            bestFix = _2optBestFixBase(sol);
+            bestFix = _2optBestFixBase(&data);
         #endif
 
         if (bestFix.costOffset < -EPSILON)
-            updateSolution(sol, bestFix, X, Y);
+            updateSolution(&data, bestFix);
         else
             notFinishedFlag = false;
 
         clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
         double currentTime = cvtTimespec2Double(timeStruct);
-        if (currentTime - printTimeSec > LOG_INTERVAL)
-        {
-            LOG(LOG_LVL_LOG, "2Opt running: cost is %lf at iteration %4lu with last optimization of %f", sol->cost, iterNum, -bestFix.costOffset);
+        if (printPerformanceLog && (currentTime - printTimeSec > LOG_INTERVAL))
+        {   
+            LOG(LOG_LVL_LOG, "2Opt running: cost is %lf at iteration %4lu with last optimization of %f", sol->cost, data.iter, -bestFix.costOffset);
             printTimeSec = currentTime;
         }
-        iterNum++;
+        data.iter++;
     }
-
-    free(X);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double elapsed = cvtTimespec2Double(timeStruct) - startTime;
     if (printPerformanceLog)
     {
-        LOG(LOG_LVL_NOTICE, "Total number of iterations: %lu", iterNum);
-        LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)iterNum/elapsed);
+        LOG(LOG_LVL_NOTICE, "Total number of iterations: %lu", data.iter);
+        LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)data.iter/elapsed);
     }
 
     sol->execTime += elapsed;
 }
 
-static inline void updateSolution(Solution *sol, _2optMoveData bestFix, float *X, float *Y)
+static inline void updateSolution(_2optData *data, _2optMoveData bestFix)
 {
+    Solution *sol = data->sol;
+
     // update cost
     sol->cost += (double)bestFix.costOffset;
 
@@ -149,12 +174,11 @@ static inline void updateSolution(Solution *sol, _2optMoveData bestFix, float *X
     {
         register int tempInt;
         swapElems(sol->indexPath[smallID], sol->indexPath[bigID], tempInt);
-        if (X)
-        {
+        #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
             register float tempFloat;
-            swapElems(X[smallID], X[bigID], tempFloat);
-            swapElems(Y[smallID], Y[bigID], tempFloat);
-        }
+            swapElems(data->X[smallID], data->X[bigID], tempFloat);
+            swapElems(data->Y[smallID], data->Y[bigID], tempFloat);
+        #endif
 
         smallID++;
         bigID--;
@@ -162,10 +186,13 @@ static inline void updateSolution(Solution *sol, _2optMoveData bestFix, float *X
 }
 
 #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-static inline _2optMoveData _2OptBestFixAVX(Solution *sol, float *X, float *Y)
+static inline _2optMoveData _2OptBestFixAVX(_2optData *data)
 {
+    Solution *sol = data->sol;
     Instance *inst = sol->instance;
     int n = inst->nNodes;
+    float *X = data->X, *Y = data->Y;
+
     enum EdgeWeightType ewt = inst->params.edgeWeightType;
     bool roundW = inst->params.roundWeights;
 
@@ -228,8 +255,9 @@ static inline _2optMoveData _2OptBestFixAVX(Solution *sol, float *X, float *Y)
     return bestFix;
 }
 #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
-static inline _2optMoveData _2optBestFixBase(Solution *sol)
+static inline _2optMoveData _2optBestFixBase(_2optData *data)
 {
+    Solution *sol = data->sol;
     Instance *inst = sol->instance;
     int n = inst->nNodes;
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)

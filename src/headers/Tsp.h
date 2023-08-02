@@ -131,13 +131,6 @@ bool checkSolution(Solution *sol);
 double computeSolutionCost(Solution *sol);
 
 /*!
-* @brief Compute/Recompite the cost of the solution given using vectorization (Didn't test if this is any faster than the other one)
-* @param sol Solution of which compute the cost.
-* @result cost of solution
-*/
-double computeSolutionCostVectorized(Solution *sol);
-
-/*!
 * @brief Perform argsort using quicksort algorithm with random pivot
 * @param arr Floating point array to sort.
 * @param indexes Array where to store the sorted indexes of arr. (memory MUST be preallocated (n*sizeof(int)))
@@ -218,9 +211,14 @@ void set2OptPerformanceBenchmarkLog(bool val);
 /*!
 * @brief  Applies 2Opt solution optimizer to sol.
 * @param sol Solution to optimize.
-* @result Number in seconds representing execution time
 */
 void apply2OptBestFix(Solution *sol);
+
+/*!
+* @brief  Same as apply2OptBestFix, but if using COMPUTE_OPTION_AVX then this function expect a correctly ordered copy of the points coordinates in X and Y. Useful when calling 2opt a lot and it doesn't do a lot of moves
+* @param sol Solution to optimize.
+*/
+void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y);
 
 
 //###################################################################################################################################

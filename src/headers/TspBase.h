@@ -17,7 +17,7 @@
 #define COMPUTE_OPTION_BASE 1 
 #define COMPUTE_OPTION_USE_COST_MATRIX 2
 
-#define COMPUTATION_TYPE COMPUTE_OPTION_AVX	
+#define COMPUTATION_TYPE COMPUTE_OPTION_BASE	
 
 // Amount of "best" elements to save when using grasp almostbest option and NOT using COMPUTE_OPTION_AVX
 #define BASE_GRASP_BEST_SAVE_BUFFER_SIZE 4

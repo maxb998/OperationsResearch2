@@ -73,7 +73,7 @@ static inline int nProcessors()
 Solution newSolution (Instance *inst)
 {
     Solution s = { .cost = INFINITY, .execTime = 0., .instance = inst };
-    s.indexPath = malloc((inst->nNodes + AVX_VEC_SIZE) * sizeof(int));
+    s.indexPath = malloc((inst->nNodes + AVX_VEC_SIZE) * sizeof(int)); // if changing the size of the malloc also change cloneSolution()
     if (!s.indexPath)
         throwError(inst, NULL, "newSolution: Failed to allocate memory");
     return s;
@@ -107,7 +107,7 @@ void cloneSolution(Solution *src, Solution *dst)
     dst->instance = src->instance;
     dst->execTime = src->execTime;
     
-    for (int i = 0; i < dst->instance->nNodes + 1; i++)
+    for (int i = 0; i < dst->instance->nNodes + AVX_VEC_SIZE; i++)
         dst->indexPath[i] = src->indexPath[i];
 }
 
