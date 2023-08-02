@@ -232,8 +232,10 @@ static inline _2optMoveData _2optBestFixBase(Solution *sol)
 {
     Instance *inst = sol->instance;
     int n = inst->nNodes;
-    enum EdgeWeightType ewt = inst->params.edgeWeightType;
-    bool roundW = inst->params.roundWeights;
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+        enum EdgeWeightType ewt = inst->params.edgeWeightType;
+        bool roundW = inst->params.roundWeights;
+    #endif
 
     _2optMoveData bestFix = { .costOffset=0 };
 

@@ -9,8 +9,6 @@
 #define METAHEUR_INIT_RATIO 1/10
 #define MATHEUR_INIT_RATIO 1/10
 
-#define MATH
-
 static Solution runHeuristic(Instance *inst, enum Mode mode, double tlim);
 static void runMetaheuristic(Solution *sol, enum Mode mode, double tlim);
 static void runExactSolver(Solution *sol, enum Mode mode, double tlim);
@@ -35,13 +33,13 @@ int main (int argc, char *argv[])
     LOG (LOG_LVL_NOTICE, "file %s has been loaded succesfully in %lf milliseconds", inst.params.inputFile, fileReadTime * 1000.);
     printf("\n");
     
-    if (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-    {
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
         printf(SEPARATOR_STR);
         double computeMatrixTime = computeCostMatrix(&inst);
         LOG(LOG_LVL_NOTICE, "Distance Matrix done in %lf seconds", computeMatrixTime);
         printf(SEPARATOR_STR"\n");
-    }
+    #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_USE_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_BASE))
+    #endif
 
     // initializing pointers to null to avoid possible errors on destruction of sol at the end of main
     Solution sol = { .indexPath = NULL };

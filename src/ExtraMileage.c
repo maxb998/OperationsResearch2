@@ -426,6 +426,15 @@ static void applyExtraMileage_Internal(ThreadSpecificData *thSpecific, int nCove
     Instance *inst = thSpecific->workingSol.instance;
     int n = inst->nNodes;
 
+    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
+        int *indexPath = thSpecific->workingSol.indexPath;
+    #endif
+
+    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+        enum EdgeWeightType ewt = thSpecific->workingSol.instance->params.edgeWeightType;
+        bool roundW = thSpecific->workingSol.instance->params.roundWeights;
+    #endif
+
     if (!checkSolutionIntegrity(thSpecific))
         throwError(inst, &thSpecific->workingSol, "applyExtraMileage_Internal: thSpecific.workingSol is not consistent");
 
@@ -451,8 +460,6 @@ static void applyExtraMileage_Internal(ThreadSpecificData *thSpecific, int nCove
 
         if ((inst->params.graspType == GRASP_RANDOM) && (graspThreshold > rand_r(&thSpecific->rndState)))
         {
-            enum EdgeWeightType ewt = thSpecific->workingSol.instance->params.edgeWeightType;
-            bool roundW = thSpecific->workingSol.instance->params.roundWeights;
             succ.node = genRandom(&thSpecific->rndState, (nCovered + 1), (n + 1));
             succ.anchor = genRandom(&thSpecific->rndState, 0, nCovered);
 
@@ -462,12 +469,10 @@ static void applyExtraMileage_Internal(ThreadSpecificData *thSpecific, int nCove
                                 computeEdgeCost(thSpecific->X[succ.anchor], thSpecific->Y[succ.anchor], thSpecific->X[succ.anchor + 1], thSpecific->Y[succ.anchor + 1], ewt, roundW);
             
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-                int *indexPath = thSpecific->workingSol.indexPath;
                 succ.extraCost = computeEdgeCost(inst->X[indexPath[succ.anchor]], inst->Y[indexPath[succ.anchor]], inst->X[indexPath[succ.node    ]], inst->Y[indexPath[succ.node    ]], ewt, roundW) +
                                  computeEdgeCost(inst->X[indexPath[succ.node  ]], inst->Y[indexPath[succ.node  ]], inst->X[indexPath[succ.anchor+1]], inst->Y[indexPath[succ.anchor+1]], ewt, roundW) -
                                  computeEdgeCost(inst->X[indexPath[succ.anchor]], inst->Y[indexPath[succ.anchor]], inst->X[indexPath[succ.anchor+1]], inst->Y[indexPath[succ.anchor+1]], ewt, roundW);
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-                int *indexPath = thSpecific->workingSol.indexPath;
                 succ.extraCost = inst->edgeCostMat[indexPath[succ.anchor] * n + indexPath[succ.node    ]] +
                                  inst->edgeCostMat[indexPath[succ.node  ] * n + indexPath[succ.anchor+1]] -
                                  inst->edgeCostMat[indexPath[succ.anchor] * n + indexPath[succ.anchor+1]];
@@ -520,8 +525,8 @@ static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCov
     thSpecific->workingSol.cost += succ.extraCost;
 
     // save best value
-    float bestX, bestY;
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        float bestX, bestY;
         bestX = thSpecific->X[succ.node];
         bestY = thSpecific->Y[succ.node];
     #endif
@@ -659,9 +664,12 @@ static SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, int nCove
     Instance *inst = thSpecific->workingSol.instance;
     int n = inst->nNodes;
     int *indexPath = thSpecific->workingSol.indexPath;
-    enum EdgeWeightType ewt = inst->params.edgeWeightType ;
-    bool roundW = inst->params.roundWeights;
     int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
+
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+        enum EdgeWeightType ewt = inst->params.edgeWeightType ;
+        bool roundW = inst->params.roundWeights;
+    #endif
 
     SuccessorData bestSuccs[BASE_GRASP_BEST_SAVE_BUFFER_SIZE];
     for (int i = 0; i < BASE_GRASP_BEST_SAVE_BUFFER_SIZE; i++)

@@ -253,9 +253,16 @@ static void applyNearestNeighbor(ThreadSpecificData *thSpecific, int firstNode)
 {
     Instance *inst = thSpecific->workingSol.instance;
     int n = inst->nNodes;
-    enum EdgeWeightType ewt = inst->params.edgeWeightType ;
-    bool roundFlag = inst->params.roundWeights;
 
+    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_AVX))
+        enum EdgeWeightType ewt = inst->params.edgeWeightType ;
+        bool roundFlag = inst->params.roundWeights;
+    #endif
+
+    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
+        int *workSolPath = thSpecific->workingSol.indexPath;
+    #endif
+    
     // Reset thSpecific->[X,Y,workingSol]
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
         for (int i = 0; i < (n + AVX_VEC_SIZE) * 2; i++)
@@ -283,10 +290,8 @@ static void applyNearestNeighbor(ThreadSpecificData *thSpecific, int firstNode)
             #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
                 successor.cost = computeEdgeCost(thSpecific->X[i], thSpecific->Y[i], thSpecific->X[successor.node], thSpecific->Y[successor.node], ewt, roundFlag);
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-                int *workSolPath = thSpecific->workingSol.indexPath;
                 successor.cost = computeEdgeCost(inst->X[workSolPath[i]], inst->Y[workSolPath[i]], inst->X[workSolPath[successor.node]], inst->Y[workSolPath[successor.node]], ewt, roundFlag);
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-                int *workSolPath = thSpecific->workingSol.indexPath;
                 successor.cost = inst->edgeCostMat[workSolPath[i] * n + workSolPath[successor.node]];
             #endif
         }
@@ -424,8 +429,11 @@ static inline SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, in
     Instance *inst = thSpecific->workingSol.instance;
     int n = inst->nNodes;
     int *indexPath = thSpecific->workingSol.indexPath;
-    enum EdgeWeightType ewt = inst->params.edgeWeightType ;
-    bool roundFlag = inst->params.roundWeights;
+
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+        enum EdgeWeightType ewt = inst->params.edgeWeightType;
+        bool roundFlag = inst->params.roundWeights;
+    #endif
 
     // initialize array with stored best successors(1st best, 2nd best, 3rd best, ...)
     SuccessorData bestSuccs[BASE_GRASP_BEST_SAVE_BUFFER_SIZE];
@@ -437,10 +445,9 @@ static inline SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, in
     
     // hope the compiler loads into the registers these variables that are accessed every time in the loop
     int lastAddedIndex = indexPath[lastAddedPos];
-    float x1, y1;
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-        x1 = inst->X[lastAddedIndex];
-        y1 = inst->Y[lastAddedIndex];
+        float x1 = inst->X[lastAddedIndex];
+        float y1 = inst->Y[lastAddedIndex];
     #endif
 
     int posToAdd = lastAddedPos + 1;
