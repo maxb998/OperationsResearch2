@@ -66,11 +66,13 @@ static void updateBestSolution(ThreadSpecificData *thSpecific);
 // Swap elements in thSpecific.X, thSpecific.Y and thSpecific.workingSol.indexPath
 static inline void swapElemsInThSpecific(ThreadSpecificData *thSpecific, int pos1, int pos2);
 
+#if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
 // finds the closest unvisited node using vectorized(SIMD) instructions
 static inline SuccessorData findSuccessorVectorized(ThreadSpecificData *thSpecific, int lastPos);
-
+#elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
 // finds the closest unvisited node using normal(SISD) instructions
 static inline SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, int lastAddedPos);
+#endif
 
 
 Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, double timeLimit, int nThreads)
@@ -155,15 +157,15 @@ static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, un
     Instance *inst = thShared->bestSol.instance;
     thSpecific.workingSol=newSolution(inst);
 
-    if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-    {   // this memory allocation is useful, but not strictly necessary when using avx (if we don't want to use it switch to the gather instructions)
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        // this memory allocation is useful, but not strictly necessary when using avx (if we don't want to use it switch to the gather instructions)
         thSpecific.X = malloc((inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float));
         if (!thSpecific.X)
             throwError(inst, &thSpecific.workingSol, "NearestNeighbor -> initThreadSpecificData: Failed to allocate memory");
         thSpecific.Y = &thSpecific.X[inst->nNodes + AVX_VEC_SIZE];
-    }
-    else
+    #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
         thSpecific.X = thSpecific.Y = NULL;
+    #endif
 
     return thSpecific;
 }
@@ -251,14 +253,14 @@ static void applyNearestNeighbor(ThreadSpecificData *thSpecific, int firstNode)
 {
     Instance *inst = thSpecific->workingSol.instance;
     int n = inst->nNodes;
-    int *workSolPath = thSpecific->workingSol.indexPath;
     enum EdgeWeightType ewt = inst->params.edgeWeightType ;
     bool roundFlag = inst->params.roundWeights;
 
     // Reset thSpecific->[X,Y,workingSol]
-    if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
         for (int i = 0; i < (n + AVX_VEC_SIZE) * 2; i++)
             thSpecific->X[i] = inst->X[i];
+    #endif
     for (int i = 0; i < n + AVX_VEC_SIZE; i++)
         thSpecific->workingSol.indexPath[i] = i;
 
@@ -277,34 +279,24 @@ static void applyNearestNeighbor(ThreadSpecificData *thSpecific, int firstNode)
         if ((inst->params.graspType == GRASP_RANDOM) && (rand_r(&thSpecific->rndState) < graspThreshold))
         {
             successor.node = genRandom(&thSpecific->rndState, (i+1), n);
-            switch (COMPUTATION_TYPE)
-            {
-            case COMPUTE_OPTION_AVX:
-                successor.cost = computeEdgeCost(thSpecific->X[i], thSpecific->Y[i], thSpecific->X[successor.node], thSpecific->Y[successor.node], ewt, roundFlag);
-                break;
-            
-            case COMPUTE_OPTION_BASE:
-                successor.cost = computeEdgeCost(inst->X[workSolPath[i]], inst->Y[workSolPath[i]], inst->X[workSolPath[successor.node]], inst->Y[workSolPath[successor.node]], ewt, roundFlag);
-                break;
 
-            case COMPUTE_OPTION_USE_COST_MATRIX:
+            #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+                successor.cost = computeEdgeCost(thSpecific->X[i], thSpecific->Y[i], thSpecific->X[successor.node], thSpecific->Y[successor.node], ewt, roundFlag);
+            #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+                int *workSolPath = thSpecific->workingSol.indexPath;
+                successor.cost = computeEdgeCost(inst->X[workSolPath[i]], inst->Y[workSolPath[i]], inst->X[workSolPath[successor.node]], inst->Y[workSolPath[successor.node]], ewt, roundFlag);
+            #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+                int *workSolPath = thSpecific->workingSol.indexPath;
                 successor.cost = inst->edgeCostMat[workSolPath[i] * n + workSolPath[successor.node]];
-                break;
-            }
+            #endif
         }
         else
         {
-            switch (COMPUTATION_TYPE)
-            {
-            case COMPUTE_OPTION_AVX:
+            #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
                 successor = findSuccessorVectorized(thSpecific, i);
-                break;
-            
-            case COMPUTE_OPTION_BASE:
-            case COMPUTE_OPTION_USE_COST_MATRIX:
+            #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
                 successor = findSuccessorBase(thSpecific, i);
-                break;
-            }
+            #endif
         }
 
         // simple debugging check. can be removed, but saved a lot of headaches so it's going to stay there
@@ -317,34 +309,25 @@ static void applyNearestNeighbor(ThreadSpecificData *thSpecific, int firstNode)
     }
 
     // add cost of the two remaining edges
-    switch (COMPUTATION_TYPE)
-    {
-    case COMPUTE_OPTION_AVX:
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
         thSpecific->workingSol.cost += computeEdgeCost(thSpecific->X[n-2], thSpecific->Y[n-2], thSpecific->X[n-1], thSpecific->Y[n-1], ewt, roundFlag) +
                                        computeEdgeCost(thSpecific->X[n-1], thSpecific->Y[n-1], thSpecific->X[0],   thSpecific->Y[0],   ewt, roundFlag);
-        break;
-
-    case COMPUTE_OPTION_BASE:
+    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
         thSpecific->workingSol.cost += computeEdgeCost(inst->X[workSolPath[n-2]], inst->Y[workSolPath[n-2]], inst->X[workSolPath[n-1]], inst->Y[workSolPath[n-1]], ewt, roundFlag) + 
                                        computeEdgeCost(inst->X[workSolPath[n-1]], inst->Y[workSolPath[n-1]], inst->X[workSolPath[0]],   inst->Y[workSolPath[0]],   ewt, roundFlag);
-        break;
-
-    case COMPUTE_OPTION_USE_COST_MATRIX:
+    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
         thSpecific->workingSol.cost += inst->edgeCostMat[workSolPath[n-2] * n + workSolPath[n-1]] + 
                                        inst->edgeCostMat[workSolPath[n-1] * n + workSolPath[0]];
-        break;
-    }
-    
+    #endif
 }
 
 static inline void swapElemsInThSpecific(ThreadSpecificData *thSpecific, int pos1, int pos2)
 {
-    if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX) //thSpecific->X in not used otherwise
-    {
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX) //thSpecific->X in not used otherwise
         register float tempFloat;
         swapElems(thSpecific->X[pos1], thSpecific->X[pos2], tempFloat);
         swapElems(thSpecific->Y[pos1], thSpecific->Y[pos2], tempFloat);
-    }
+    #endif
     register int tempInt;
     swapElems(thSpecific->workingSol.indexPath[pos1], thSpecific->workingSol.indexPath[pos2], tempInt);
 }
@@ -368,6 +351,7 @@ static void updateBestSolution(ThreadSpecificData *thSpecific)
     swapElems(bestSol->indexPath, newBest->indexPath, temp);
 }
 
+#if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
 static inline SuccessorData findSuccessorVectorized(ThreadSpecificData *thSpecific, int lastAddedPos)
 {
     Instance *inst = thSpecific->workingSol.instance;
@@ -434,7 +418,7 @@ static inline SuccessorData findSuccessorVectorized(ThreadSpecificData *thSpecif
 
     return succ;
 }
-
+#elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
 static inline SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, int lastAddedPos)
 {
     Instance *inst = thSpecific->workingSol.instance;
@@ -454,11 +438,10 @@ static inline SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, in
     // hope the compiler loads into the registers these variables that are accessed every time in the loop
     int lastAddedIndex = indexPath[lastAddedPos];
     float x1, y1;
-    if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-    {
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
         x1 = inst->X[lastAddedIndex];
         y1 = inst->Y[lastAddedIndex];
-    }
+    #endif
 
     int posToAdd = lastAddedPos + 1;
 
@@ -466,10 +449,11 @@ static inline SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, in
     {   
         SuccessorData currentSucc = { .node=node };
 
-        if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+        #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
             currentSucc.cost = computeSquaredEdgeCost(x1, y1, inst->X[indexPath[node]], inst->Y[indexPath[node]], ewt, roundFlag);
-        else
+        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
             currentSucc.cost = inst->edgeCostMat[lastAddedIndex * n + indexPath[node]];
+        #endif
 
         for (int i = 0; i < BASE_GRASP_BEST_SAVE_BUFFER_SIZE; i++)
         {
@@ -494,8 +478,10 @@ static inline SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, in
                 break;
     }
 
-    if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
         bestSuccs[successorSubIndex].cost = computeEdgeCost(x1, y1, inst->X[indexPath[bestSuccs[successorSubIndex].node]], inst->Y[indexPath[bestSuccs[successorSubIndex].node]], ewt, roundFlag);
+    #endif
 
     return bestSuccs[successorSubIndex];
 }
+#endif
