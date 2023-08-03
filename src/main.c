@@ -117,7 +117,7 @@ static Solution runHeuristic(Instance *inst, enum Mode mode, double tlim)
         sol = NearestNeighbor(inst, inst->params.nnFirstNodeOption, tlim, 0);
 
         printf("Nearest Neighbor finished in %lf second\n", sol.execTime);
-        printf("Solution Cost = %lf\n", sol.cost);
+        printf("Solution Cost = %lf\n", cvtCost2Double(sol.cost));
         break;
 
     case MODE_EM:
@@ -126,7 +126,7 @@ static Solution runHeuristic(Instance *inst, enum Mode mode, double tlim)
         sol = ExtraMileage(inst, inst->params.emInitOption, tlim, 0);
 
         printf("Extra Mileage finished in %lf seconds\n", sol.execTime);
-        printf("Solution Cost = %lf\n", sol.cost);
+        printf("Solution Cost = %lf\n", cvtCost2Double(sol.cost));
         break;
 
     default: throwError(inst, NULL, "runHeuristic: specified mode must be in [MODE_NN, MODE_EM]"); break;
@@ -149,7 +149,7 @@ static void runMetaheuristic(Solution *sol, enum Mode mode, double tlim)
         printf("Tabu Search Starting...\n");
 
         printf("Tabu Search finished in %lf second\n", sol->execTime - startTime);
-        printf("Solution Cost = %lf\n", sol->cost);
+        printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));
         break;
     case MODE_VNS:
         printf("Variable Neighborhood Search Starting...\n");
@@ -157,19 +157,19 @@ static void runMetaheuristic(Solution *sol, enum Mode mode, double tlim)
         VariableNeighborhoodSearch(sol, tlim, 0);
 
         printf("Variable Neighborhood Search finished in %lf second\n", sol->execTime - startTime);
-        printf("Solution Cost = %lf\n", sol->cost);
+        printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));
         break;
     case MODE_ANNEALING:
         printf("Simulated Annealing Starting...\n");
 
         printf("Simulated Annealing finished in %lf second\n", sol->execTime - startTime);
-        printf("Solution Cost = %lf\n", sol->cost);
+        printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));
         break;
     case MODE_GENETIC:
         printf("Genetic Search Starting...\n");
 
         printf("Genetic Search finished in %lf second\n", sol->execTime - startTime);
-        printf("Solution Cost = %lf\n", sol->cost);
+        printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));
         break;
 
     default: throwError(sol->instance, sol, "runMetaheuristic: specified mode must be in [MODE_TABU, MODE_VNS, MODE_ANNEALING, MODE_GENETIC]"); break;
@@ -192,7 +192,7 @@ static void runExactSolver(Solution *sol, enum Mode mode, double tlim)
         benders(sol, tlim);
 
         printf("Benders finished in %lf second\n", sol->execTime - startTime);
-        printf("Solution Cost = %lf\n", sol->cost);
+        printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));
         break;
     case MODE_BRANCH_CUT:
         printf("Branch & Cut Starting...\n");
@@ -200,7 +200,7 @@ static void runExactSolver(Solution *sol, enum Mode mode, double tlim)
         BranchAndCut(sol, tlim);
 
         printf("Branch & Cut finished in %lf second\n", sol->execTime - startTime);
-        printf("Solution Cost = %lf\n", sol->cost);
+        printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));
         break;
 
     default: throwError(sol->instance, sol, "runMetaheuristic: specified mode must be in [MODE_BENDERS, MODE_BRANCH_CUT]"); break;
@@ -223,7 +223,7 @@ static void runMatheuristic (Solution *sol, enum Mode mode, double tlim)
         HardFixing(sol, sol->instance->params.hardFixPolicy, tlim);
 
         printf("Hard Fixing finished in %lf second\n", sol->execTime - startTime);
-        printf("Solution Cost = %lf\n", sol->cost);
+        printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));
         break;
     case MODE_LOCAL_BRANCHING:
         printf("Local Branching Starting...\n");
@@ -231,7 +231,7 @@ static void runMatheuristic (Solution *sol, enum Mode mode, double tlim)
         LocalBranching(sol, tlim);
 
         printf("Local Branching finished in %lf second\n", sol->execTime - startTime);
-        printf("Solution Cost = %lf\n", sol->cost);
+        printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));
         break;
 
     default: throwError(sol->instance, sol, "runMetaheuristic: specified mode must be in [MODE_HARDFIX, MODE_LOCAL_BRANCHING]"); break;
@@ -251,7 +251,7 @@ static void run2Opt(Solution *sol)
     set2OptPerformanceBenchmarkLog(false);
 
     printf("2Opt finished in %lf seconds\n", sol->execTime - startTime);
-    printf("Solution Cost = %lf\n", sol->cost);
+    printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));
     printf(SEPARATOR_STR"\n");
 }
 

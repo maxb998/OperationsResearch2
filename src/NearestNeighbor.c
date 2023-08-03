@@ -310,20 +310,25 @@ static void applyNearestNeighbor(ThreadSpecificData *thSpecific, int firstNode)
 
         // update solution
         swapElemsInThSpecific(thSpecific, i+1, successor.node);
-        thSpecific->workingSol.cost += successor.cost;
+        thSpecific->workingSol.cost += cvtFloat2Cost(successor.cost);
     }
+
+    float secondToLastCost, lastCost;
 
     // add cost of the two remaining edges
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        thSpecific->workingSol.cost += computeEdgeCost(thSpecific->X[n-2], thSpecific->Y[n-2], thSpecific->X[n-1], thSpecific->Y[n-1], ewt, roundFlag) +
-                                       computeEdgeCost(thSpecific->X[n-1], thSpecific->Y[n-1], thSpecific->X[0],   thSpecific->Y[0],   ewt, roundFlag);
+        secondToLastCost = computeEdgeCost(thSpecific->X[n - 2], thSpecific->Y[n - 2], thSpecific->X[n - 1], thSpecific->Y[n - 1], ewt, roundFlag);
+        lastCost = computeEdgeCost(thSpecific->X[n - 1], thSpecific->Y[n - 1], thSpecific->X[0], thSpecific->Y[0], ewt, roundFlag);
     #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-        thSpecific->workingSol.cost += computeEdgeCost(inst->X[workSolPath[n-2]], inst->Y[workSolPath[n-2]], inst->X[workSolPath[n-1]], inst->Y[workSolPath[n-1]], ewt, roundFlag) + 
-                                       computeEdgeCost(inst->X[workSolPath[n-1]], inst->Y[workSolPath[n-1]], inst->X[workSolPath[0]],   inst->Y[workSolPath[0]],   ewt, roundFlag);
+        secondToLastCost = computeEdgeCost(inst->X[workSolPath[n-2]], inst->Y[workSolPath[n-2]], inst->X[workSolPath[n-1]], inst->Y[workSolPath[n-1]], ewt, roundFlag);
+        lastCost = computeEdgeCost(inst->X[workSolPath[n-1]], inst->Y[workSolPath[n-1]], inst->X[workSolPath[0]],   inst->Y[workSolPath[0]],   ewt, roundFlag);
     #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-        thSpecific->workingSol.cost += inst->edgeCostMat[workSolPath[n-2] * n + workSolPath[n-1]] + 
-                                       inst->edgeCostMat[workSolPath[n-1] * n + workSolPath[0]];
+        secondToLastCost = inst->edgeCostMat[workSolPath[n-2] * n + workSolPath[n-1]];
+        lastCost = inst->edgeCostMat[workSolPath[n-1] * n + workSolPath[0]];
     #endif
+
+    thSpecific->workingSol.cost += cvtFloat2Cost(secondToLastCost);
+    thSpecific->workingSol.cost += cvtFloat2Cost(lastCost);
 }
 
 static inline void swapElemsInThSpecific(ThreadSpecificData *thSpecific, int pos1, int pos2)
@@ -350,7 +355,7 @@ static void updateBestSolution(ThreadSpecificData *thSpecific)
         if (!checkSolution(newBest))
 		    throwError(newBest->instance, newBest, "updateBestSolution: newBest Solution is not valid");
 
-    LOG(LOG_LVL_LOG, "Found better solution: cost = %f", newBest->cost);
+    LOG(LOG_LVL_LOG, "Found better solution: cost = %lf", cvtCost2Double(newBest->cost));
 
     register int *temp;
     swapElems(bestSol->indexPath, newBest->indexPath, temp);

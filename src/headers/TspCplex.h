@@ -28,7 +28,7 @@ typedef struct
 	int iterNum;
 	pthread_mutex_t mutex;
 
-	double bestCost;
+	__uint128_t bestCost;
 	int *bestSuccessors;
 } CallbackData;
 
@@ -75,7 +75,7 @@ void cvtCPXtoSuccessors(double *xstar, int ncols, int nNodes, SubtoursData *subD
 * @param inst Pointer to the instance of the problem
 * @result Cost of the solution
 */
-double computeSuccessorsSolCost(int *successors, Instance *inst);
+__uint128_t computeSuccessorsSolCost(int *successors, Instance *inst);
 
 /*!
 * @brief Convert a successors array in a standard Solution struct
@@ -114,7 +114,7 @@ int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr c
 * @attention Mutex only locks bestSuccessorsSol and bestCost, the other ones must be thread-local data
 * @result Cost of the Repaired Solution
 */
-double PatchingHeuristic(SubtoursData *sub, Instance *inst);
+__uint128_t PatchingHeuristic(SubtoursData *sub, Instance *inst);
 
 /*!
 * @brief Check Solution in the form of an array of successors

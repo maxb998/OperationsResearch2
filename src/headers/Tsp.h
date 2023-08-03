@@ -4,6 +4,8 @@
 #include "TspBase.h"
 #include "EdgeCostFunctions.h"
 
+#include "limits.h"
+
 //###################################################################################################################################
 // ARG_PARSER 
 //###################################################################################################################################
@@ -61,6 +63,12 @@ void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointC
 
 // Use rand_r to generate a random integer in the range [min,max) while avoiding low entropy bits (statiscally better than doing "rand() % (n+1)") https://codereview.stackexchange.com/questions/159604/uniform-random-numbers-in-an-integer-interval-in-c
 #define genRandom(rndStatePtr,min,max) (int)((long)rand_r(rndStatePtr) * (long)((max)-(min)) / (RAND_MAX + 1L)) + (min)
+
+// Convert float to fixed point 128 bit
+#define cvtFloat2Cost(fpVar) ((__uint128_t)((double)fpVar * (double)ULONG_MAX))
+
+// Convert fixed point 128bit to double
+#define cvtCost2Double(cost) ((double)cost / (double)ULONG_MAX)
 
 /*!
 * @brief Generate empty instance
@@ -128,7 +136,7 @@ bool checkSolution(Solution *sol);
 * @param sol Solution of which compute the cost.
 * @result cost of solution
 */
-double computeSolutionCost(Solution *sol);
+__uint128_t computeSolutionCost(Solution *sol);
 
 /*!
 * @brief Perform argsort using quicksort algorithm with random pivot

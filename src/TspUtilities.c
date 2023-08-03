@@ -72,7 +72,12 @@ static inline int nProcessors()
 
 Solution newSolution (Instance *inst)
 {
-    Solution s = { .cost = INFINITY, .execTime = 0., .instance = inst };
+    Solution s = {
+        .cost = -1LL,
+        .execTime = 0.,
+        .instance = inst 
+    };
+
     s.indexPath = malloc((inst->nNodes + AVX_VEC_SIZE) * sizeof(int)); // if changing the size of the malloc also change cloneSolution()
     if (!s.indexPath)
         throwError(inst, NULL, "newSolution: Failed to allocate memory");
@@ -186,26 +191,26 @@ bool checkSolution(Solution *sol)
         { LOG(LOG_LVL_CRITICAL, "SolutionCheck: node %d is not in the path", i); return false; }
     free(coveredNodes);
 
-    double recomputedCost = computeSolutionCost(sol);
+    __uint128_t recomputedCost = computeSolutionCost(sol);
 
     if (recomputedCost != sol->cost)
-    { LOG(LOG_LVL_CRITICAL, "SolutionCheck: Error in the computation of the pathCost. Recomputed Cost: %lf Cost in Solution: %lf", recomputedCost, sol->cost); return false; }
+    { LOG(LOG_LVL_CRITICAL, "SolutionCheck: Error in the computation of the pathCost. Recomputed Cost: %f Cost in Solution: %f", cvtCost2Double(recomputedCost), cvtCost2Double(sol->cost)); return false; }
 
     return true;
 }
 
-double computeSolutionCost(Solution *sol)
+__uint128_t computeSolutionCost(Solution *sol)
 {
     Instance *inst = sol->instance;
     int n = inst->nNodes;
     enum EdgeWeightType ewt = inst->params.edgeWeightType ;
     bool roundFlag = inst->params.roundWeights;
 
-    double cost = 0;
+    __uint128_t cost = 0;
     for (int i = 0; i < n - 1; i++)
-        cost += (double)computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i+1]], inst->Y[sol->indexPath[i+1]], ewt, roundFlag);
+        cost += cvtFloat2Cost(computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i+1]], inst->Y[sol->indexPath[i+1]], ewt, roundFlag));
     
-    cost += (double)computeEdgeCost(inst->X[sol->indexPath[n-1]], inst->Y[sol->indexPath[n-1]], inst->X[sol->indexPath[0]], inst->Y[sol->indexPath[0]], ewt, roundFlag);
+    cost += cvtFloat2Cost(computeEdgeCost(inst->X[sol->indexPath[n-1]], inst->Y[sol->indexPath[n-1]], inst->X[sol->indexPath[0]], inst->Y[sol->indexPath[0]], ewt, roundFlag));
 
     return cost;
 }

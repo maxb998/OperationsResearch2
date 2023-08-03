@@ -144,8 +144,8 @@ void applyExtraMileage(Solution *sol, int nCovered, unsigned int *rndState)
     // recompute cost of nCovered loop
     sol->cost = 0;
     for (int i = 0; i < nCovered-1; i++)
-        sol->cost += computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i+1]], inst->Y[sol->indexPath[i+1]], inst->params.edgeWeightType, inst->params.roundWeights);
-    sol->cost += computeEdgeCost(inst->X[sol->indexPath[nCovered-1]], inst->Y[sol->indexPath[nCovered-1]], inst->X[sol->indexPath[0]], inst->Y[sol->indexPath[0]], inst->params.edgeWeightType, inst->params.roundWeights);
+        sol->cost += cvtFloat2Cost(computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i+1]], inst->Y[sol->indexPath[i+1]], inst->params.edgeWeightType, inst->params.roundWeights));
+    sol->cost += cvtFloat2Cost(computeEdgeCost(inst->X[sol->indexPath[nCovered-1]], inst->Y[sol->indexPath[nCovered-1]], inst->X[sol->indexPath[0]], inst->Y[sol->indexPath[0]], inst->params.edgeWeightType, inst->params.roundWeights));
             
     // make thSpecific.workingSol consistent with the Extra Mileage implementation(only nodes after nCovered)
     bool *isNodeInSol = calloc(n, sizeof(bool));
@@ -310,9 +310,9 @@ static void initialization(ThreadSpecificData *thSpecific)
 
     // update cost
     #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-        thSpecific->workingSol.cost = computeEdgeCost(inst->X[indexPath[0]], inst->Y[indexPath[0]], inst->X[indexPath[1]], inst->Y[indexPath[1]], inst->params.edgeWeightType , inst->params.roundWeights) * 2.;
+        thSpecific->workingSol.cost = cvtFloat2Cost(computeEdgeCost(inst->X[indexPath[0]], inst->Y[indexPath[0]], inst->X[indexPath[1]], inst->Y[indexPath[1]], inst->params.edgeWeightType , inst->params.roundWeights) * 2.);
     #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-        thSpecific->workingSol.cost = inst->edgeCostMat[indexPath[0] * inst->nNodes + indexPath[1]] * 2;
+        thSpecific->workingSol.cost = cvtFloat2Cost(inst->edgeCostMat[indexPath[0] * inst->nNodes + indexPath[1]] * 2);
     #endif
 }
 
@@ -415,7 +415,7 @@ static void updateBestSolution(ThreadSpecificData *thSpecific)
 		    throwError(newBest->instance, newBest, "updateBestSolutionEM: newBest Solution is not valid");
         }
     
-    LOG(LOG_LVL_LOG, "Found better solution: cost = %f", newBest->cost);
+    LOG(LOG_LVL_LOG, "Found better solution: cost = %lf", cvtCost2Double(newBest->cost));
 
     register int *temp;
     swapElems(bestSol->indexPath, newBest->indexPath, temp);
@@ -519,10 +519,37 @@ static bool checkSolutionIntegrity(ThreadSpecificData *thSpecific)
 
 static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCovered, SuccessorData succ)
 {
+    int *indexPath = thSpecific->workingSol.indexPath;
+
     nCovered++;
 
+    float oldEdgeCost, newEdge0Cost, newEdge1Cost;
+
     // update cost
-    thSpecific->workingSol.cost += succ.extraCost;
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        enum EdgeWeightType ewt = thSpecific->workingSol.instance->params.edgeWeightType;
+        bool roundWeights = thSpecific->workingSol.instance->params.roundWeights;
+        oldEdgeCost = computeEdgeCost(thSpecific->X[succ.anchor], thSpecific->Y[succ.anchor], thSpecific->X[succ.anchor+1], thSpecific->Y[succ.anchor+1], ewt, roundWeights);
+        newEdge0Cost = computeEdgeCost(thSpecific->X[succ.anchor], thSpecific->Y[succ.anchor], thSpecific->X[succ.node], thSpecific->Y[succ.node], ewt, roundWeights);
+        newEdge1Cost = computeEdgeCost(thSpecific->X[succ.node], thSpecific->Y[succ.node], thSpecific->X[succ.anchor+1], thSpecific->Y[succ.anchor+1], ewt, roundWeights);
+    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+        Instance *inst = thSpecific->workingSol.instance;
+        enum EdgeWeightType ewt = inst->params.edgeWeightType;
+        bool roundWeights = inst->params.roundWeights;
+        oldEdgeCost = computeEdgeCost(inst->X[indexPath[succ.anchor]], inst->Y[indexPath[succ.anchor]], inst->X[indexPath[succ.anchor+1]], inst->Y[indexPath[succ.anchor+1]], ewt, roundWeights);
+        newEdge0Cost = computeEdgeCost(inst->X[indexPath[succ.anchor]], inst->Y[indexPath[succ.anchor]], inst->X[indexPath[succ.node]], inst->Y[indexPath[succ.node]], ewt, roundWeights);
+        newEdge1Cost = computeEdgeCost(inst->X[indexPath[succ.node]], inst->Y[indexPath[succ.node]], inst->X[indexPath[succ.anchor+1]], inst->Y[indexPath[succ.anchor+1]], ewt, roundWeights);
+    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+        Instance *inst = thSpecific->workingSol.instance;
+        int n = inst->nNodes;
+        oldEdgeCost = inst->edgeCostMat[indexPath[succ.anchor] * n + indexPath[succ.anchor+1]];
+        newEdge0Cost = inst->edgeCostMat[indexPath[succ.anchor] * n + indexPath[succ.node]];
+        newEdge1Cost = inst->edgeCostMat[indexPath[succ.node] * n + indexPath[succ.anchor+1]];
+    #endif
+
+    thSpecific->workingSol.cost -= cvtFloat2Cost(oldEdgeCost);
+    thSpecific->workingSol.cost += cvtFloat2Cost(newEdge0Cost);
+    thSpecific->workingSol.cost += cvtFloat2Cost(newEdge1Cost);
 
     // save best value
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
@@ -530,14 +557,14 @@ static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCov
         bestX = thSpecific->X[succ.node];
         bestY = thSpecific->Y[succ.node];
     #endif
-    int bestIndex = thSpecific->workingSol.indexPath[succ.node];
+    int bestIndex = indexPath[succ.node];
 
     // place elements to insert in the tour at the end of the covered nodes "set"
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
         thSpecific->X[succ.node] = thSpecific->X[nCovered];
         thSpecific->Y[succ.node] = thSpecific->Y[nCovered];
     #endif
-    thSpecific->workingSol.indexPath[succ.node] = thSpecific->workingSol.indexPath[nCovered];
+    indexPath[succ.node] = indexPath[nCovered];
 
     int i = nCovered;
 
@@ -547,10 +574,10 @@ static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCov
         {
             __m256 xVec = _mm256_loadu_ps(&thSpecific->X[i]);
             __m256 yVec = _mm256_loadu_ps(&thSpecific->Y[i]);
-            __m256i indexVec = _mm256_loadu_si256((__m256i_u*)&thSpecific->workingSol.indexPath[i]);
+            __m256i indexVec = _mm256_loadu_si256((__m256i_u*)&indexPath[i]);
             _mm256_storeu_ps(&thSpecific->X[i + 1], xVec);
             _mm256_storeu_ps(&thSpecific->Y[i + 1], yVec);
-            _mm256_storeu_si256((__m256i_u*)&thSpecific->workingSol.indexPath[i + 1], indexVec);
+            _mm256_storeu_si256((__m256i_u*)&indexPath[i + 1], indexVec);
         }
         i += AVX_VEC_SIZE;
     #endif
@@ -562,7 +589,7 @@ static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCov
             thSpecific->X[i+1] = thSpecific->X[i];
             thSpecific->Y[i+1] = thSpecific->Y[i];
         #endif
-        thSpecific->workingSol.indexPath[i+1] = thSpecific->workingSol.indexPath[i];
+        indexPath[i+1] = indexPath[i];
     }
 
     i++;
@@ -571,9 +598,9 @@ static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCov
         thSpecific->X[i] = bestX;
         thSpecific->Y[i] = bestY;
     #endif
-    thSpecific->workingSol.indexPath[i] = bestIndex;
+    indexPath[i] = bestIndex;
 
-    LOG(LOG_LVL_EVERYTHING, "Extra Mileage Solution Update: Node %d added to solution between nodes %d and %d", thSpecific->workingSol.indexPath[i], thSpecific->workingSol.indexPath[i-1], thSpecific->workingSol.indexPath[i+1]);
+    LOG(LOG_LVL_EVERYTHING, "Extra Mileage Solution Update: Node %d added to solution between nodes %d and %d", indexPath[i], indexPath[i-1], indexPath[i+1]);
 }
 
 #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)

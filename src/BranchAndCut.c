@@ -7,7 +7,7 @@
 
 
 // Function to post the solution to cplex. Vals and indexes are two allocated portions of memory of ncols elements each.
-static int PostSolution(CPXCALLBACKCONTEXTptr context, Instance *inst, int ncols, int *successors, double cost, double *vals, int *indexes);
+static int PostSolution(CPXCALLBACKCONTEXTptr context, Instance *inst, int ncols, int *successors, __uint128_t cost, double *vals, int *indexes);
 
 // Callback for adding the lazy subtour elimination cuts
 
@@ -60,7 +60,7 @@ void BranchAndCut(Solution *sol, double tlim)
 	}
 	
 	cvtSuccessorsToSolution(cbData.bestSuccessors, sol);
-	sol->cost = cbData.bestCost;
+	//sol->cost = cbData.bestCost;
 
 	destroyCallbackData(&cbData);
 
@@ -98,7 +98,7 @@ int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG co
 	cbData->iterNum++;
 	pthread_mutex_unlock(&cbData->mutex);
 
-	double cost = INFINITY;
+	__uint128_t cost = -1LL;
 	if(sub.subtoursCount > 1)
 	{
 		double * coeffs = xstar;
@@ -122,7 +122,7 @@ int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG co
 
 		enum LogLevel lvl = LOG_LVL_NOTICE;
 		if (inst->params.mode != MODE_BRANCH_CUT) lvl = LOG_LVL_LOG;
-		LOG(lvl, "Branch & Cut: Incumbent updated -> cost = %lf", cost);
+		LOG(lvl, "Branch & Cut: Incumbent updated -> cost = %lf", cvtCost2Double(cost));
 
 		cbData->bestCost = cost;
 
@@ -145,7 +145,7 @@ CallbackData initCallbackData(CplexData *cpx, Solution *sol)
 		.inst = cpx->inst,
 		.ncols = CPXgetnumcols(cpx->env, cpx->lp),
 		.iterNum = 0,
-		.bestCost = INFINITY,
+		.bestCost = -1LL,
 	};
 
 	if (cbData.ncols <= 0)
@@ -170,7 +170,7 @@ void destroyCallbackData(CallbackData *cbData)
 	pthread_mutex_destroy(&cbData->mutex);
 }
 
-static int PostSolution(CPXCALLBACKCONTEXTptr context, Instance *inst, int ncols, int *successors, double cost, double *vals, int *indexes)
+static int PostSolution(CPXCALLBACKCONTEXTptr context, Instance *inst, int ncols, int *successors, __uint128_t cost, double *vals, int *indexes)
 {
 	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (!checkSuccessorSolution(inst, successors) != 0))
 		return 1;
@@ -189,7 +189,7 @@ static int PostSolution(CPXCALLBACKCONTEXTptr context, Instance *inst, int ncols
 	if (inst->params.logLevel >= LOG_LVL_DEBUG)
 		strat = CPXCALLBACKSOLUTION_CHECKFEAS;
 
-	int retVal = CPXcallbackpostheursoln(context, ncols, indexes, vals, cost, strat);
+	int retVal = CPXcallbackpostheursoln(context, ncols, indexes, vals, cvtCost2Double(cost), strat);
 
 	return retVal;
 }

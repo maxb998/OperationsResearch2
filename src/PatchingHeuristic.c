@@ -3,7 +3,7 @@
 
 static inline void findBestSubtourMerge(SubtoursData *sub, int subtoursCount, Instance *inst, int mergeIndexes[2], int *invertOrientation);
 
-double PatchingHeuristic(SubtoursData *sub, Instance *inst)
+__uint128_t PatchingHeuristic(SubtoursData *sub, Instance *inst)
 {
 	int n = inst->nNodes;
 
@@ -52,7 +52,7 @@ double PatchingHeuristic(SubtoursData *sub, Instance *inst)
 		subtoursCount--;
 	}
 
-	double cost = computeSuccessorsSolCost(sub->successors, inst);
+	__uint128_t cost = computeSuccessorsSolCost(sub->successors, inst);
 
 	return cost;
 }

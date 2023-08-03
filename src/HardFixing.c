@@ -14,7 +14,7 @@
 // Incremental/Decremental step in fixAmount during computation
 #define FIX_OFFSET 10
 // Number of non-improving iterations before fixAmount is increased
-#define STATIC_COST_THRESHOLD 10
+#define STATIC_COST_THRESHOLD 10LL
 
 typedef struct
 {
@@ -131,10 +131,7 @@ void HardFixing(Solution *sol, enum HardFixPolicy policy, double tlim)
     
     // update sol if necessary(very likely)
     if (hfAlloc.cbData.bestCost < sol->cost)
-    {
         cvtSuccessorsToSolution(hfAlloc.cbData.bestSuccessors, sol);
-        sol->cost = computeSolutionCost(sol);
-    }
     else
         LOG(LOG_LVL_WARNING, "HardFixing: Solution could not be optimized any further");
 
@@ -212,7 +209,7 @@ static void updateFixAmount(HardfixAllocatedMem *hfAlloc)
     // counts how for how many iterations the cost of the solution hasn't improved
     static int staticCostCount = -1;
     // keeps track of the previous iteration cost
-    static double oldCost = INFINITY;
+    static __uint128_t oldCost = -1LL;
 
     int n = hfAlloc->cpx.inst->nNodes;
 

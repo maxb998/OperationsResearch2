@@ -120,10 +120,7 @@ void LocalBranching(Solution *sol, double timeLimit)
     
     // update sol if necessary(very likely)
     if (lbData.cbData.bestCost < sol->cost)
-    {
         cvtSuccessorsToSolution(lbData.cbData.bestSuccessors, sol);
-        sol->cost = computeSolutionCost(sol);
-    }
     else
         LOG(LOG_LVL_WARNING, "LocalBranching: Solution could not be optimized any further");
 
@@ -139,7 +136,7 @@ void LocalBranching(Solution *sol, double timeLimit)
 
 static void updateK(LocalBranchingData *lbData)
 {
-    static double oldCost = INFINITY;
+    static __uint128_t oldCost = -1LL;
 
     if (oldCost > lbData->cbData.bestCost)
     {

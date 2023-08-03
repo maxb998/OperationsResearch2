@@ -28,7 +28,7 @@ void benders(Solution *sol, double tlim)
 	SubtoursData sub = initSubtoursData(n);
 
 	int *bestSuccessorsSol = malloc(n * sizeof(int));
-	double bestCost = sol->cost;
+	__uint128_t bestCost = sol->cost;
 	cvtSolutionToSuccessors(sol, bestSuccessorsSol);
 
 	int *indexes = malloc(ncols * sizeof(int));
@@ -80,7 +80,7 @@ void benders(Solution *sol, double tlim)
 		}
 		
 		// generate a solution using Repair Heuristic and check if it is better than the previous solutions
-		double cost = PatchingHeuristic(&sub, inst);
+		__uint128_t cost = PatchingHeuristic(&sub, inst);
 
 		if (!checkSuccessorSolution(inst, sub.successors))
 		{
@@ -96,7 +96,7 @@ void benders(Solution *sol, double tlim)
 			bestCost = cost;
 		}
 
-		LOG(LOG_LVL_LOG, "Subtours at iteration %d is %d. Cost of Repaired Solution: %lf  Incumbent: %lf", iterNum, sub.subtoursCount, cost, bestCost);
+		LOG(LOG_LVL_LOG, "Subtours at iteration %d is %d. Cost of Repaired Solution: %lf  Incumbent: %lf", iterNum, sub.subtoursCount, cvtCost2Double(cost), cvtCost2Double(bestCost));
 
 		iterNum++;
 	}
@@ -104,14 +104,12 @@ void benders(Solution *sol, double tlim)
 	free(xstar);
 	free(indexes);
 	destroyCplexData(&cpx);
-
 	destroySubtoursData(&sub);
 
 	cvtSuccessorsToSolution(bestSuccessorsSol, sol);
 
 	free(bestSuccessorsSol);
 
-	sol->cost = bestCost;
 	clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     currentTime = cvtTimespec2Double(timeStruct);
 	sol->execTime += currentTime - startTime;

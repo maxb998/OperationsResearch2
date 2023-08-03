@@ -210,7 +210,7 @@ static void *runVns(void *arg)
             pthread_mutex_lock(&thShared->mutex);
             if (thSpecific->workingSol.cost < thShared->bestSol.cost)
             {
-                LOG(LOG_LVL_LOG, "Found better solution: cost = %f", thSpecific->workingSol.cost);
+                LOG(LOG_LVL_LOG, "Found better solution: cost = %lf", cvtCost2Double(thSpecific->workingSol.cost));
                 cloneSolution(&thSpecific->workingSol, &thShared->bestSol);
             }
             pthread_mutex_unlock(&thShared->mutex);
@@ -287,16 +287,21 @@ static void kick(ThreadSpecificData *thSpecific)
 
     for (int i = 0; i < currentKickMagnitude; i++)
     {
+        float edgeCost0, edgeCost1;
+
         // subtract old cost
         #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-            thSpecific->workingSol.cost -= (computeEdgeCost(thSpecific->X[nodesToKick[i]-1], thSpecific->Y[nodesToKick[i]-1], thSpecific->X[nodesToKick[i]],   thSpecific->Y[nodesToKick[i]],   ewt, roundW) +
-                                            computeEdgeCost(thSpecific->X[nodesToKick[i]],   thSpecific->Y[nodesToKick[i]],   thSpecific->X[nodesToKick[i]+1], thSpecific->Y[nodesToKick[i]+1], ewt, roundW));
+            edgeCost0 = computeEdgeCost(thSpecific->X[nodesToKick[i]-1], thSpecific->Y[nodesToKick[i]-1], thSpecific->X[nodesToKick[i]],   thSpecific->Y[nodesToKick[i]],   ewt, roundW);
+            edgeCost1 = computeEdgeCost(thSpecific->X[nodesToKick[i]],   thSpecific->Y[nodesToKick[i]],   thSpecific->X[nodesToKick[i]+1], thSpecific->Y[nodesToKick[i]+1], ewt, roundW);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-            thSpecific->workingSol.cost -= (computeEdgeCost(inst->X[path[nodesToKick[i]-1]], inst->Y[path[nodesToKick[i]-1]], inst->X[path[nodesToKick[i]]],   inst->Y[path[nodesToKick[i]]],   ewt, roundW) +
-                                            computeEdgeCost(inst->X[path[nodesToKick[i]]],   inst->Y[path[nodesToKick[i]]],   inst->X[path[nodesToKick[i]+1]], inst->Y[path[nodesToKick[i]+1]], ewt, roundW));
+            edgeCost0 = computeEdgeCost(inst->X[path[nodesToKick[i]-1]], inst->Y[path[nodesToKick[i]-1]], inst->X[path[nodesToKick[i]]],   inst->Y[path[nodesToKick[i]]],   ewt, roundW);
+            edgeCost1 = computeEdgeCost(inst->X[path[nodesToKick[i]]],   inst->Y[path[nodesToKick[i]]],   inst->X[path[nodesToKick[i]+1]], inst->Y[path[nodesToKick[i]+1]], ewt, roundW);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-            thSpecific->workingSol.cost -= (inst->edgeCostMat[path[nodesToKick[i]] * n + path[nodesToKick[i]-1]] + inst->edgeCostMat[path[nodesToKick[i]] * n + path[nodesToKick[i]+1]]);
+            edgeCost0 = inst->edgeCostMat[path[nodesToKick[i]] * n + path[nodesToKick[i]-1]];
+            edgeCost1 = inst->edgeCostMat[path[nodesToKick[i]] * n + path[nodesToKick[i]+1]];
         #endif
+
+        thSpecific->workingSol.cost -= (cvtFloat2Cost(edgeCost0) + cvtFloat2Cost(edgeCost1));
 
         
         if (i < currentKickMagnitude-1)
@@ -318,15 +323,17 @@ static void kick(ThreadSpecificData *thSpecific)
 
         // add new cost
         #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-            thSpecific->workingSol.cost += (computeEdgeCost(thSpecific->X[nodesToKick[i]-1], thSpecific->Y[nodesToKick[i]-1], thSpecific->X[nodesToKick[i]],   thSpecific->Y[nodesToKick[i]],   ewt, roundW) +
-                                            computeEdgeCost(thSpecific->X[nodesToKick[i]],   thSpecific->Y[nodesToKick[i]],   thSpecific->X[nodesToKick[i]+1], thSpecific->Y[nodesToKick[i]+1], ewt, roundW));
+            edgeCost0 = computeEdgeCost(thSpecific->X[nodesToKick[i]-1], thSpecific->Y[nodesToKick[i]-1], thSpecific->X[nodesToKick[i]],   thSpecific->Y[nodesToKick[i]],   ewt, roundW);
+            edgeCost1 = computeEdgeCost(thSpecific->X[nodesToKick[i]],   thSpecific->Y[nodesToKick[i]],   thSpecific->X[nodesToKick[i]+1], thSpecific->Y[nodesToKick[i]+1], ewt, roundW);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-            thSpecific->workingSol.cost += computeEdgeCost(inst->X[path[nodesToKick[i]-1]], inst->Y[path[nodesToKick[i]-1]], inst->X[path[nodesToKick[i]]],   inst->Y[path[nodesToKick[i]]],   ewt, roundW) +
-                                           computeEdgeCost(inst->X[path[nodesToKick[i]]],   inst->Y[path[nodesToKick[i]]],   inst->X[path[nodesToKick[i]+1]], inst->Y[path[nodesToKick[i]+1]], ewt, roundW);
+            edgeCost0 = computeEdgeCost(inst->X[path[nodesToKick[i]-1]], inst->Y[path[nodesToKick[i]-1]], inst->X[path[nodesToKick[i]]],   inst->Y[path[nodesToKick[i]]],   ewt, roundW);
+            edgeCost1 = computeEdgeCost(inst->X[path[nodesToKick[i]]],   inst->Y[path[nodesToKick[i]]],   inst->X[path[nodesToKick[i]+1]], inst->Y[path[nodesToKick[i]+1]], ewt, roundW);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-            thSpecific->workingSol.cost += (inst->edgeCostMat[path[nodesToKick[i]] * n + path[nodesToKick[i]-1]] + inst->edgeCostMat[path[nodesToKick[i]] * n + path[nodesToKick[i]+1]]);
+            edgeCost0 = inst->edgeCostMat[path[nodesToKick[i]] * n + path[nodesToKick[i]-1]];
+            edgeCost1 = inst->edgeCostMat[path[nodesToKick[i]] * n + path[nodesToKick[i]+1]];
         #endif
         
+        thSpecific->workingSol.cost += (cvtFloat2Cost(edgeCost0) + cvtFloat2Cost(edgeCost1));
     }
 }
 

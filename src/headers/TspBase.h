@@ -77,7 +77,6 @@ enum NNFirstNodeOptions{
 enum EMInitType {
     EM_INIT_RANDOM,
     EM_INIT_FARTHEST_POINTS
-    //EM_INIT_HULL // won't be working for now
 };
 
 enum HardFixPolicy {
@@ -131,7 +130,7 @@ typedef struct
 
 typedef struct
 {
-    double cost;    // best solution found cost
+    __uint128_t cost;    // best solution found cost
 
 	double execTime;
 

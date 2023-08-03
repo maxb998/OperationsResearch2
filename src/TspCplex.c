@@ -154,6 +154,9 @@ void cvtSuccessorsToSolution(int *successors, Solution *sol)
 {
 	Instance *inst = sol->instance;
 	int n = inst->nNodes;
+
+	if (sol->instance->params.logLevel >= LOG_LVL_DEBUG)
+		checkSuccessorSolution(sol->instance, successors);
 	
 	// start from 0
 	sol->indexPath[0] = 0;
@@ -162,6 +165,8 @@ void cvtSuccessorsToSolution(int *successors, Solution *sol)
 		sol->indexPath[pos] = i;
 
 	sol->indexPath[n] = 0;
+
+	sol->cost = computeSolutionCost(sol);
 }
 
 void cvtSolutionToSuccessors(Solution *sol, int* successors)
@@ -223,28 +228,29 @@ int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr c
 	return retVal;
 }
 
-double computeSuccessorsSolCost(int *successors, Instance *inst)
+__uint128_t computeSuccessorsSolCost(int *successors, Instance *inst)
 {
 	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (!checkSuccessorSolution(inst, successors) != 0))
-		return -1.0;
+		throwError(inst, NULL, "computeSuccessorsSolCost: successors array passed as input is not feasible");
 
 	int n = inst->nNodes;
 	enum EdgeWeightType ewt = inst->params.edgeWeightType ;
 	bool roundFlag = inst->params.roundWeights;
 
-	double cost = 0;
+	__uint128_t cost = 0LL;
 
 	int i = 0;
 	int counter = 0;
 	do
 	{
 		int succ = successors[i];
-		cost += computeEdgeCost(inst->X[i], inst->Y[i], inst->X[succ], inst->Y[succ], ewt, roundFlag);
+		cost += cvtFloat2Cost(computeEdgeCost(inst->X[i], inst->Y[i], inst->X[succ], inst->Y[succ], ewt, roundFlag));
 		i = succ;
 
 		if (counter > n)
 			throwError(inst, NULL, "computeSuccessorsSolCost: There are subtours inside the successor array even after repair heuristic");
 		counter++;
+
 	} while (i != 0);
 	
 	return cost;

@@ -125,7 +125,7 @@ void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y)
         double currentTime = cvtTimespec2Double(timeStruct);
         if (printPerformanceLog && (currentTime - printTimeSec > LOG_INTERVAL))
         {   
-            LOG(LOG_LVL_LOG, "2Opt running: cost is %lf at iteration %4lu with last optimization of %f", sol->cost, data.iter, -bestFix.costOffset);
+            LOG(LOG_LVL_LOG, "2Opt running: cost is %lf at iteration %4lu with last optimization of %lf", cvtCost2Double(sol->cost), data.iter, -bestFix.costOffset);
             printTimeSec = currentTime;
         }
         data.iter++;
@@ -146,8 +146,36 @@ static inline void updateSolution(_2optData *data, _2optMoveData bestFix)
 {
     Solution *sol = data->sol;
 
+    float oldEdge0Cost, oldEdge1Cost, altEdge0Cost, altEdge1Cost;
+
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        enum EdgeWeightType ewt = sol->instance->params.edgeWeightType;
+        bool roundWeights = sol->instance->params.roundWeights;
+        oldEdge0Cost = computeEdgeCost(data->X[bestFix.edge0], data->Y[bestFix.edge0], data->X[bestFix.edge0+1], data->Y[bestFix.edge0+1], ewt, roundWeights);
+        oldEdge1Cost = computeEdgeCost(data->X[bestFix.edge1], data->Y[bestFix.edge1], data->X[bestFix.edge1+1], data->Y[bestFix.edge1+1], ewt, roundWeights);
+        altEdge0Cost = computeEdgeCost(data->X[bestFix.edge0], data->Y[bestFix.edge0], data->X[bestFix.edge1], data->Y[bestFix.edge1], ewt, roundWeights);
+        altEdge1Cost = computeEdgeCost(data->X[bestFix.edge0+1], data->Y[bestFix.edge0+1], data->X[bestFix.edge1+1], data->Y[bestFix.edge1+1], ewt, roundWeights);
+    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+        Instance *inst = sol->instance;
+        int *indexPath = sol->indexPath;
+        enum EdgeWeightType ewt = inst->params.edgeWeightType;
+        bool roundWeights = inst->params.roundWeights;
+        oldEdge0Cost = computeEdgeCost(inst->X[indexPath[bestFix.edge0]], inst->Y[indexPath[bestFix.edge0]], inst->X[indexPath[bestFix.edge0+1]], inst->Y[indexPath[bestFix.edge0+1]], ewt, roundWeights);
+        oldEdge1Cost = computeEdgeCost(inst->X[indexPath[bestFix.edge1]], inst->Y[indexPath[bestFix.edge1]], inst->X[indexPath[bestFix.edge1+1]], inst->Y[indexPath[bestFix.edge1+1]], ewt, roundWeights);
+        altEdge0Cost = computeEdgeCost(inst->X[indexPath[bestFix.edge0]], inst->Y[indexPath[bestFix.edge0]], inst->X[indexPath[bestFix.edge1]], inst->Y[indexPath[bestFix.edge1]], ewt, roundWeights);
+        altEdge1Cost = computeEdgeCost(inst->X[indexPath[bestFix.edge0+1]], inst->Y[indexPath[bestFix.edge0+1]], inst->X[indexPath[bestFix.edge1+1]], inst->Y[indexPath[bestFix.edge1+1]], ewt, roundWeights);
+    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+        Instance *inst = sol->instance;
+        int *indexPath = sol->indexPath;
+        int n = inst->nNodes;
+        oldEdge0Cost = inst->edgeCostMat[indexPath[bestFix.edge0] * n + indexPath[bestFix.edge0+1]];
+        oldEdge1Cost = inst->edgeCostMat[indexPath[bestFix.edge1] * n + indexPath[bestFix.edge1+1]];
+        altEdge0Cost = inst->edgeCostMat[indexPath[bestFix.edge0] * n + indexPath[bestFix.edge1]];
+        altEdge1Cost = inst->edgeCostMat[indexPath[bestFix.edge0+1] * n + indexPath[bestFix.edge1+1]];
+    #endif
+
     // update cost
-    sol->cost += (double)bestFix.costOffset;
+    sol->cost += cvtFloat2Cost(altEdge0Cost) + cvtFloat2Cost(altEdge1Cost) - cvtFloat2Cost(oldEdge0Cost) - cvtFloat2Cost(oldEdge1Cost);
 
     /*
      *      bestSolIDs = { 0 1 2 3 4 5 6 7 8 9 }
@@ -165,9 +193,10 @@ static inline void updateSolution(_2optData *data, _2optMoveData bestFix)
     static int updateCount = 0; // can generate issues with vns
     updateCount++;
 
-    LOG(LOG_LVL_EVERYTHING, "2Opt: [%d] Updating solution by switching edge (%d,%d) with edge (%d,%d) improving cost by %f", updateCount,
+    LOG(LOG_LVL_EVERYTHING, "2Opt: [%d] Updating solution by switching edge (%d,%d) with edge (%d,%d) improving cost by %f. New Cost = %lf", updateCount,
         sol->indexPath[bestFix.edge0], sol->indexPath[bestFix.edge0 + 1],
-        sol->indexPath[bestFix.edge1], sol->indexPath[bestFix.edge1 + 1], bestFix.costOffset);
+        sol->indexPath[bestFix.edge1], sol->indexPath[bestFix.edge1 + 1],
+        bestFix.costOffset, cvtCost2Double(sol->cost));
 
 
     while (smallID < bigID)
