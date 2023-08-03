@@ -302,14 +302,14 @@ static void readTspLine(char *line, int length, int index, Instance *inst, int k
     while (i < length)
     {
         // scroll past any black spaces
-        if (line[i] == ' ')
+        if ((line[i] == ' ') || (line[i] == '\n'))
         {
             i++;
             continue;
         }
 
         if (numID >= 3)
-            throwError(inst, NULL, "Line %lu is not formatted correctly. More than 3 numbers for each line are not supported.", keywordsLinesCount + index + 1);
+            throwError(inst, NULL, "Line %lu is not formatted correctly. More than 3 numbers for each line are not supported", keywordsLinesCount + index + 1);
 
         // convert number and save into array
         char *oldEndPtr = endPtr;
