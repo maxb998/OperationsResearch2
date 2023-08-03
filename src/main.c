@@ -94,6 +94,11 @@ int main (int argc, char *argv[])
     
     if (inst.params.saveSolution)
         saveSolution(&sol, argc, argv);
+    
+    printf(SEPARATOR_STR);
+    printf("Total runtime = %lf seconds\n", sol.execTime);
+    printf("Final cost = %lf\n", cvtCost2Double(sol.cost));
+    printf(SEPARATOR_STR);
 
     destroySolution(&sol);
     destroyInstance(&inst);

@@ -66,9 +66,9 @@ static const char *modeStrings[] = {
 #define GRASP_DOC "\
 Specify to Grasp mode (DEFAULT=random(0.1))\n" \
 SUBOPT_BLANKSPACE SUBOPT_GRASP_ALMOSTBEST " : The Use of grasp will be limited to selecting another good choice with default probability value\n" \
-SUBOPT_BLANKSPACE SUBOPT_GRASP_ALMOSTBEST "(<GRASP_CHANCE>) : Same as \"almostbest\" but the selection of the secondary choice happens with probability specified with <GRASP_CHANCE>\n" \
+SUBOPT_BLANKSPACE SUBOPT_GRASP_ALMOSTBEST "[<GRASP_CHANCE>] : Same as \"almostbest\" but the selection of the secondary choice happens with probability specified with <GRASP_CHANCE>\n" \
 SUBOPT_BLANKSPACE SUBOPT_GRASP_RANDOM "     : At every iteration have a completely random choice with default probability\n" \
-SUBOPT_BLANKSPACE SUBOPT_GRASP_RANDOM "(<GRASP_CHANCE>)     : Same as \"random\" but the probability of the random choice is specified with <GRASP_CHANCE>\n"
+SUBOPT_BLANKSPACE SUBOPT_GRASP_RANDOM "[<GRASP_CHANCE>]     : Same as \"random\" but the probability of the random choice is specified with <GRASP_CHANCE>\n"
 
 static const char *graspStrings[] = { SUBOPT_GRASP_ALMOSTBEST, SUBOPT_GRASP_RANDOM };
 
@@ -304,13 +304,13 @@ static int parseGrasp(char *arg, Instance *inst)
 
         // check if GRASP_CHANCE is also specified
         int graspChancePosStart = (int)strlen(graspStrings[GRASP_RANDOM]);
-        if (arg[graspChancePosStart] == '(')
+        if (arg[graspChancePosStart] == '[')
         {
             char *endPtr;
             double cvt = strtod(&arg[graspChancePosStart + 1], &endPtr);
-            if (*endPtr != ')')
+            if (*endPtr != ']')
             {
-                LOG(LOG_LVL_ERROR, "Couldn't find the ')' after GRASP_CHANCE. It must be placed directly after the number");
+                LOG(LOG_LVL_ERROR, "Couldn't find the ']' after GRASP_CHANCE. It must be placed directly after the number");
                 return ARGP_ERR_UNKNOWN;
             }
             if ((cvt <= 0) || (cvt > 1))
@@ -319,7 +319,7 @@ static int parseGrasp(char *arg, Instance *inst)
                 return ARGP_ERR_UNKNOWN;
             }
             if (endPtr[1] != 0)
-                LOG(LOG_LVL_WARNING, "There are elements after the ')'. They will be ignored");
+                LOG(LOG_LVL_WARNING, "There are elements after the ']'. They will be ignored");
             inst->params.graspChance = cvt;
         }
     }
