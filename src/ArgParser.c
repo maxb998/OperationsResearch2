@@ -20,16 +20,6 @@
 #define SUBOPT_GRASP_ALMOSTBEST "almostbest"
 #define SUBOPT_GRASP_RANDOM "random"
 
-#define SUBOPT_NN_RANDOM "random"
-#define SUBOPT_NN_TRYALL "tryall"
-
-#define SUBOPT_EM_RANDOM "random"
-#define SUBOPT_EM_FARTHEST "farthest"
-//#define SUBOPT_EM_HULL "hull"
-
-#define SUBOPT_HARDFIX_RANDOM "random"
-#define SUBOPT_HARDFIX_SMALL "small"
-
 #define SUBOPT_LOG_ERROR "error"
 #define SUBOPT_LOG_CRITICAL "critical"
 #define SUBOPT_LOG_WARNING "warning"
@@ -82,23 +72,6 @@ SUBOPT_BLANKSPACE SUBOPT_GRASP_RANDOM "(<GRASP_CHANCE>)     : Same as \"random\"
 
 static const char *graspStrings[] = { SUBOPT_GRASP_ALMOSTBEST, SUBOPT_GRASP_RANDOM };
 
-#define NN_OPTIONS_DOC "\
-Specify the way the first node is selected when using Nearest Neighbor anywhere in the heuristic (DEFAULT=random)\n" \
-SUBOPT_BLANKSPACE SUBOPT_NN_RANDOM "     : Select a node at random\n" \
-SUBOPT_BLANKSPACE SUBOPT_NN_TRYALL "     : Try starting from each node(if time limit allows)\n"
-
-static const char *nnOptionsStrings[] = { SUBOPT_NN_RANDOM, SUBOPT_NN_TRYALL };
-static const int nnOptionsCount = sizeof(nnOptionsStrings)/sizeof(*nnOptionsStrings);
-
-#define EM_OPTIONS_DOC "\
-Specify the way Extra Mileage heuristic is initialized every time it's called (DEFAULT=random)\n" \
-SUBOPT_BLANKSPACE SUBOPT_EM_RANDOM "     : Use two random nodes\n" \
-SUBOPT_BLANKSPACE SUBOPT_EM_FARTHEST "   : Use farthest nodes\n"
-//hull                : Compute the hull of the set using quickhull algorthim and use it as initialization.
-
-static const char *emOptionsStrings[] = { SUBOPT_EM_RANDOM, SUBOPT_EM_FARTHEST }; // hull
-static const int emOptionsCount = sizeof(emOptionsStrings)/sizeof(*emOptionsStrings);
-
 #define METAHEURISTICS_INIT_MODE_DOC "\
 Specify the heuristic that vns shall use at the start when finding the base solution (DEFAULT=nn)\n" \
 DOC_NN DOC_EM
@@ -113,14 +86,6 @@ DOC_NN DOC_EM DOC_TABU DOC_VNS DOC_ANNEALING DOC_GENETIC
 Specify the type of heuristic to use when computing a warm-start solution\n" \
 DOC_NN DOC_EM DOC_TABU DOC_VNS DOC_ANNEALING DOC_GENETIC
 #define WARM_START_MODES_COUNT (HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT)
-
-#define HARDFIX_POLICY_DOC "\
-Specify the type of policy Hard Fixing should use when fixing edges\n" \
-SUBOPT_BLANKSPACE SUBOPT_HARDFIX_RANDOM "   : Fix random edges\n" \
-SUBOPT_BLANKSPACE SUBOPT_HARDFIX_SMALL "    : Fix edges with smallest cost in solution\n"
-
-static const char *hardFixPolicyStrings[] = { SUBOPT_HARDFIX_RANDOM, SUBOPT_HARDFIX_SMALL };
-static const int hardfixOptionsCount = sizeof(hardFixPolicyStrings)/sizeof(*hardFixPolicyStrings);
 
 #define LOG_LEVEL_DOC "\
 Specify the log level (or verbosity level) of for the run. (DEFAULT=log\n" \
@@ -143,14 +108,13 @@ enum argpKeys{
     ARGP_2OPT='2',
     ARGP_TLIM='t',
 
-    ARGP_NN_MODE=257,
-    ARGP_EM_MODE,
-
-    ARGP_METAHEURISTICS_INIT_MODE,
+    ARGP_METAHEURISTICS_INIT_MODE=257,
     ARGP_MATHEURISTICS_INIT_MODE,
     ARGP_WARM_START_MODE,
 
-    ARGP_HARDFIX_POLICY,
+    ARGP_NN_TRYALL,
+    ARGP_EM_FARTHEST,
+    ARGP_HARDFIX_SMALLEST,
 
     ARGP_SEED,
     ARGP_NTHREADS='j',
@@ -183,20 +147,19 @@ void argParse(Instance * inst, int argc, char *argv[])
         { .name="2opt", .key=ARGP_2OPT, .arg=NULL, .flags=0, .doc="Specify to use 2-opt at the end of the selected heuristic\n", .group=2 },
         { .name="tlim", .key=ARGP_TLIM, .arg="UINT", .flags=0, .doc="Specify time limit for the execution\n", .group=2 },
 
-        { .name="nn-opt", .key=ARGP_NN_MODE, .arg="STRING", .flags=0, .doc=NN_OPTIONS_DOC, .group=3 },
-        { .name="em-opt", .key=ARGP_EM_MODE, .arg="STRING", .flags=0, .doc=EM_OPTIONS_DOC, .group=3 },
-
         { .name="metaheur-init-mode", .key=ARGP_METAHEURISTICS_INIT_MODE, .arg="STRING", .flags=0, .doc=METAHEURISTICS_INIT_MODE_DOC, .group=3 },
         { .name="matheur-init-mode", .key=ARGP_MATHEURISTICS_INIT_MODE, .arg="STRING", .flags=0, .doc=MATHEUR_INIT_MODE_DOC, .group=3 },
         { .name="warm-start-mode", .key=ARGP_WARM_START_MODE, .arg="STRING", .flags=0, .doc=WARM_START_MODE_DOC, .group=3 },
 
-        { .name="hardfix-policy", .key=ARGP_HARDFIX_POLICY, .arg="STRING", .flags=0, .doc=HARDFIX_POLICY_DOC, .group=3 },
+        { .name="nn-tryall", .key=ARGP_NN_TRYALL, .arg=NULL, .flags=0, .doc="Specify to make Nearest Neighbor start from each node instead of chosing a random one each time\n", .group=4 },
+        { .name="em-farthest", .key=ARGP_EM_FARTHEST, .arg=NULL, .flags=0, .doc="Specify to make Extra Mileage initialization the farthest nodes each time instead of a random one each time\n", .group=4 },
+        { .name="hardfix-smallest", .key=ARGP_HARDFIX_SMALLEST, .arg=NULL, .flags=0, .doc="Specify to make Hard Fixing fix only edges with smallest cost instead of fixing random edges\n", .group=4 },
 
-        { .name="seed", .key=ARGP_SEED, .arg="UINT", .flags=0, .doc="Random Seed [0,MAX_INT32] to use as random seed for the current run. If -1 seed will be random\n", .group=4 },
-        { .name="threads", .key=ARGP_NTHREADS, .arg="UINT", .flags=0, .doc="Maximum number of threads to use. If not specified gets maximum automatically\n", .group=4 },
-        { .name="roundcosts", .key=ARGP_ROUND, .arg=NULL, .flags=0, .doc="Specify this if yout want to use rounded version of edge cost\n", .group=4 },
-        { .name="plot", .key=ARGP_PLOT, .arg=NULL, .flags=0, .doc="Specify this if yout want to plot final result\n", .group=4 },
-        { .name="save", .key=ARGP_SAVE, .arg=NULL, .flags=0, .doc="Specify this if yout want to save final result in run/\n", .group=4 },
+        { .name="seed", .key=ARGP_SEED, .arg="UINT", .flags=0, .doc="Random Seed [0,MAX_INT32] to use as random seed for the current run. If -1 seed will be random\n", .group=5 },
+        { .name="threads", .key=ARGP_NTHREADS, .arg="UINT", .flags=0, .doc="Maximum number of threads to use. If not specified gets maximum automatically\n", .group=5 },
+        { .name="roundcosts", .key=ARGP_ROUND, .arg=NULL, .flags=0, .doc="Specify this if yout want to use rounded version of edge cost\n", .group=5 },
+        { .name="plot", .key=ARGP_PLOT, .arg=NULL, .flags=0, .doc="Specify this if yout want to plot final result\n", .group=5 },
+        { .name="save", .key=ARGP_SAVE, .arg=NULL, .flags=0, .doc="Specify this if yout want to save final result in run/\n", .group=5 },
         { .name="loglvl", .key=ARGP_LOG_LEVEL, .arg="STRING", .flags=0, .doc=LOG_LEVEL_DOC, .group=4 },
         { 0 }
     };
@@ -237,12 +200,6 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
     
     case ARGP_TLIM:
         return parseTlim(arg, inst);
-
-    case ARGP_NN_MODE:
-        return parseEnumOption(arg, (int*)&inst->params.nnFirstNodeOption, nnOptionsStrings, 0, nnOptionsCount, "nn-opt");
-    
-    case ARGP_EM_MODE:
-        return parseEnumOption(arg, (int*)&inst->params.emInitOption, emOptionsStrings, 0, emOptionsCount, "em-opt");
     
     case ARGP_METAHEURISTICS_INIT_MODE:
         return parseEnumOption(arg, (int*)&inst->params.metaheurInitMode, modeStrings, 0, HEURISTICS_MODES_COUNT, "metaheur-init-mode");
@@ -253,8 +210,17 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
     case ARGP_WARM_START_MODE:
         return parseEnumOption(arg, (int*)&inst->params.warmStartMode, modeStrings, 0, HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT, "warm-start-mode");
 
-    case ARGP_HARDFIX_POLICY:
-        return parseEnumOption(arg, (int*)&inst->params.hardFixPolicy, hardFixPolicyStrings, 0, hardfixOptionsCount, "hardfix-policy");
+    case ARGP_NN_TRYALL:
+        inst->params.nnFirstNodeOption = NN_FIRST_TRYALL;
+        break;
+    
+    case ARGP_EM_FARTHEST:
+        inst->params.emInitOption = EM_INIT_FARTHEST_POINTS;
+        break;
+
+    case ARGP_HARDFIX_SMALLEST:
+        inst->params.hardFixPolicy = HARDFIX_POLICY_SMALLEST;
+        break;
 
     case ARGP_SEED:
         return parseSeed(arg, inst);
@@ -464,20 +430,24 @@ void printInfo(Instance *inst)
     else
         printf(BLANK_SPACE "Time limit is not set\n");
     
-    // nn options
-    if (p->mode == MODE_NN || (p->mode >= HEURISTICS_MODES_COUNT  && (p->metaheurInitMode == MODE_NN && p->matheurInitMode == MODE_EM)) || 
-            (p->mode >= (HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT) && p->matheurInitMode == MODE_NN))
-        printf(BLANK_SPACE "Nearest Neighbor starting node set to: %s\n", nnOptionsStrings[p->nnFirstNodeOption]);
-    // em options
-    if (p->mode == MODE_EM || (p->mode >= HEURISTICS_MODES_COUNT  && (p->metaheurInitMode == MODE_EM && p->matheurInitMode == MODE_NN)) || 
-            (p->mode >= (HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT) && p->matheurInitMode == MODE_EM))
-        printf(BLANK_SPACE "Extra Mileage initialization set to: %s\n", emOptionsStrings[p->emInitOption]);
     // metaheuristics modes
     if (p->mode >= HEURISTICS_MODES_COUNT && (p->mode < HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT || p->matheurInitMode >= HEURISTICS_MODES_COUNT))
         printf(BLANK_SPACE "Metaheuristics initialization set to: %s\n", modeStrings[p->metaheurInitMode]);
     // matheuristics modes
     if (p->mode >= HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT)
         printf(BLANK_SPACE "Matheuristics initialization set to: %s\n", modeStrings[p->matheurInitMode]);
+
+    // nn options
+    if (p->mode == MODE_NN || (p->mode >= HEURISTICS_MODES_COUNT  && (p->metaheurInitMode == MODE_NN && p->matheurInitMode == MODE_EM)) || 
+            (p->mode >= (HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT) && p->matheurInitMode == MODE_NN))
+        printf(BLANK_SPACE "Nearest Neighbor starting node set to: %s\n", inst->params.nnFirstNodeOption == NN_FIRST_RANDOM ? "random" : "tryall");
+    // em options
+    if (p->mode == MODE_EM || (p->mode >= HEURISTICS_MODES_COUNT  && (p->metaheurInitMode == MODE_EM && p->matheurInitMode == MODE_NN)) || 
+            (p->mode >= (HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT) && p->matheurInitMode == MODE_EM))
+        printf(BLANK_SPACE "Extra Mileage initialization set to: %s\n", inst->params.emInitOption == EM_INIT_RANDOM ? "random" : "farthest");
+    // hardfix options
+    if (p->mode == MODE_HARDFIX)
+        printf(BLANK_SPACE "Hard Fixing policy set to: %s\n", inst->params.hardFixPolicy == HARDFIX_POLICY_RANDOM ? "random" : "smallest");
 
     // seed
     if (p->randomSeed != -1)

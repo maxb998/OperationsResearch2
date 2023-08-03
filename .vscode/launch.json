@@ -13,23 +13,22 @@
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
                 "--file", "data/a280.tsp",
-                "--mode", "nn",
+                "--mode", "hardfix",
 
                 "--grasp", "almostbest(0.02)",
                 //"--2opt",
                 "--tlim", "10",
 
-                //"--nn-opt", "tryall",
-                //"--em-opt", "random",
-
                 //"--metaheur-init-mode", "em",
                 //"--matheur-init-mode", "em",
                 //"--warm-start-mode", "em",
 
-                //"--hardfix-policy", "small",
+                "--nn-tryall",
+                "--em-farthest",
+                "--hardfix-smallest",
 
                 "--seed", "2023",
-                "--threads", "1",
+                "--threads", "4",
                 "--roundcosts",
                 "--plot", 
                 //"--save",
@@ -51,16 +50,15 @@
                 "--2opt",
                 "--tlim", "10",
 
-                //"--nn-opt", "tryall",
-                //"--em-opt", "random",
-
                 //"--metaheur-init-mode", "nn",
                 //"--matheur-init-mode", "vns",
                 //"--warm-start-mode", "tabu",
 
-                //"--hardfix-policy", "small",
+                //"--nn-tryall",
+                //"--em-farthest",
+                //"--hardfix-smallest",
 
-                "--seed", "2023",
+                //"--seed", "2023",
                 "--threads", "8",
                 //"--roundcosts",
                 "--plot", 
