@@ -381,7 +381,7 @@ static inline void farthestPointsInit(ThreadSpecificData *thSpecific)
             {
                 float currentCost;
                 #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-                    currentCost = computeSquaredEdgeCost(x1, y1, inst->X[j], inst->Y[j], inst->params.edgeWeightType, inst->params.roundWeights);
+                    currentCost = computeEdgeCost(x1, y1, inst->X[j], inst->Y[j], inst->params.edgeWeightType, inst->params.roundWeights);
                 #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
                     currentCost = inst->edgeCostMat[(size_t)i * (size_t)n + (size_t)j];
                 #endif

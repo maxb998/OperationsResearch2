@@ -385,7 +385,7 @@ static inline SuccessorData findSuccessorVectorized(ThreadSpecificData *thSpecif
     {
         // get distance first
         __m256 x2 = _mm256_loadu_ps(&thSpecific->X[i]), y2 = _mm256_loadu_ps(&thSpecific->Y[i]);
-        __m256 dist = computeSquaredEdgeCost_VEC(x1, y1, x2, y2, ewt, roundFlag);
+        __m256 dist = noSquaredRootEdgeCost_VEC(x1, y1, x2, y2, ewt);
 
         // get first minimum
         __m256i mask = _mm256_castps_si256(_mm256_cmp_ps(dist, minVec, _CMP_LT_OQ)); // set for "non-signaling" -> if one element is NaN than set as false
@@ -462,7 +462,7 @@ static inline SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, in
         SuccessorData currentSucc = { .node=node };
 
         #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-            currentSucc.cost = computeSquaredEdgeCost(x1, y1, inst->X[indexPath[node]], inst->Y[indexPath[node]], ewt, roundFlag);
+            currentSucc.cost = noSquaredRootEdgeCost(x1, y1, inst->X[indexPath[node]], inst->Y[indexPath[node]], ewt);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
             currentSucc.cost = inst->edgeCostMat[(size_t)lastAddedIndex * (size_t)n + (size_t)indexPath[node]];
         #endif
