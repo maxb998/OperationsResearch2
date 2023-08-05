@@ -292,7 +292,7 @@ static void applyNearestNeighbor(ThreadSpecificData *thSpecific, int firstNode)
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
                 successor.cost = computeEdgeCost(inst->X[workSolPath[i]], inst->Y[workSolPath[i]], inst->X[workSolPath[successor.node]], inst->Y[workSolPath[successor.node]], ewt, roundFlag);
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-                successor.cost = inst->edgeCostMat[workSolPath[i] * n + workSolPath[successor.node]];
+                successor.cost = inst->edgeCostMat[(size_t)workSolPath[i] * (size_t)n + (size_t)workSolPath[successor.node]];
             #endif
         }
         else
@@ -323,8 +323,8 @@ static void applyNearestNeighbor(ThreadSpecificData *thSpecific, int firstNode)
         secondToLastCost = computeEdgeCost(inst->X[workSolPath[n-2]], inst->Y[workSolPath[n-2]], inst->X[workSolPath[n-1]], inst->Y[workSolPath[n-1]], ewt, roundFlag);
         lastCost = computeEdgeCost(inst->X[workSolPath[n-1]], inst->Y[workSolPath[n-1]], inst->X[workSolPath[0]],   inst->Y[workSolPath[0]],   ewt, roundFlag);
     #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-        secondToLastCost = inst->edgeCostMat[workSolPath[n-2] * n + workSolPath[n-1]];
-        lastCost = inst->edgeCostMat[workSolPath[n-1] * n + workSolPath[0]];
+        secondToLastCost = inst->edgeCostMat[(size_t)workSolPath[n-2] * (size_t)n + (size_t)workSolPath[n-1]];
+        lastCost = inst->edgeCostMat[(size_t)workSolPath[n-1] * (size_t)n + (size_t)workSolPath[0]];
     #endif
 
     thSpecific->workingSol.cost += cvtFloat2Cost(secondToLastCost);
@@ -414,7 +414,7 @@ static inline SuccessorData findSuccessorVectorized(ThreadSpecificData *thSpecif
     {
         int rndIdx = 1;
         for (; rndIdx < AVX_VEC_SIZE - 1; rndIdx++)
-            if (rand_r(&thSpecific->rndState) > RAND_MAX / 2)
+            if (rand_r(&thSpecific->rndState) > graspThreshold)
                 break;
 
         successorSubIndex = sortedArgs[rndIdx];
@@ -464,7 +464,7 @@ static inline SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, in
         #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
             currentSucc.cost = computeSquaredEdgeCost(x1, y1, inst->X[indexPath[node]], inst->Y[indexPath[node]], ewt, roundFlag);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-            currentSucc.cost = inst->edgeCostMat[lastAddedIndex * n + indexPath[node]];
+            currentSucc.cost = inst->edgeCostMat[(size_t)lastAddedIndex * (size_t)n + (size_t)indexPath[node]];
         #endif
 
         for (int i = 0; i < BASE_GRASP_BEST_SAVE_BUFFER_SIZE; i++)
@@ -486,7 +486,7 @@ static inline SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, in
     {
         successorSubIndex = 1;
         for (; successorSubIndex < BASE_GRASP_BEST_SAVE_BUFFER_SIZE - 1; successorSubIndex++)
-            if (rand_r(&thSpecific->rndState) > RAND_MAX / 2)
+            if (rand_r(&thSpecific->rndState) > graspThreshold)
                 break;
     }
 

@@ -161,6 +161,7 @@ void applyExtraMileage(Solution *sol, int nCovered, unsigned int *rndState)
     ThreadSharedData unallocatedThShared = { .bestSol = { .instance = sol->instance } };
     ThreadSpecificData thSpecific = initThreadSpecificData(&unallocatedThShared, *rndState);
 
+    // must clone solution since ThreadSpecificData will free workingSol.indexPath and we don't want to free sol.indexPath
     cloneSolution(sol, &thSpecific.workingSol);
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
         for (int i = 0; i < (n + AVX_VEC_SIZE) * 2; i++)
@@ -312,7 +313,7 @@ static void initialization(ThreadSpecificData *thSpecific)
     #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
         thSpecific->workingSol.cost = cvtFloat2Cost(computeEdgeCost(inst->X[indexPath[0]], inst->Y[indexPath[0]], inst->X[indexPath[1]], inst->Y[indexPath[1]], inst->params.edgeWeightType , inst->params.roundWeights) * 2.);
     #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-        thSpecific->workingSol.cost = cvtFloat2Cost(inst->edgeCostMat[indexPath[0] * inst->nNodes + indexPath[1]] * 2);
+        thSpecific->workingSol.cost = cvtFloat2Cost(inst->edgeCostMat[(size_t)indexPath[0] * (size_t)inst->nNodes + (size_t)indexPath[1]] * 2UL);
     #endif
 }
 
@@ -321,7 +322,7 @@ static inline void farthestPointsInit(ThreadSpecificData *thSpecific)
     Instance *inst = thSpecific->workingSol.instance;
     int n = inst->nNodes;
 
-    #if (COMPUTE_OPTION_AVX == COMPUTE_OPTION_AVX)
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
         __m256 maxCostVec = _mm256_set1_ps(0), rowMaxCostVec = _mm256_set1_ps(0); // cost is always positive
         __m256i maxIndexVec1 = _mm256_set1_epi32(0), maxIndexVec2 = _mm256_set1_epi32(0);
         __m256i incrementVec = _mm256_set1_epi32(AVX_VEC_SIZE), ones = _mm256_set1_epi32(1);
@@ -370,11 +371,10 @@ static inline void farthestPointsInit(ThreadSpecificData *thSpecific)
         float maxCost = 0;
         for (int i = 0; i < n - 1; i++)
         {
-            // hope the compiler loads into the registers these variables that are accessed every time in the loop
-            float x1, y1;
             #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-                x1 = inst->X[i];
-                y1 = inst->Y[i];
+                // hope the compiler loads into the registers these variables that are accessed every time in the loop
+                float x1 = inst->X[i];
+                float y1 = inst->Y[i];
             #endif
 
             for (int j = i + 1; j < n; j++)
@@ -383,7 +383,7 @@ static inline void farthestPointsInit(ThreadSpecificData *thSpecific)
                 #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
                     currentCost = computeSquaredEdgeCost(x1, y1, inst->X[j], inst->Y[j], inst->params.edgeWeightType, inst->params.roundWeights);
                 #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-                    currentCost = inst->edgeCostMat[i * n + j];
+                    currentCost = inst->edgeCostMat[(size_t)i * (size_t)n + (size_t)j];
                 #endif
 
                 if (currentCost > maxCost)
@@ -473,9 +473,9 @@ static void applyExtraMileage_Internal(ThreadSpecificData *thSpecific, int nCove
                                  computeEdgeCost(inst->X[indexPath[succ.node  ]], inst->Y[indexPath[succ.node  ]], inst->X[indexPath[succ.anchor+1]], inst->Y[indexPath[succ.anchor+1]], ewt, roundW) -
                                  computeEdgeCost(inst->X[indexPath[succ.anchor]], inst->Y[indexPath[succ.anchor]], inst->X[indexPath[succ.anchor+1]], inst->Y[indexPath[succ.anchor+1]], ewt, roundW);
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-                succ.extraCost = inst->edgeCostMat[indexPath[succ.anchor] * n + indexPath[succ.node    ]] +
-                                 inst->edgeCostMat[indexPath[succ.node  ] * n + indexPath[succ.anchor+1]] -
-                                 inst->edgeCostMat[indexPath[succ.anchor] * n + indexPath[succ.anchor+1]];
+                succ.extraCost = inst->edgeCostMat[(size_t)indexPath[succ.anchor] * (size_t)n + (size_t)indexPath[succ.node    ]] +
+                                 inst->edgeCostMat[(size_t)indexPath[succ.node  ] * (size_t)n + (size_t)indexPath[succ.anchor+1]] -
+                                 inst->edgeCostMat[(size_t)indexPath[succ.anchor] * (size_t)n + (size_t)indexPath[succ.anchor+1]];
             #endif
         }
         else
@@ -542,9 +542,9 @@ static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCov
     #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
         Instance *inst = thSpecific->workingSol.instance;
         int n = inst->nNodes;
-        oldEdgeCost = inst->edgeCostMat[indexPath[succ.anchor] * n + indexPath[succ.anchor+1]];
-        newEdge0Cost = inst->edgeCostMat[indexPath[succ.anchor] * n + indexPath[succ.node]];
-        newEdge1Cost = inst->edgeCostMat[indexPath[succ.node] * n + indexPath[succ.anchor+1]];
+        oldEdgeCost = inst->edgeCostMat[(size_t)indexPath[succ.anchor] * (size_t)n + (size_t)indexPath[succ.anchor+1]];
+        newEdge0Cost = inst->edgeCostMat[(size_t)indexPath[succ.anchor] * (size_t)n + (size_t)indexPath[succ.node]];
+        newEdge1Cost = inst->edgeCostMat[(size_t)indexPath[succ.node] * (size_t)n + (size_t)indexPath[succ.anchor+1]];
     #endif
 
     thSpecific->workingSol.cost -= cvtFloat2Cost(oldEdgeCost);
@@ -709,7 +709,7 @@ static SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, int nCove
         #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
             currEdgeCost = computeEdgeCost(inst->X[indexPath[anchor]], inst->Y[indexPath[anchor]], inst->X[indexPath[anchor+1]], inst->Y[indexPath[anchor+1]], ewt, roundW);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-            currEdgeCost = inst->edgeCostMat[indexPath[anchor] * n + indexPath[anchor + 1]];
+            currEdgeCost = inst->edgeCostMat[(size_t)indexPath[anchor] * (size_t)n + (size_t)indexPath[anchor + 1]];
         #endif
 
         for (int node = nCovered+1; node < n + 1; node++) // covered node i from 0 to posCovered
@@ -720,8 +720,8 @@ static SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, int nCove
                 altEdgeCost = computeEdgeCost(inst->X[indexPath[node]], inst->Y[indexPath[node]], inst->X[indexPath[anchor  ]], inst->Y[indexPath[anchor  ]], ewt, roundW) + 
                               computeEdgeCost(inst->X[indexPath[node]], inst->Y[indexPath[node]], inst->X[indexPath[anchor+1]], inst->Y[indexPath[anchor+1]], ewt, roundW);
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-                altEdgeCost = inst->edgeCostMat[indexPath[node] * n + indexPath[anchor]] + 
-                              inst->edgeCostMat[indexPath[node] * n + indexPath[anchor + 1]];
+                altEdgeCost = inst->edgeCostMat[(size_t)indexPath[node] * (size_t)n + (size_t)indexPath[anchor]] + 
+                              inst->edgeCostMat[(size_t)indexPath[node] * (size_t)n + (size_t)indexPath[anchor + 1]];
             #endif
 
             SuccessorData currSucc = { .node=node, .anchor=anchor, .extraCost = altEdgeCost - currEdgeCost };

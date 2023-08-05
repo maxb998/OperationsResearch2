@@ -41,7 +41,12 @@ double computeCostMatrix(Instance *inst)
         throwError(inst, NULL, "Distance Matrix Computation: Edge weight type unsupported");
 
     // allocate memory
-    inst->edgeCostMat = malloc(inst->nNodes * inst->nNodes * sizeof(float));
+    size_t allocSize = (size_t)inst->nNodes * (size_t)inst->nNodes * sizeof(float);
+    inst->edgeCostMat = malloc(allocSize);
+    if (inst->edgeCostMat == NULL)
+        throwError(inst, NULL, "Could not allocate memory for the edgeCostMatrix. Required amount is %.2f GB", (float)allocSize / (1024.F * 1024.F * 1024.F));
+    else
+        LOG(LOG_LVL_LOG, "EdgeCostMatrix: %.2f GB of memory allocated successfully", (float)allocSize / (1024.F * 1024.F * 1024.F));
         
     // init data structure to pass to threads
     ThreadsData thInst = { .inst = inst, .nextRow = 0 };
@@ -87,15 +92,15 @@ static void * computeDistMatThread(void* arg)
         // CRITICAL REGION STARTED(INCLUDING WHILE CONDITION) ######################
         // here thread gets it's workspace
 
-        int row = th->nextRow;
+        int j = th->nextRow;
         th->nextRow++; // prevent other threads threads to access this thread working row
 
         pthread_mutex_unlock (&th->mutex);
         // CRITICAL REGION END #####################################################
 
         // now the thread can compute the distance matrix inside it's workspace (row)
-        __m256 x1 = _mm256_set1_ps(th->inst->X[row]);
-        __m256 y1 = _mm256_set1_ps(th->inst->Y[row]);
+        __m256 x1 = _mm256_set1_ps(th->inst->X[j]);
+        __m256 y1 = _mm256_set1_ps(th->inst->Y[j]);
 
         int i;
         for (i = 0; i < n - AVX_VEC_SIZE; i += AVX_VEC_SIZE)
@@ -106,7 +111,8 @@ static void * computeDistMatThread(void* arg)
             __m256 dist = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType , inst->params.roundWeights);
 
             // store result in memory
-            _mm256_storeu_ps(&inst->edgeCostMat[row * n + i], dist);
+            size_t matrixPos = (size_t)j * (size_t)n + (size_t)i;
+            _mm256_storeu_ps(&inst->edgeCostMat[matrixPos], dist);
         }
         
         // last elements must be done differently since a vector may override the contents of the next line
@@ -117,7 +123,8 @@ static void * computeDistMatThread(void* arg)
         __m256 dist = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType , inst->params.roundWeights);
 
         // maskstore the result avoiding to overwrite data
-        _mm256_maskstore_ps(&inst->edgeCostMat[row * n + i], _mm256_loadu_si256((__m256i*)mask), dist);
+        size_t matrixPos = (size_t)j * (size_t)n + (size_t)i;
+        _mm256_maskstore_ps(&inst->edgeCostMat[matrixPos], _mm256_loadu_si256((__m256i*)mask), dist);
     }
 
     // unlock mutex that was locked in the while condition

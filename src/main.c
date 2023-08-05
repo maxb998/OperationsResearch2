@@ -55,7 +55,7 @@ int main (int argc, char *argv[])
     {
         sol = runHeuristic(&inst, inst.params.metaheurInitMode, tlim * METAHEUR_INIT_RATIO );
         run2Opt(&sol);
-        runMetaheuristic(&sol, m, tlim * (1 - METAHEUR_INIT_RATIO));
+        runMetaheuristic(&sol, m, tlim - sol.execTime);
     }
     else
     {
@@ -65,7 +65,6 @@ int main (int argc, char *argv[])
         else
             init = inst.params.matheurInitMode;
 
-        double remainingTime = tlim;
         if (init <= MODE_EM)
         {
             sol = runHeuristic(&inst, init, tlim * MATHEUR_INIT_RATIO);
@@ -76,14 +75,12 @@ int main (int argc, char *argv[])
             sol = runHeuristic(&inst, inst.params.metaheurInitMode, tlim * METAHEUR_INIT_RATIO);
             runMetaheuristic(&sol, inst.params.matheurInitMode, tlim * MATHEUR_INIT_RATIO);
             run2Opt(&sol);
-            remainingTime -= tlim * METAHEUR_INIT_RATIO;
         }
-        remainingTime -= tlim * MATHEUR_INIT_RATIO;
 
         if (m <= MODE_BRANCH_CUT)
-            runExactSolver(&sol, m, remainingTime);
+            runExactSolver(&sol, m, tlim - sol.execTime);
         else
-            runMatheuristic(&sol, m, remainingTime);
+            runMatheuristic(&sol, m, tlim - sol.execTime);
     }
 
     if (inst.params.use2Opt)
