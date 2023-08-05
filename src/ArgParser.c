@@ -279,13 +279,13 @@ static int parseGrasp(char *arg, Instance *inst)
 
         // check if GRASP_CHANCE is also specified
         int graspChancePosStart = (int)strlen(graspStrings[GRASP_ALMOSTBEST]);
-        if (arg[graspChancePosStart] == '(')
+        if (arg[graspChancePosStart] == '[')
         {
             char *endPtr;
             double cvt = strtod(&arg[graspChancePosStart + 1], &endPtr);
-            if (*endPtr != ')')
+            if (*endPtr != ']')
             {
-                LOG(LOG_LVL_ERROR, "Couldn't find the ')' after GRASP_CHANCE. It must be placed directly after the number");
+                LOG(LOG_LVL_ERROR, "Couldn't find the ']' after GRASP_CHANCE. It must be placed directly after the number");
                 return ARGP_ERR_UNKNOWN;
             }
             if ((cvt <= 0) || (cvt > 1))

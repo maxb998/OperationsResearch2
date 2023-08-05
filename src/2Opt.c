@@ -168,10 +168,10 @@ static inline void updateSolution(_2optData *data, _2optMoveData bestFix)
         Instance *inst = sol->instance;
         int *indexPath = sol->indexPath;
         int n = inst->nNodes;
-        oldEdge0Cost = inst->edgeCostMat[indexPath[bestFix.edge0] * n + indexPath[bestFix.edge0+1]];
-        oldEdge1Cost = inst->edgeCostMat[indexPath[bestFix.edge1] * n + indexPath[bestFix.edge1+1]];
-        altEdge0Cost = inst->edgeCostMat[indexPath[bestFix.edge0] * n + indexPath[bestFix.edge1]];
-        altEdge1Cost = inst->edgeCostMat[indexPath[bestFix.edge0+1] * n + indexPath[bestFix.edge1+1]];
+        oldEdge0Cost = inst->edgeCostMat[(size_t)indexPath[bestFix.edge0] * (size_t)n + (size_t)indexPath[bestFix.edge0+1]];
+        oldEdge1Cost = inst->edgeCostMat[(size_t)indexPath[bestFix.edge1] * (size_t)n + (size_t)indexPath[bestFix.edge1+1]];
+        altEdge0Cost = inst->edgeCostMat[(size_t)indexPath[bestFix.edge0] * (size_t)n + (size_t)indexPath[bestFix.edge1]];
+        altEdge1Cost = inst->edgeCostMat[(size_t)indexPath[bestFix.edge0+1] * (size_t)n + (size_t)indexPath[bestFix.edge1+1]];
     #endif
 
     // update cost
@@ -302,7 +302,7 @@ static inline _2optMoveData _2optBestFixBase(_2optData *data)
         #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
             partSolEdgeWgt = computeEdgeCost(inst->X[sol->indexPath[currFix.edge0]], inst->Y[sol->indexPath[currFix.edge0]], inst->X[sol->indexPath[currFix.edge0 + 1]], inst->Y[sol->indexPath[currFix.edge0 + 1]], ewt, roundW);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-            partSolEdgeWgt = inst->edgeCostMat[sol->indexPath[currFix.edge0] * n + sol->indexPath[currFix.edge0 + 1]];
+            partSolEdgeWgt = inst->edgeCostMat[(size_t)sol->indexPath[currFix.edge0] * (size_t)n + (size_t)sol->indexPath[currFix.edge0 + 1]];
         #endif
 
         for (currFix.edge1 = 2 + currFix.edge0; (currFix.edge1 < n - 1) || ((currFix.edge1 < n) && (currFix.edge0 > 0)); currFix.edge1++)
@@ -311,7 +311,7 @@ static inline _2optMoveData _2optBestFixBase(_2optData *data)
             #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
                 solEdgeWgt = partSolEdgeWgt + computeEdgeCost(inst->X[sol->indexPath[currFix.edge1]], inst->Y[sol->indexPath[currFix.edge1]], inst->X[sol->indexPath[currFix.edge1 + 1]], inst->Y[sol->indexPath[currFix.edge1 + 1]], ewt, roundW);
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-                solEdgeWgt = partSolEdgeWgt + inst->edgeCostMat[sol->indexPath[currFix.edge1] * n + sol->indexPath[currFix.edge1 + 1]];
+                solEdgeWgt = partSolEdgeWgt + inst->edgeCostMat[(size_t)sol->indexPath[currFix.edge1] * (size_t)n + (size_t)sol->indexPath[currFix.edge1 + 1]];
             #endif
 
             // check the combined weight other combination of edges
@@ -320,7 +320,8 @@ static inline _2optMoveData _2optBestFixBase(_2optData *data)
                 altEdgeWgt = computeEdgeCost(inst->X[sol->indexPath[currFix.edge0]], inst->Y[sol->indexPath[currFix.edge0]], inst->X[sol->indexPath[currFix.edge1]], inst->Y[sol->indexPath[currFix.edge1]], ewt, roundW) + 
                              computeEdgeCost(inst->X[sol->indexPath[currFix.edge0 + 1]], inst->Y[sol->indexPath[currFix.edge0 + 1]], inst->X[sol->indexPath[currFix.edge1 + 1]], inst->Y[sol->indexPath[currFix.edge1 + 1]], ewt, roundW);
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-                altEdgeWgt = inst->edgeCostMat[sol->indexPath[currFix.edge0] * n + sol->indexPath[currFix.edge1]] + inst->edgeCostMat[sol->indexPath[currFix.edge1 + 1] * n + sol->indexPath[currFix.edge0 + 1]];
+                altEdgeWgt = inst->edgeCostMat[(size_t)sol->indexPath[currFix.edge0] * (size_t)n + (size_t)sol->indexPath[currFix.edge1]] + 
+                             inst->edgeCostMat[(size_t)sol->indexPath[currFix.edge1 + 1] * (size_t)n + (size_t)sol->indexPath[currFix.edge0 + 1]];
             #endif
 
             currFix.costOffset = altEdgeWgt - solEdgeWgt;

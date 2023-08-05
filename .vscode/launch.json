@@ -13,9 +13,9 @@
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
                 "--file", "data/a280.tsp",
-                "--mode", "hardfix",
+                "--mode", "vns",
 
-                "--grasp", "almostbest(0.02)",
+                "--grasp", "almostbest[0.02]",
                 //"--2opt",
                 "--tlim", "10",
 
@@ -23,14 +23,14 @@
                 //"--matheur-init-mode", "em",
                 //"--warm-start-mode", "em",
 
-                "--nn-tryall",
-                "--em-farthest",
-                "--hardfix-smallest",
+                //"--nn-tryall",
+                //"--em-farthest",
+                //"--hardfix-smallest",
 
-                "--seed", "2023",
-                "--threads", "4",
+                //"--seed", "2023",
+                "--threads", "8",
                 "--roundcosts",
-                "--plot", 
+                //"--plot", 
                 //"--save",
                 "--loglvl", "debug"
             ],
@@ -44,9 +44,9 @@
             "program": "${workspaceFolder}/bin/x64/main",
             "args": [
                 "--file", "data/a280.tsp",
-                "--mode", "nn",
+                "--mode", "vns",
 
-                "--grasp", "random(0.01)",
+                "--grasp", "almostbest[0.01]",
                 "--2opt",
                 "--tlim", "10",
 
@@ -59,11 +59,11 @@
                 //"--hardfix-smallest",
 
                 //"--seed", "2023",
-                "--threads", "8",
+                //"--threads", "8",
                 //"--roundcosts",
-                "--plot", 
+                //"--plot", 
                 //"--save",
-                "--loglvl", "log"
+                "--loglvl", "debug"
             ],
             "cwd": "${workspaceFolder}"
         }

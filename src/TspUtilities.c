@@ -203,14 +203,21 @@ __uint128_t computeSolutionCost(Solution *sol)
 {
     Instance *inst = sol->instance;
     int n = inst->nNodes;
-    enum EdgeWeightType ewt = inst->params.edgeWeightType ;
-    bool roundFlag = inst->params.roundWeights;
-
     __uint128_t cost = 0;
-    for (int i = 0; i < n - 1; i++)
-        cost += cvtFloat2Cost(computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i+1]], inst->Y[sol->indexPath[i+1]], ewt, roundFlag));
-    
-    cost += cvtFloat2Cost(computeEdgeCost(inst->X[sol->indexPath[n-1]], inst->Y[sol->indexPath[n-1]], inst->X[sol->indexPath[0]], inst->Y[sol->indexPath[0]], ewt, roundFlag));
+
+    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+        enum EdgeWeightType ewt = inst->params.edgeWeightType ;
+        bool roundFlag = inst->params.roundWeights;
+        for (int i = 0; i < n - 1; i++)
+            cost += cvtFloat2Cost(computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i+1]], inst->Y[sol->indexPath[i+1]], ewt, roundFlag));
+        
+        cost += cvtFloat2Cost(computeEdgeCost(inst->X[sol->indexPath[n-1]], inst->Y[sol->indexPath[n-1]], inst->X[sol->indexPath[0]], inst->Y[sol->indexPath[0]], ewt, roundFlag));
+    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+        for (int i = 0; i < n - 1; i++)
+            cost += cvtFloat2Cost(inst->edgeCostMat[(size_t)sol->indexPath[i] * (size_t)n + (size_t)sol->indexPath[i+1]]);
+        
+        cost += cvtFloat2Cost(inst->edgeCostMat[(size_t)sol->indexPath[n-1] * (size_t)n + (size_t)sol->indexPath[0]]);
+    #endif
 
     return cost;
 }
