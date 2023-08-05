@@ -249,7 +249,8 @@ void VariableNeighborhoodSearch(Solution *sol, double timeLimit, int nThreads);
 * @brief Runs Simulated Annealing on input solution sol.
 * @param sol Starting point solution.
 * @param timeLimit Time limit.
+* @param nThreads Set to 0 to use single threading, to 1 to use multi threading.
 */
-void SimulatedAnnealing(Solution *sol, double timeLimit)
+void SimulatedAnnealing(Solution *sol, double timeLimit, int nThreads);
 
 #endif //TSP_FUNCTIONS_H
