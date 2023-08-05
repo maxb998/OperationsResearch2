@@ -241,4 +241,15 @@ void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y);
 void VariableNeighborhoodSearch(Solution *sol, double timeLimit, int nThreads);
 
 
+//###################################################################################################################################
+// SIMULATED_ANNEALING
+//###################################################################################################################################
+
+/*!
+* @brief Runs Simulated Annealing on input solution sol.
+* @param sol Starting point solution.
+* @param timeLimit Time limit.
+*/
+void SimulatedAnnealing(Solution *sol, double timeLimit)
+
 #endif //TSP_FUNCTIONS_H
