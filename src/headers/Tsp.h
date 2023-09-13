@@ -226,7 +226,7 @@ void apply2OptBestFix(Solution *sol);
 * @brief  Same as apply2OptBestFix, but if using COMPUTE_OPTION_AVX then this function expect a correctly ordered copy of the points coordinates in X and Y. Useful when calling 2opt a lot and it doesn't do a lot of moves
 * @param sol Solution to optimize.
 */
-void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y);
+void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *costCache);
 
 
 //###################################################################################################################################

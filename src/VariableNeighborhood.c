@@ -35,6 +35,7 @@ typedef struct
     Solution workingSol;
     float *X;
     float *Y;
+    float *costCache;
 
 } ThreadSpecificData;
 
@@ -151,12 +152,16 @@ static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, un
         throwError(inst, &thSpecific.workingSol, "VariableNeighborhoodSearch -> initThreadSpecificData: Failed to allocate memory");
     
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        thSpecific.X = malloc((n + AVX_VEC_SIZE) * 2 * sizeof(int));
+        thSpecific.X = malloc((n + AVX_VEC_SIZE) * 3 * sizeof(int));
         if (!thSpecific.X)
             throwError(inst, &thSpecific.workingSol, "VariableNeighborhoodSearch -> initThreadSpecificData: Failed to allocate memory");
         thSpecific.Y = &thSpecific.X[n + AVX_VEC_SIZE];
+        thSpecific.costCache = &thSpecific.Y[n + AVX_VEC_SIZE];
     #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
         thSpecific.X = thSpecific.Y = NULL;
+        thSpecific.costCache = malloc((n + AVX_VEC_SIZE) * sizeof(float));
+        if (!thSpecific.costCache)
+            throwError(inst, &thSpecific.workingSol, "VariableNeighborhoodSearch -> initThreadSpecificData: Failed to allocate memory");
     #endif
 
     return thSpecific;
@@ -167,10 +172,14 @@ static void destroyThreadSpecificData(ThreadSpecificData *thSpecific)
     destroySolution(&thSpecific->workingSol);
 
     free(thSpecific->nodesToKick);
-    free(thSpecific->X);
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        free(thSpecific->X);
+    #else
+        free(thSpecific->costCache);
+    #endif
 
     thSpecific->nodesToKick = NULL;
-    thSpecific->X = NULL;
+    thSpecific->X = thSpecific->Y = thSpecific->costCache = NULL;
 }
 
 static void *runVns(void *arg)
@@ -187,8 +196,8 @@ static void *runVns(void *arg)
 
     // init nodesToKick if using permutations to kick
     if (inst->nNodes < PERMUTATION_THRESHOLD)
-        for (int i = 0; i < inst->nNodes-1; i++)
-            thSpecific->nodesToKick[i] = i+1;
+        for (int i = 1; i < inst->nNodes; i++)
+            thSpecific->nodesToKick[i] = i;
 
     int nonImprovingIterCount = 0;
 
@@ -200,15 +209,11 @@ static void *runVns(void *arg)
 
         kick(thSpecific);
 
-        LOG(LOG_LVL_EVERYTHING, "runVns: [%d] solution has been kicked. Cost=%f", thSpecific->workingSol.cost);
+        LOG(LOG_LVL_EVERYTHING, "runVns: [%d] solution has been kicked. Cost=%lf", cvtCost2Double(thSpecific->workingSol.cost));
 
-        #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-            apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->X, thSpecific->Y);
-        #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
-            apply2OptBestFix(&thSpecific->workingSol);
-        #endif
+        apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->X, thSpecific->Y, thSpecific->costCache);
 
-        LOG(LOG_LVL_EVERYTHING, "runVns: [%d] solution has been optimized. Cost=%f", thSpecific->iterCount, thSpecific->workingSol.cost);
+        LOG(LOG_LVL_EVERYTHING, "runVns: [%d] solution has been optimized. Cost=%lf", thSpecific->iterCount, cvtCost2Double(thSpecific->workingSol.cost));
 
         if (thSpecific->workingSol.cost < thShared->bestSol->cost)
         {
@@ -237,6 +242,8 @@ static void *runVns(void *arg)
 static void setupThSpecificOnBestSol(ThreadSpecificData *thSpecific)
 {
     ThreadSharedData *thShared = thSpecific->thShared;
+    Instance *inst = thSpecific->workingSol.instance;
+    int n = inst->nNodes;
 
     // clone of best sol must be done with locked mutex otherwise there may be synchronization errors when starting a lot of threads
     pthread_mutex_lock(&thShared->mutex);
@@ -244,8 +251,6 @@ static void setupThSpecificOnBestSol(ThreadSpecificData *thSpecific)
     pthread_mutex_unlock(&thShared->mutex);
 
     #if (COMPUTATION_TYPE == COMPUTATE_OPTION_AVX)
-        Instance *inst = thSpecific->workingSol.instance;
-        int n = inst->nNodes;
         for (int i = 0; i < n; i++)
         {
             thSpecific->X[i] = inst->X[thSpecific->workingSol.indexPath[i]];
@@ -253,12 +258,26 @@ static void setupThSpecificOnBestSol(ThreadSpecificData *thSpecific)
         }
         thSpecific->X[n] = thSpecific->X[0];
         thSpecific->Y[n] = thSpecific->Y[0];
+
         for (int i = n+1; i < n + AVX_VEC_SIZE; i++)
         {
             thSpecific->X[i] = INFINITY;
             thSpecific->Y[i] = INFINITY;
         }
     #endif
+
+    int *path = thShared->bestSol->indexPath;
+    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+        for (int i = 0; i < n; i++) // build cost cache
+            thSpecific->costCache[i] = computeEdgeCost(inst->X[path[i]], inst->Y[path[i]], inst->X[path[i+1]], inst->Y[path[i+1]], inst->params.edgeWeightType, inst->params.roundWeights);
+    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+        for (int i = 0; i < n; i++) // build cost cache
+            thSpecific->costCache[i] = inst->edgeCostMat[path[i] * n + path[i+1]];
+    #endif
+
+    for (int i = n+1; i < n + AVX_VEC_SIZE; i++)
+        thSpecific->costCache[i] = INFINITY;
+
 }
 
 static void kick(ThreadSpecificData *thSpecific)
@@ -279,7 +298,7 @@ static void kick(ThreadSpecificData *thSpecific)
         {
             // get permutation indexes
             int rndIndex0 = genRandom(&thSpecific->rndState, 0, n-1), rndIndex1 = genRandom(&thSpecific->rndState, 0, n-1);
-            while (rndIndex0 == rndIndex1) rndIndex1 = genRandom(&thSpecific->rndState, 0, n-1);
+            while (rndIndex0 == rndIndex1) rndIndex1 = genRandom(&thSpecific->rndState, 1, n);
 
             register int temp;
             swapElems(nodesToKick[rndIndex0], nodesToKick[rndIndex1], temp);
@@ -370,6 +389,8 @@ static void kick(ThreadSpecificData *thSpecific)
         #endif
         
         thSpecific->workingSol.cost += (cvtFloat2Cost(edgeCost0) + cvtFloat2Cost(edgeCost1));
+        thSpecific->costCache[nodesToKick[i]-1] = edgeCost0;
+        thSpecific->costCache[nodesToKick[i]] = edgeCost1;
     }
 
     if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (!checkSolution(&thSpecific->workingSol)))

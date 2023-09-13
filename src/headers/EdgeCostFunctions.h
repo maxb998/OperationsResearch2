@@ -109,4 +109,22 @@ static inline __m256 computeEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2, __m2
 	return costVec;
 }
 
+static inline __m256 computeEdgeCost_VEC_APPROX(__m256 x1, __m256 y1,  __m256 x2, __m256 y2, enum EdgeWeightType edgeWgtType, bool roundWeights)
+{
+	register __m256 costVec = noSquaredRootEdgeCost_VEC (x1, y1, x2, y2, edgeWgtType);
+
+	if ((edgeWgtType == EUC_2D) || (edgeWgtType == ATT))
+		costVec = _mm256_rcp_ps(_mm256_rsqrt_ps(costVec));
+
+	if (roundWeights)
+	{
+		if (edgeWgtType == ATT)
+			return _mm256_ceil_ps(costVec);
+		else
+			return _mm256_round_ps(costVec, _MM_FROUND_TO_NEAREST_INT |_MM_FROUND_NO_EXC); // round to nearest, and suppress exceptions
+	}
+	
+	return costVec;
+}
+
 #endif // EDGE_COST_FUNCTIONS
