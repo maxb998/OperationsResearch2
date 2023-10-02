@@ -37,10 +37,11 @@ typedef struct
 {
     int node;
     int anchor;
-    float extraCost;
 
     float newCost0;
     float newCost1;
+
+    float extraCost;
 } SuccessorData;
 
 
@@ -428,10 +429,7 @@ static void updateBestSolution(ThreadSpecificData *thSpecific)
     // check solution when debugging
     if (bestSol->instance->params.logLevel >= LOG_LVL_DEBUG)
         if (!checkSolution(newBest))
-        {
-            destroySolution(bestSol);
 		    throwError(newBest->instance, newBest, "updateBestSolutionEM: newBest Solution is not valid");
-        }
     
     LOG(LOG_LVL_LOG, "Found better solution: cost = %lf", cvtCost2Double(newBest->cost));
 
@@ -488,18 +486,17 @@ static void applyExtraMileage_Internal(ThreadSpecificData *thSpecific, int nCove
             succ.anchor = genRandom(&thSpecific->rndState, 0, nCovered);
 
             #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-                succ.extraCost = computeEdgeCost(thSpecific->X[succ.anchor], thSpecific->Y[succ.anchor], thSpecific->X[succ.node],       thSpecific->Y[succ.node],       ewt, roundW) +
-                                computeEdgeCost(thSpecific->X[succ.node],   thSpecific->Y[succ.node],   thSpecific->X[succ.anchor + 1], thSpecific->Y[succ.anchor + 1], ewt, roundW) -
-                                computeEdgeCost(thSpecific->X[succ.anchor], thSpecific->Y[succ.anchor], thSpecific->X[succ.anchor + 1], thSpecific->Y[succ.anchor + 1], ewt, roundW);
+                succ.newCost0 = computeEdgeCost(thSpecific->X[succ.node], thSpecific->Y[succ.node], thSpecific->X[succ.anchor], thSpecific->Y[succ.anchor], ewt, roundW);
+                succ.newCost1 = computeEdgeCost(thSpecific->X[succ.node], thSpecific->Y[succ.node], thSpecific->X[succ.anchor+1], thSpecific->Y[succ.anchor+1], ewt, roundW);
             
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-                succ.extraCost = computeEdgeCost(inst->X[indexPath[succ.anchor]], inst->Y[indexPath[succ.anchor]], inst->X[indexPath[succ.node    ]], inst->Y[indexPath[succ.node    ]], ewt, roundW) +
-                                 computeEdgeCost(inst->X[indexPath[succ.node  ]], inst->Y[indexPath[succ.node  ]], inst->X[indexPath[succ.anchor+1]], inst->Y[indexPath[succ.anchor+1]], ewt, roundW) -
-                                 computeEdgeCost(inst->X[indexPath[succ.anchor]], inst->Y[indexPath[succ.anchor]], inst->X[indexPath[succ.anchor+1]], inst->Y[indexPath[succ.anchor+1]], ewt, roundW);
+                succ.newCost0 = computeEdgeCost(inst->X[indexPath[succ.node]], inst->Y[indexPath[succ.node]], inst->X[indexPath[succ.anchor]], inst->Y[indexPath[succ.anchor]], ewt, roundW);
+                succ.newCost1 = computeEdgeCost(inst->X[indexPath[succ.node]], inst->Y[indexPath[succ.node]], inst->X[indexPath[succ.anchor+1]], inst->Y[indexPath[succ.anchor+1]], ewt, roundW);
+
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-                succ.extraCost = inst->edgeCostMat[(size_t)indexPath[succ.anchor] * (size_t)n + (size_t)indexPath[succ.node    ]] +
-                                 inst->edgeCostMat[(size_t)indexPath[succ.node  ] * (size_t)n + (size_t)indexPath[succ.anchor+1]] -
-                                 inst->edgeCostMat[(size_t)indexPath[succ.anchor] * (size_t)n + (size_t)indexPath[succ.anchor+1]];
+                succ.newCost0 = inst->edgeCostMat[(size_t)indexPath[succ.node] * (size_t)n + (size_t)indexPath[succ.anchor]];
+                succ.newCost1 = inst->edgeCostMat[(size_t)indexPath[succ.node] * (size_t)n + (size_t)indexPath[succ.anchor+1]];
+
             #endif
         }
         else
@@ -612,7 +609,7 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
 
     // Contains best cost values (extra cost, current cost, new cost 0 and new cost 1)
     __m256 bestExtraCostVec = _mm256_set1_ps(INFINITY);
-    //__m256 bestAltEdgeCostVec0 = bestExtraCostVec, bestAltEdgeCostVec1 = bestExtraCostVec;
+    __m256 bestAltEdgeCostVec0 = bestExtraCostVec, bestAltEdgeCostVec1 = bestExtraCostVec;
     // Contains the indexes of the nodes from which the best (chosen according to bestMileageVec) one will be added to the solution at the end of the iteration
     __m256i bestNodesVec = _mm256_set1_epi32(-1);
     // Contains the indexes corresponding to the edge that will be removed/ splitted to accomodate the new node
@@ -640,8 +637,8 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
 
             // keep only the best
             bestExtraCostVec = _mm256_blendv_ps(bestExtraCostVec, currExtraCostVec, cmpMask);
-            //bestAltEdgeCostVec0 = _mm256_blendv_ps(bestAltEdgeCostVec0, altEdgeCostVec0, cmpMask);
-            //bestAltEdgeCostVec1 = _mm256_blendv_ps(bestAltEdgeCostVec1, altEdgeCostVec1, cmpMask);
+            bestAltEdgeCostVec0 = _mm256_blendv_ps(bestAltEdgeCostVec0, altEdgeCostVec0, cmpMask);
+            bestAltEdgeCostVec1 = _mm256_blendv_ps(bestAltEdgeCostVec1, altEdgeCostVec1, cmpMask);
             bestAnchorsVec = _mm256_blendv_epi8(bestAnchorsVec, anchorsIndexesVec, _mm256_castps_si256(cmpMask));
             bestNodesVec = _mm256_blendv_epi8(bestNodesVec, currNodeIndex, _mm256_castps_si256(cmpMask));
             
@@ -658,34 +655,23 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
     int sortedArgs[AVX_VEC_SIZE];
     argsort(avxStoreFloat, sortedArgs, AVX_VEC_SIZE);
 
-    int chosenNodeSubIndex = 0;
-    if ((inst->params.graspType == GRASP_ALMOSTBEST) && (graspThreshold > rand_r(&thSpecific->rndState)) && (n - nCovered - 1 > AVX_VEC_SIZE))
-    {
-        chosenNodeSubIndex = 1;
-        for (; chosenNodeSubIndex < AVX_VEC_SIZE - 1; chosenNodeSubIndex++)
-            if (rand_r(&thSpecific->rndState) > RAND_MAX / 2)
+    int chosenIndex = sortedArgs[0];
+    if ((inst->params.graspType == GRASP_ALMOSTBEST) && (n - nCovered > AVX_VEC_SIZE + 1) && !(avxStoreFloat[sortedArgs[1]] == -INFINITY) && (graspThreshold > rand_r(&thSpecific->rndState)))
+        for (int i = 1; i < AVX_VEC_SIZE - 1; i++)
+            if ((avxStoreFloat[sortedArgs[i+1]] == -INFINITY) || (rand_r(&thSpecific->rndState) < graspThreshold))
                 break;
-    }
 
-    int chosenIndex = sortedArgs[chosenNodeSubIndex];
-
-    SuccessorData retVal = { .extraCost = avxStoreFloat[chosenIndex] };
-
+    SuccessorData retVal;
     int *avxStoreInt = (int*)avxStoreFloat;
+    
     _mm256_storeu_si256((__m256i_u *)avxStoreInt, bestNodesVec);
     retVal.node = avxStoreInt[chosenIndex];
     _mm256_storeu_si256((__m256i_u *)avxStoreInt, bestAnchorsVec);
     retVal.anchor = avxStoreInt[chosenIndex];
-
-    // apparently results from avx computation and normal square root lead to different results on amd ryzen 5800h machine
-    
-    //_mm256_storeu_ps(avxStoreFloat, bestAltEdgeCostVec0);
-    //retVal.newCost0 = avxStoreFloat[chosenIndex];
-    retVal.newCost0 = computeEdgeCost(thSpecific->X[retVal.node], thSpecific->Y[retVal.node], thSpecific->X[retVal.anchor], thSpecific->Y[retVal.anchor], ewt, roundW);
-    
-    //_mm256_storeu_ps(avxStoreFloat, bestAltEdgeCostVec1);
-    //retVal.newCost1 = avxStoreFloat[chosenIndex];
-    retVal.newCost1 = computeEdgeCost(thSpecific->X[retVal.node], thSpecific->Y[retVal.node], thSpecific->X[retVal.anchor+1], thSpecific->Y[retVal.anchor+1], ewt, roundW);
+    _mm256_storeu_ps(avxStoreFloat, bestAltEdgeCostVec0);
+    retVal.newCost0 = avxStoreFloat[chosenIndex];
+    _mm256_storeu_ps(avxStoreFloat, bestAltEdgeCostVec1);
+    retVal.newCost1 = avxStoreFloat[chosenIndex];
 
     return retVal;
 }
@@ -707,6 +693,7 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
     SuccessorData bestSuccs[BASE_GRASP_BEST_SAVE_BUFFER_SIZE];
     for (int i = 0; i < BASE_GRASP_BEST_SAVE_BUFFER_SIZE; i++)
         bestSuccs[i].extraCost = INFINITY;
+    
     
     for (int node = nCovered+1; node <= n; node++)
     {
