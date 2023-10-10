@@ -83,7 +83,7 @@ Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, do
 
     // check input
     if ((nThreads < 0) || (nThreads > MAX_THREADS))
-        throwError(inst, NULL, "NearestNeighbor: nThreads value is not valid: %d", nThreads);
+        throwError("NearestNeighbor: nThreads value is not valid: %d", nThreads);
     else if (nThreads == 0)
         nThreads = inst->params.nThreads;
 
@@ -129,8 +129,8 @@ static ThreadSharedData initThreadSharedData (Instance *inst, enum NNFirstNodeOp
     };
 
     if (startOption == NN_FIRST_TRYALL) // syncronization in the selection of the starting node of the solution is only necessary when tryall option is used
-        if (pthread_mutex_init(&thShared.getStartNodeMutex, NULL)) throwError(inst, NULL, "NearestNeighbor -> initThreadSharedData: Failed to initialize getStartNodeMutex");
-    if (pthread_mutex_init(&thShared.saveSolutionMutex, NULL)) throwError(inst, NULL, "NearestNeighbor -> initThreadSharedData: Failed to initialize saveSolutionMutex");
+        if (pthread_mutex_init(&thShared.getStartNodeMutex, NULL)) throwError("NearestNeighbor -> initThreadSharedData: Failed to initialize getStartNodeMutex");
+    if (pthread_mutex_init(&thShared.saveSolutionMutex, NULL)) throwError("NearestNeighbor -> initThreadSharedData: Failed to initialize saveSolutionMutex");
 
     thShared.bestSol = newSolution(inst);
 
@@ -140,8 +140,8 @@ static ThreadSharedData initThreadSharedData (Instance *inst, enum NNFirstNodeOp
 static void destroyThreadSharedData (ThreadSharedData *thShared)
 {
     if (thShared->startOption == NN_FIRST_TRYALL)
-        if (pthread_mutex_init(&thShared->getStartNodeMutex, NULL)) throwError(thShared->bestSol.instance, &thShared->bestSol, "NearestNeighbor -> destroyThreadSharedData: Failed to destroy getStartNodeMutex");
-    if (pthread_mutex_init(&thShared->saveSolutionMutex, NULL)) throwError(thShared->bestSol.instance, &thShared->bestSol, "NearestNeighbor -> destroyThreadSharedData: Failed to destroy saveSolutionMutex");
+        if (pthread_mutex_init(&thShared->getStartNodeMutex, NULL)) throwError("NearestNeighbor -> destroyThreadSharedData: Failed to destroy getStartNodeMutex");
+    if (pthread_mutex_init(&thShared->saveSolutionMutex, NULL)) throwError("NearestNeighbor -> destroyThreadSharedData: Failed to destroy saveSolutionMutex");
 
     destroySolution(&thShared->bestSol);
 }
@@ -161,7 +161,7 @@ static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, un
         // this memory allocation is useful, but not strictly necessary when using avx (if we don't want to use it switch to the gather instructions)
         thSpecific.X = malloc((inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(float));
         if (!thSpecific.X)
-            throwError(inst, &thSpecific.workingSol, "NearestNeighbor -> initThreadSpecificData: Failed to allocate memory");
+            throwError("NearestNeighbor -> initThreadSpecificData: Failed to allocate memory");
         thSpecific.Y = &thSpecific.X[inst->nNodes + AVX_VEC_SIZE];
     #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
         thSpecific.X = thSpecific.Y = NULL;
@@ -306,7 +306,7 @@ static void applyNearestNeighbor(ThreadSpecificData *thSpecific, int firstNode)
 
         // simple debugging check. can be removed, but saved a lot of headaches so it's going to stay there
         if ((successor.node >= n) || (successor.node < 0))
-            throwError(inst, &thSpecific->workingSol, "applyNearestNeighbor: Value of successor isn't applicable: %d (startNode=%d)", successor.node, firstNode);
+            throwError("applyNearestNeighbor: Value of successor isn't applicable: %d (startNode=%d)", successor.node, firstNode);
 
         // update solution
         swapElemsInThSpecific(thSpecific, i+1, successor.node);
@@ -353,7 +353,7 @@ static void updateBestSolution(ThreadSpecificData *thSpecific)
     // check solution when debugging
     if (bestSol->instance->params.logLevel >= LOG_LVL_DEBUG)
         if (!checkSolution(newBest))
-		    throwError(newBest->instance, newBest, "updateBestSolution: newBest Solution is not valid");
+		    throwError("updateBestSolution: newBest Solution is not valid");
 
     LOG(LOG_LVL_LOG, "Found better solution: cost = %lf", cvtCost2Double(newBest->cost));
 

@@ -53,7 +53,7 @@ void apply2OptBestFix(Solution *sol)
 
         X = malloc((n + AVX_VEC_SIZE) * 3 * sizeof(float));
         if (X == NULL)
-            throwError(inst, sol, "apply2OptBestFix: Failed to allocate memory");
+            throwError("apply2OptBestFix: Failed to allocate memory");
         Y = &X[n + AVX_VEC_SIZE];
         costCache = &Y[n + AVX_VEC_SIZE];
 
@@ -75,7 +75,7 @@ void apply2OptBestFix(Solution *sol)
 
         costCache = malloc((n + AVX_VEC_SIZE) * sizeof(float));
         if (costCache == NULL)
-            throwError(inst, sol, "apply2OptBestFix: Failed to allocate memory");
+            throwError("apply2OptBestFix: Failed to allocate memory");
 
     #endif
 
@@ -113,22 +113,22 @@ void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *
     if (inst->params.logLevel >= LOG_LVL_DEBUG)
     {
         if (!checkSolution(sol))
-            throwError(inst, sol, "apply2OptBestFix: Input solution is not valid");
+            throwError("apply2OptBestFix: Input solution is not valid");
         
         #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
             for (int i = 0; i <= n; i++)
                 if ((inst->X[sol->indexPath[i]] != X[i]) || (inst->Y[sol->indexPath[i]] != Y[i]))
-                    throwError(inst, sol, "apply2OptBestFix_fastIteratively: input mismatch between inst.X/Y[%d] = [%f, %f] and X/Y[indexPath[%d]] = [%f, %f]", i, inst->X[sol->indexPath[i]], X[i], i, inst->Y[sol->indexPath[i]], Y[i]);
+                    throwError("apply2OptBestFix_fastIteratively: input mismatch between inst.X/Y[%d] = [%f, %f] and X/Y[indexPath[%d]] = [%f, %f]", i, inst->X[sol->indexPath[i]], X[i], i, inst->Y[sol->indexPath[i]], Y[i]);
         #endif
 
         // check costCache
         for (int i = 0; i < n; i++)
             #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
                 if (costCache[i] != computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i + 1]], inst->Y[sol->indexPath[i + 1]], inst->params.edgeWeightType, inst->params.roundWeights))
-                    throwError(inst, sol, "apply2OptBestFix_fastIteratively: input not valid: costCache isn't coherent with solution at position %d", i);
+                    throwError("apply2OptBestFix_fastIteratively: input not valid: costCache isn't coherent with solution at position %d", i);
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
                 if (costCache[i] != inst->edgeCostMat[sol->indexPath[i] * n + sol->indexPath[i+1]])
-                    throwError(inst, sol, "apply2OptBestFix_fastIteratively: input not valid: costCache isn't coherent with solution at position %d", i);
+                    throwError("apply2OptBestFix_fastIteratively: input not valid: costCache isn't coherent with solution at position %d", i);
             #endif
         
     }

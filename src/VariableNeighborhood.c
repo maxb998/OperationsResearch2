@@ -74,12 +74,12 @@ void VariableNeighborhoodSearch(Solution *sol, double timeLimit, int nThreads)
         srand(inst->params.randomSeed);
 
     if ((nThreads < 0) || (nThreads > MAX_THREADS))
-        throwError(sol->instance, sol, "VariableNeighborhood: nThreads value is not valid: %d", nThreads);
+        throwError("VariableNeighborhood: nThreads value is not valid: %d", nThreads);
     else if (nThreads == 0)
         nThreads = inst->params.nThreads;
 
     if (!checkSolution(sol))
-        throwError(inst, sol, "VariableNeighborhood: Input solution is not valid");
+        throwError("VariableNeighborhood: Input solution is not valid");
 
     sol->indexPath[inst->nNodes] = sol->indexPath[0];
 
@@ -116,14 +116,14 @@ static ThreadSharedData initThreadSharedData (Solution *sol, double timeLimit)
 {
     ThreadSharedData thShared = { .timeLimit = timeLimit, .bestSol=sol };
 
-    if (pthread_mutex_init(&thShared.mutex, NULL)) throwError(sol->instance, sol, "VariableNeighborhoodSearch -> initThreadSharedData: Failed to initialize mutex");
+    if (pthread_mutex_init(&thShared.mutex, NULL)) throwError("VariableNeighborhoodSearch -> initThreadSharedData: Failed to initialize mutex");
 
     return thShared;
 }
 
 static void destroyThreadSharedData (ThreadSharedData *thShared)
 {
-    if (pthread_mutex_init(&thShared->mutex, NULL)) throwError(thShared->bestSol->instance, thShared->bestSol, "VariableNeighborhoodSearch -> destroyThreadSharedData: Failed to destroy mutex");
+    if (pthread_mutex_init(&thShared->mutex, NULL)) throwError("VariableNeighborhoodSearch -> destroyThreadSharedData: Failed to destroy mutex");
 }
 
 static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, unsigned int rndState)
@@ -149,19 +149,19 @@ static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, un
     else
         thSpecific.nodesToKick = malloc((n - 1) * sizeof(int));
     if (!thSpecific.nodesToKick)
-        throwError(inst, &thSpecific.workingSol, "VariableNeighborhoodSearch -> initThreadSpecificData: Failed to allocate memory");
+        throwError("VariableNeighborhoodSearch -> initThreadSpecificData: Failed to allocate memory");
     
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
         thSpecific.X = malloc((n + AVX_VEC_SIZE) * 3 * sizeof(int));
         if (!thSpecific.X)
-            throwError(inst, &thSpecific.workingSol, "VariableNeighborhoodSearch -> initThreadSpecificData: Failed to allocate memory");
+            throwError("VariableNeighborhoodSearch -> initThreadSpecificData: Failed to allocate memory");
         thSpecific.Y = &thSpecific.X[n + AVX_VEC_SIZE];
         thSpecific.costCache = &thSpecific.Y[n + AVX_VEC_SIZE];
     #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
         thSpecific.X = thSpecific.Y = NULL;
         thSpecific.costCache = malloc((n + AVX_VEC_SIZE) * sizeof(float));
         if (!thSpecific.costCache)
-            throwError(inst, &thSpecific.workingSol, "VariableNeighborhoodSearch -> initThreadSpecificData: Failed to allocate memory");
+            throwError("VariableNeighborhoodSearch -> initThreadSpecificData: Failed to allocate memory");
     #endif
 
     return thSpecific;
@@ -397,7 +397,7 @@ static void kick(ThreadSpecificData *thSpecific)
     {
         for (int i = 0; i < currentKickMagnitude; i++)
             LOG(LOG_LVL_DEBUG, "iter n° %d nodesToKick[%d] = %d", thSpecific->iterCount, i, nodesToKick[i]);
-        throwError(inst, &thSpecific->workingSol, "runVns: Solution after kick is incorrect (iteration = %d)", thSpecific->iterCount);
+        throwError("runVns: Solution after kick is incorrect (iteration = %d)", thSpecific->iterCount);
     }
 }
 

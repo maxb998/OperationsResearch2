@@ -122,7 +122,7 @@ void LOG (enum LogLevel lvl, char * line, ...);
 * @param sol Pointer to the Solution to destroy. Can be NULL.
 * @param line Error message.
 */
-void throwError (Instance *inst, Solution *sol, char * line, ...);
+void throwError (char * line, ...);
 
 /*!
 * @brief Checks if a solution is feasible both in the sequences of sol.{x,y,indexPath} and in the value of the cost.

@@ -96,7 +96,7 @@ double readFile (Instance *inst)
         }
 
         if (keywordsFound[keywordID] == 1)
-            throwError(inst, NULL, "Keyword \"%s\" is present more than one time. Check the .tsp file", keywords[keywordID]);
+            throwError("Keyword \"%s\" is present more than one time. Check the .tsp file", keywords[keywordID]);
 
         switch (keywordID)
         {
@@ -134,7 +134,7 @@ double readFile (Instance *inst)
             break;
 
         default:
-            throwError(inst, NULL, "Wierd error upon reading keywords from file. Check the code");
+            throwError("Wierd error upon reading keywords from file. Check the code");
             break;
         }
     }
@@ -142,7 +142,7 @@ double readFile (Instance *inst)
     // check all important keywords have been found
     for (int i = 0; i < KEYWORDS_COUNT; i++)
         if (keywordsFound[i] != 1)  // keyword has not been found in the loop above
-            throwError(inst, NULL, "Important keyword \"%s\" has not been found/detected in the tsp file. Check the .tsp file", keywords[i]);
+            throwError("Important keyword \"%s\" has not been found/detected in the tsp file. Check the .tsp file", keywords[i]);
 
     // allocate memory
     // improve memory locality
@@ -215,7 +215,7 @@ static void getNameFromFile(char * line, int lineSize, char out[], Instance *ins
 
     int nameLen = lineSize + line - nameBegin - 1;
     if (nameLen > 200)
-        throwError(inst, NULL, "Name lenght exceeds 200 characters");
+        throwError("Name lenght exceeds 200 characters");
     memcpy(out, nameBegin, nameLen);
 }
 
@@ -226,8 +226,7 @@ static void checkFileType(char * line, int lineSize, Instance *inst)
     memcpy(substr, &line[lineSize - 4], 3); // generate substring of 3 chars for logging/debugging purposes
     //LOG(LOG_LVL_EVERYTHING, "Checking file TYPE keyword: comparing \"TSP\" with what is found at the of the line which is:%s", substr);
     if (strncmp(&line[lineSize - 4], "TSP", 3) != 0)
-        throwError(inst, NULL, "The file is either not of type TSP, or there are some characters (even blank spaces) after \"TSP\" and before the next line. \n\
-                                     Check that the file used in input is of the correct type and correctly formatted. Only \"TSP\" files are currently supported");
+        throwError("The file is either not of type TSP, or there are some characters (even blank spaces) after \"TSP\" and before the next line. \nCheck that the file used in input is of the correct type and correctly formatted. Only \"TSP\" files are currently supported");
 }
 
 static int getDimensionFromLine(char * line, int lineSize, Instance *inst)
@@ -247,16 +246,16 @@ static int getDimensionFromLine(char * line, int lineSize, Instance *inst)
 
     // check for errors on conversion
     if (endPtr == numberFirstChar)
-        throwError(inst, NULL, "Converting dimension number from file: first character that was supposed to be a number is not a number. \n\
+        throwError("Converting dimension number from file: first character that was supposed to be a number is not a number. \n\
                                         Dimension line in file is supposed to look like \"DIMENSION : <NUMBER>\" with just one separator \':\' and at most a \' \' after it before the numeric value");
     if (endPtr != &line[lineSize - 1])
-        throwError(inst, NULL, "Converting dimension number from file: there are unrecognized character before end of line with keyword DIMENSION");
+        throwError("Converting dimension number from file: there are unrecognized character before end of line with keyword DIMENSION");
 
     // check for error on converted number
     if (dimension == 0)
-        throwError(inst, NULL, "Could not properly convert dimension number in tsp file");
+        throwError("Could not properly convert dimension number in tsp file");
     if (dimension == ULONG_MAX)
-        throwError(inst, NULL, "Dimension value in file is too great. Either too much data(unlikely) or the dimension value is wrong");
+        throwError("Dimension value in file is too great. Either too much data(unlikely) or the dimension value is wrong");
 
     return dimension;
 }
@@ -288,7 +287,7 @@ static int getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *inst)
 
     // check if no match has been found
     if (foundEdgeWeightTypeID == -1)
-        throwError(inst, NULL, "Getting the edge weight type from file: Could not identify the \"EDGE_WEIGTH_TYPE property\"");
+        throwError("Getting the edge weight type from file: Could not identify the \"EDGE_WEIGTH_TYPE property\"");
 
     return foundEdgeWeightTypeID;
 }
@@ -309,13 +308,13 @@ static void readTspLine(char *line, int length, int index, Instance *inst, int k
         }
 
         if (numID >= 3)
-            throwError(inst, NULL, "Line %lu is not formatted correctly. More than 3 numbers for each line are not supported", keywordsLinesCount + index + 1);
+            throwError("Line %lu is not formatted correctly. More than 3 numbers for each line are not supported", keywordsLinesCount + index + 1);
 
         // convert number and save into array
         char *oldEndPtr = endPtr;
         numbers[numID] = strtod(&line[i], &endPtr);
         if (endPtr == oldEndPtr) // error on strtod
-            throwError(inst, NULL, "Conversion at line %lu has gone wrong", keywordsLinesCount + index + 1);
+            throwError("Conversion at line %lu has gone wrong", keywordsLinesCount + index + 1);
         numID++;
 
         // move i to end of number

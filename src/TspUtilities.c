@@ -80,7 +80,7 @@ Solution newSolution (Instance *inst)
 
     s.indexPath = malloc((inst->nNodes + AVX_VEC_SIZE) * sizeof(int)); // if changing the size of the malloc also change cloneSolution()
     if (!s.indexPath)
-        throwError(inst, NULL, "newSolution: Failed to allocate memory");
+        throwError("newSolution: Failed to allocate memory");
     return s;
 }
 
@@ -104,10 +104,8 @@ void destroySolution (Solution *sol)
 void cloneSolution(Solution *src, Solution *dst)
 {
     if (src->instance->nNodes != dst->instance->nNodes)
-    {
-        destroySolution(dst);
-        throwError(src->instance, src, "cloneSolution: Size of src and dst does not match");
-    }
+        throwError("cloneSolution: Size of src and dst does not match");
+
     dst->cost = src->cost;
     dst->instance = src->instance;
     dst->execTime = src->execTime;
@@ -141,7 +139,7 @@ void LOG (enum LogLevel lvl, char * line, ...)
         printf("\n");
 }
 
-void throwError (Instance *inst, Solution *sol, char * line, ...)
+void throwError (char * line, ...)
 {
     printf("[%s] ", logLevelString[0]);
 
@@ -151,15 +149,6 @@ void throwError (Instance *inst, Solution *sol, char * line, ...)
     va_end(params);
 
     printf("\n");
-
-    // free allocated memory
-    if (inst)
-        destroyInstance(inst);
-    if (sol)
-    {
-        destroyInstance(sol->instance);
-        destroySolution(sol);
-    }
 
     exit(EXIT_FAILURE);
 }

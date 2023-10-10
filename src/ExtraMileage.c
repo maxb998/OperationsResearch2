@@ -92,7 +92,7 @@ Solution ExtraMileage(Instance *inst, enum EMInitType startOption, double timeLi
     double startTime = cvtTimespec2Double(timeStruct);
 
     if ((nThreads < 0) || (nThreads > MAX_THREADS))
-        throwError(inst, NULL, "ExtraMileage: nThreads value is not valid: %d", nThreads);
+        throwError("ExtraMileage: nThreads value is not valid: %d", nThreads);
     else if (nThreads == 0)
         nThreads = inst->params.nThreads;
     
@@ -141,7 +141,7 @@ void applyExtraMileage(Solution *sol, int nCovered, unsigned int *rndState)
     for (int i = 0; i < nCovered; i++)
         for (int j = 0; j < nCovered; j++)
             if ((i != j) && (sol->indexPath[i] == sol->indexPath[j]))
-                throwError(sol->instance, sol, "applyExtraMileage: Presented solution has the same node in the path before nCovered. sol->indexPath[%d] = sol->indexPath[%d] = %d", i, j, sol->indexPath[i]);
+                throwError("applyExtraMileage: Presented solution has the same node in the path before nCovered. sol->indexPath[%d] = sol->indexPath[%d] = %d", i, j, sol->indexPath[i]);
 
     // recompute cost of nCovered loop
     sol->cost = 0;
@@ -186,7 +186,7 @@ static ThreadSharedData initThreadSharedData (Instance *inst, enum EMInitType st
         .timeLimit = timeLimit
     };
 
-    if (pthread_mutex_init(&thShared.mutex, NULL)) throwError(inst, NULL, "ExtraMileage -> initThreadSharedData: Failed to initialize mutex");
+    if (pthread_mutex_init(&thShared.mutex, NULL)) throwError("ExtraMileage -> initThreadSharedData: Failed to initialize mutex");
 
     thShared.bestSol = newSolution(inst);
 
@@ -195,7 +195,7 @@ static ThreadSharedData initThreadSharedData (Instance *inst, enum EMInitType st
 
 static void destroyThreadSharedData (ThreadSharedData *thShared)
 {
-    if (pthread_mutex_init(&thShared->mutex, NULL)) throwError(thShared->bestSol.instance, &thShared->bestSol, "ExtraMileage -> destroyThreadSharedData: Failed to destroy mutex");
+    if (pthread_mutex_init(&thShared->mutex, NULL)) throwError("ExtraMileage -> destroyThreadSharedData: Failed to destroy mutex");
     destroySolution(&thShared->bestSol);
 }
 
@@ -214,13 +214,13 @@ static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, un
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
         thSpecific.X = malloc((inst->nNodes + AVX_VEC_SIZE) * 3 * sizeof(int));
         if (thSpecific.X == NULL)
-            throwError(inst, &thSpecific.workingSol, "ExtraMileage -> initThreadSpecificData: Failed to allocate memory");
+            throwError("ExtraMileage -> initThreadSpecificData: Failed to allocate memory");
         thSpecific.Y = &thSpecific.X[inst->nNodes + AVX_VEC_SIZE];
         thSpecific.costCache = &thSpecific.Y[inst->nNodes + AVX_VEC_SIZE];
     #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE))
         thSpecific.costCache = malloc((inst->nNodes + AVX_VEC_SIZE) * sizeof(float));
         if (thSpecific.costCache == NULL)
-            throwError(inst, &thSpecific.workingSol, "ExtraMileage -> initThreadSpecificData: Failed to allocate memory");
+            throwError("ExtraMileage -> initThreadSpecificData: Failed to allocate memory");
     #endif
 
     return thSpecific;
@@ -429,7 +429,7 @@ static void updateBestSolution(ThreadSpecificData *thSpecific)
     // check solution when debugging
     if (bestSol->instance->params.logLevel >= LOG_LVL_DEBUG)
         if (!checkSolution(newBest))
-		    throwError(newBest->instance, newBest, "updateBestSolutionEM: newBest Solution is not valid");
+		    throwError("updateBestSolutionEM: newBest Solution is not valid");
     
     LOG(LOG_LVL_LOG, "Found better solution: cost = %lf", cvtCost2Double(newBest->cost));
 
@@ -452,7 +452,7 @@ static void applyExtraMileage_Internal(ThreadSpecificData *thSpecific, int nCove
     #endif
 
     if (!checkSolutionIntegrity(thSpecific))
-        throwError(inst, &thSpecific->workingSol, "applyExtraMileage_Internal: thSpecific.workingSol is not consistent");
+        throwError("applyExtraMileage_Internal: thSpecific.workingSol is not consistent");
 
     // save element to last position & close the tour at index nCovered
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)

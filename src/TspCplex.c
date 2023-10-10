@@ -14,7 +14,7 @@ CplexData initCplexData(Instance *inst)
 	int errno = 0;
 	cpxData.env = CPXopenCPLEX(&errno);
 	if (errno)
-		throwError(inst, NULL, "buildCPXModel: error at CPXopenCPLEX with code %d", errno);
+		throwError("buildCPXModel: error at CPXopenCPLEX with code %d", errno);
 
 	// screen output
 	if (inst->params.logLevel >= LOG_LVL_EVERYTHING)
@@ -28,7 +28,7 @@ CplexData initCplexData(Instance *inst)
 
 	cpxData.lp = CPXcreateprob(cpxData.env, &errno, "TSP");
 	if (errno)
-		throwError(inst, NULL, "buildCPXModel: error at CPXcreateprob with code %d", errno);
+		throwError("buildCPXModel: error at CPXcreateprob with code %d", errno);
 
     int n = inst->nNodes;
     enum EdgeWeightType ewt = inst->params.edgeWeightType ;
@@ -49,15 +49,9 @@ CplexData initCplexData(Instance *inst)
 			double obj = computeEdgeCost(inst->X[i], inst->Y[i], inst->X[j], inst->Y[j], ewt, roundFlag); // cost == distance
 			double ub = 1.0;
 			if ( CPXnewcols(cpxData.env, cpxData.lp, 1, &obj, NULL, &ub, &binary, cname) )
-			{
-				destroyCplexData(&cpxData);
-				throwError(inst, NULL, "initCplexData: wrong CPXnewcols on x var.s");
-			}
+				throwError("initCplexData: wrong CPXnewcols on x var.s");
     		if ( CPXgetnumcols(cpxData.env, cpxData.lp)-1 != xpos(i,j,n) )
-			{
-				destroyCplexData(&cpxData);
-				throwError(inst, NULL, "initCplexData: wrong position for x var.s");
-			}
+				throwError("initCplexData: wrong position for x var.s");
 		}
 	} 
 
@@ -81,10 +75,7 @@ CplexData initCplexData(Instance *inst)
 		}
 		int izero = 0;
 		if ( CPXaddrows(cpxData.env, cpxData.lp, 0, 1, nnz, &rhs, &sense, &izero, index, value, NULL, &cname[0]) )
-		{
-			destroyCplexData(&cpxData);
-			throwError(inst, NULL, "initCplexData: CPXaddrows(): error 1");
-		}
+			throwError("initCplexData: CPXaddrows(): error 1");
 	} 
 
 	free(value);
@@ -105,7 +96,7 @@ void destroyCplexData(CplexData * cpxData)
 int xpos(int i, int j, int n)
 {
     if (i == j)
-        throwError(NULL, NULL, "xpos: i == j");
+        throwError("xpos: i == j");
     if (i > j)
     {
         register int temp;
@@ -177,7 +168,7 @@ void cvtSolutionToSuccessors(Solution *sol, int* successors)
 		successors[sol->indexPath[i]] = sol->indexPath[i+1];
 
 	if ((sol->instance->params.logLevel >= LOG_LVL_EVERYTHING) && (!checkSuccessorSolution(sol->instance, successors) != 0))
-		throwError(sol->instance, sol, "cvtSolutionToSuccessors: Converted solution is wrong");	
+		throwError("cvtSolutionToSuccessors: Converted solution is wrong");	
 }
 
 int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, SubtoursData *subData, int iterNum, Instance *inst, int nCols, bool isBenders)
@@ -231,7 +222,7 @@ int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr c
 __uint128_t computeSuccessorsSolCost(int *successors, Instance *inst)
 {
 	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (!checkSuccessorSolution(inst, successors) != 0))
-		throwError(inst, NULL, "computeSuccessorsSolCost: successors array passed as input is not feasible");
+		throwError("computeSuccessorsSolCost: successors array passed as input is not feasible");
 
 	int n = inst->nNodes;
 	enum EdgeWeightType ewt = inst->params.edgeWeightType ;
@@ -248,7 +239,7 @@ __uint128_t computeSuccessorsSolCost(int *successors, Instance *inst)
 		i = succ;
 
 		if (counter > n)
-			throwError(inst, NULL, "computeSuccessorsSolCost: There are subtours inside the successor array even after repair heuristic");
+			throwError("computeSuccessorsSolCost: There are subtours inside the successor array even after repair heuristic");
 		counter++;
 
 	} while (i != 0);
@@ -287,10 +278,7 @@ int WarmStart(CplexData *cpx, int *successors)
 	int n = inst->nNodes;
 
 	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (!checkSuccessorSolution(inst, successors)))
-	{
-		LOG(LOG_LVL_ERROR, "WarStartSuccessors: successor solution is incorrect");
-		return 1;
-	}
+		throwError("WarStartSuccessors: successor solution is incorrect");
 
 	double *ones = malloc(n * sizeof(double));
 	int *indexes = malloc(n * sizeof(int));
@@ -323,7 +311,7 @@ SubtoursData initSubtoursData(int n)
 	};
 
 	if ((subData.successors == NULL) || (subData.subtoursMap == NULL))
-		throwError(NULL, NULL, "initSubtoursData: Failed to allocate memory");
+		throwError("initSubtoursData: Failed to allocate memory");
 
 	return subData;
 }

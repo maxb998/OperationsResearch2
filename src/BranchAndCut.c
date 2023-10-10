@@ -22,7 +22,7 @@ void BranchAndCut(Solution *sol, double tlim)
 	Instance *inst = sol->instance;
 
 	if (!checkSolution(sol))
-		throwError(inst, sol, "benders: Input solution is not valid");
+		throwError("benders: Input solution is not valid");
 
 	CplexData cpx = initCplexData(inst);
 	int errCode = 0;
@@ -30,34 +30,19 @@ void BranchAndCut(Solution *sol, double tlim)
 	CallbackData cbData = initCallbackData(&cpx, sol);
 
 	if ((errCode = WarmStart(&cpx, cbData.bestSuccessors)) != 0)
-	{
-		destroyCplexData(&cpx); destroySolution(sol);
-		throwError(inst, NULL, "BranchAndCut: error on WarmStart with code %d", errCode);
-	}
+		throwError("BranchAndCut: error on WarmStart with code %d", errCode);
 
 	if (CPXsetintparam(cpx.env, CPX_PARAM_MIPCBREDLP, CPX_OFF))
-	{
-		destroyCplexData(&cpx); destroySolution(sol);
-		throwError(inst, NULL, "BranchAndCut: error on CPXsetinitparam(CPX_PARAM_MIPCBREDLP)");
-	}
+		throwError("BranchAndCut: error on CPXsetinitparam(CPX_PARAM_MIPCBREDLP)");
 
 	if (CPXcallbacksetfunc(cpx.env, cpx.lp, CPX_CALLBACKCONTEXT_CANDIDATE, genericCallbackCandidate, &cbData))
-	{
-		destroyCplexData(&cpx); destroySolution(sol);
-		throwError(inst, NULL, "BranchAndCut: error on CPXsetlazyconstraintcallbackfunc");
-	}
+		throwError("BranchAndCut: error on CPXsetlazyconstraintcallbackfunc");
 	
 	if (CPXsetintparam(cpx.env, CPX_PARAM_THREADS, inst->params.nThreads))
-	{
-		destroyCplexData(&cpx); destroySolution(sol);
-		throwError(inst, NULL, "BranchAndCut: error on CPXsetintparam(CPX_PARAM_THREADS)");
-	}
+		throwError("BranchAndCut: error on CPXsetintparam(CPX_PARAM_THREADS)");
 
 	if (CPXmipopt(cpx.env, cpx.lp))
-	{
-		destroyCplexData(&cpx); destroySolution(sol);
-		throwError(inst, NULL, "BranchAndCut: output of CPXmipopt != 0");
-	}
+		throwError("BranchAndCut: output of CPXmipopt != 0");
 	
 	cvtSuccessorsToSolution(cbData.bestSuccessors, sol);
 	//sol->cost = cbData.bestCost;
@@ -103,11 +88,7 @@ int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG co
 	{
 		double * coeffs = xstar;
 		if ((errCode = setSEC(coeffs, indexes, NULL, context, &sub, 0, inst, cbData->ncols, 0)) != 0)
-		{
-			free(xstar); free(sub.successors); free(sub.subtoursMap); free(indexes);
-			LOG(LOG_LVL_ERROR,"BranchAndCut callback: setSEC failed with code %d", errCode);
-			return 1;
-		}
+			throwError("BranchAndCut callback: setSEC failed with code %d", errCode);
 
 		cost = PatchingHeuristic(&sub, inst);
 	}
@@ -128,11 +109,7 @@ int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG co
 
 		// post solution to cplex
 		if ((sub.subtoursCount > 1) && ((errCode = PostSolution(context, inst, cbData->ncols, cbData->bestSuccessors, cbData->bestCost, xstar, indexes)) != 0))
-		{
-			free(xstar); free(sub.successors); free(sub.subtoursMap); free(indexes);
-			LOG(LOG_LVL_ERROR,"BranchAndCut callback: postSolution failed with code %d", errCode);
-			return 1;
-		}
+			throwError("BranchAndCut callback: postSolution failed with code %d", errCode);
 	}
 
 	free(xstar); destroySubtoursData(&sub); free(indexes);
@@ -149,11 +126,11 @@ CallbackData initCallbackData(CplexData *cpx, Solution *sol)
 	};
 
 	if (cbData.ncols <= 0)
-		throwError(NULL, sol, "initCallbackData: CPXgetnumcols returned 0. Cpx.env is probably empty");
+		throwError("initCallbackData: CPXgetnumcols returned 0. Cpx.env is probably empty");
 
 	cbData.bestSuccessors = malloc((cpx->inst->nNodes + AVX_VEC_SIZE) * sizeof(int));
 	if (cbData.bestSuccessors == NULL)
-		throwError(NULL, sol, "initCallbackData: Failed to allocate memory");
+		throwError("initCallbackData: Failed to allocate memory");
 
 	pthread_mutex_init(&cbData.mutex, NULL);
 

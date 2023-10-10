@@ -18,7 +18,7 @@ void benders(Solution *sol, double tlim)
 	int n = inst->nNodes;
 
 	if (!checkSolution(sol))
-		throwError(inst, sol, "benders: Input solution is not valid");
+		throwError("benders: Input solution is not valid");
 
     CplexData cpx = initCplexData(inst);
 
@@ -46,16 +46,10 @@ void benders(Solution *sol, double tlim)
 
 
 		if (CPXmipopt(cpx.env, cpx.lp))
-		{
-			destroyCplexData(&cpx);
-			throwError(inst, NULL, "Benders: output of CPXmipopt != 0");
-		}
+			throwError("Benders: output of CPXmipopt != 0");
 
 		if (CPXgetx(cpx.env, cpx.lp, xstar, 0, ncols - 1))
-		{
-			destroyCplexData(&cpx);
-			throwError(inst, NULL, "Benders: output of CPXgetx != 0");
-		}
+			throwError("Benders: output of CPXgetx != 0");
 
 		sub.subtoursCount = 0;
 		
@@ -73,21 +67,13 @@ void benders(Solution *sol, double tlim)
 		double * coeffs = xstar; // reuse xStar instead of allocating new memory
 
 		if (setSEC(coeffs, indexes, &cpx, NULL, &sub, iterNum, inst, ncols, 1) == 1)
-		{
-			free(xstar); free(sub.subtoursMap); free(sub.successors); free(bestSuccessorsSol); free(indexes);
-			destroyCplexData(&cpx);
-			throwError(inst, NULL, "Benders: SetSEC failed");
-		}
+			throwError("Benders: SetSEC failed");
 		
 		// generate a solution using Repair Heuristic and check if it is better than the previous solutions
 		__uint128_t cost = PatchingHeuristic(&sub, inst);
 
 		if (!checkSuccessorSolution(inst, sub.successors))
-		{
-			free(xstar); free(sub.subtoursMap); free(sub.successors); free(bestSuccessorsSol); free(indexes);
-			destroyCplexData(&cpx);
-			throwError(inst, NULL, "Benders: Successors after repair heuristic does not represent a loop");
-		}
+			throwError("Benders: Successors after repair heuristic does not represent a loop");
 
 		if (cost < bestCost)
 		{

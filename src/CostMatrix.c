@@ -38,13 +38,13 @@ double computeCostMatrix(Instance *inst)
 
     // first check that distance type is supported
     if (inst->params.edgeWeightType  > ATT)
-        throwError(inst, NULL, "Distance Matrix Computation: Edge weight type unsupported");
+        throwError("Distance Matrix Computation: Edge weight type unsupported");
 
     // allocate memory
     size_t allocSize = (size_t)inst->nNodes * (size_t)inst->nNodes * sizeof(float);
     inst->edgeCostMat = malloc(allocSize);
     if (inst->edgeCostMat == NULL)
-        throwError(inst, NULL, "Could not allocate memory for the edgeCostMatrix. Required amount is %.2f GB", (float)allocSize / (1024.F * 1024.F * 1024.F));
+        throwError("Could not allocate memory for the edgeCostMatrix. Required amount is %.2f GB", (float)allocSize / (1024.F * 1024.F * 1024.F));
     else
         LOG(LOG_LVL_LOG, "EdgeCostMatrix: %.2f GB of memory allocated successfully", (float)allocSize / (1024.F * 1024.F * 1024.F));
         

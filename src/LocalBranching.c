@@ -18,6 +18,10 @@ typedef struct
     int k;
 } LocalBranchingData;
 
+static LocalBranchingData initLocalBranchingData (Solution *sol);
+
+static void destroyLocalBranchingData (LocalBranchingData *lbData);
+
 static LocalBranchingData initLocalBranchingData (Solution *sol)
 {
     LocalBranchingData lbData = {
@@ -36,25 +40,6 @@ static void destroyLocalBranchingData (LocalBranchingData *lbData)
     destroyCplexData(&lbData->cpx);
 }
 
-static void throwLocalBranchingError(LocalBranchingData *lbData, Solution *sol, char *msg, ...)
-{
-    printf("[\033[1;31mERR \033[0m] ");
-
-    va_list params;
-    va_start(params, msg);
-    vprintf(msg, params);
-    va_end(params);
-
-    printf("\n");
-
-    if (lbData) destroyLocalBranchingData(lbData);
-    if (sol->instance) destroyInstance(sol->instance);
-    if (sol) destroySolution(sol);
-
-    exit(EXIT_FAILURE);
-}
-
-
 static void updateK(LocalBranchingData *lbData);
 
 static void addSolSimilarityConstraint(LocalBranchingData *lbData);
@@ -72,7 +57,7 @@ void LocalBranching(Solution *sol, double timeLimit)
     int errCode;
 
     if ((errCode = CPXcallbacksetfunc(lbData.cpx.env, lbData.cpx.lp, CPX_CALLBACKCONTEXT_CANDIDATE, genericCallbackCandidate, &lbData.cbData)))
-        throwLocalBranchingError(&lbData, sol, "LocalBranching: CPXcallbacksetfunc failed with code %d", errCode);
+        throwError("LocalBranching: CPXcallbacksetfunc failed with code %d", errCode);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double currentTime = cvtTimespec2Double(timeStruct);
@@ -88,23 +73,23 @@ void LocalBranching(Solution *sol, double timeLimit)
         // update time limit
         double remainingTime = startTime + timeLimit - currentTime;
         if ((errCode = CPXsetdblparam(lbData.cpx.env, CPX_PARAM_TILIM, remainingTime)))
-            throwLocalBranchingError(&lbData, sol, "LocalBranching: CPXsetdblparam failed with code %d", errCode);
+            throwError("LocalBranching: CPXsetdblparam failed with code %d", errCode);
 
         // update/set warm start solution
         if ((errCode = WarmStart(&lbData.cpx, lbData.cbData.bestSuccessors)))
-            throwLocalBranchingError(&lbData, sol, "LocalBranching: WarmStart failed with code %d", errCode);
+            throwError("LocalBranching: WarmStart failed with code %d", errCode);
 
         LOG(LOG_LVL_DEBUG, "LocalBranching: WarmStart was set");
 
         // run cplex
         LOG(LOG_LVL_NOTICE, "LocalBranching: Iteration %4d, running Branch&Cut method with k = %d", iterCount, lbData.k);
         if ((errCode = CPXmipopt(lbData.cpx.env, lbData.cpx.lp)))
-            throwLocalBranchingError(&lbData, sol, "LocalBranching: CPXmipopt failed with code %d", errCode);
+            throwError("LocalBranching: CPXmipopt failed with code %d", errCode);
 
         LOG(LOG_LVL_DEBUG, "LocalBranching: CPXmipopt finished");
 
         if ((errCode = removeSolSimilarityConstraint(&lbData)))
-            throwLocalBranchingError(&lbData, sol, "LocalBranching: removeSolSimilarityConstraint -> CPXdelrows failed with code %d", errCode);
+            throwError("LocalBranching: removeSolSimilarityConstraint -> CPXdelrows failed with code %d", errCode);
 
         if (lbData.k >= sol->instance->nNodes)
         {
@@ -172,10 +157,7 @@ static void addSolSimilarityConstraint(LocalBranchingData *lbData)
 
     int errCode = CPXaddrows(lbData->cpx.env, lbData->cpx.lp, 0, 1, n, &rhs, &sense, &izero, index, value, NULL, &rname);
     if (errCode)
-    {
-        destroyLocalBranchingData(lbData); free(index); free(value);
-        throwError(lbData->sol->instance, lbData->sol, "addSolSimilarityConstraint: CPXaddrows(): error %d", errCode);
-    }
+        throwError("addSolSimilarityConstraint: CPXaddrows(): error %d", errCode);
 }
 
 static inline int removeSolSimilarityConstraint(LocalBranchingData *lbData)

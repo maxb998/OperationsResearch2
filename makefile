@@ -1,5 +1,5 @@
-# compiler name
-CC = clang
+# compiler name (gcc seems to use smarter tricks since the executable is faster when using gcc instead of clang on an arch linux machine)
+CC = gcc
 
 # Cplex Location
 CPLEX_HEADERS_COMPILER_FLAG := -I/opt/ibm/ILOG/CPLEX_Studio2211/cplex/include/ilcplex

@@ -38,9 +38,6 @@ static HardfixAllocatedMem initHardfixAllocatedMem(Solution *sol);
 // Free all memory allocated by init method and destriy all sub-structs
 static void destroyHardfixAllocatedMem(HardfixAllocatedMem *hfAlloc);
 
-// Very similar to throwError but frees all memory allocated in [HardfixAllocatedMem, sol] and destroys sub-structs. Defined to improve readability
-static void throwHardFixError(HardfixAllocatedMem *hfAlloc, Solution *sol, char *msg, ...);
-
 // Updates fixAmount value. Only does so after STATIC_COST_THRESHOLD iterations
 static void updateFixAmount(HardfixAllocatedMem *hfAlloc);
 
@@ -60,16 +57,15 @@ void HardFixing(Solution *sol, enum HardFixPolicy policy, double tlim)
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
     double startTime = cvtTimespec2Double(currT);
 
-    Instance *inst = sol->instance;
     int errCode = 0;
 
     if (!checkSolution(sol))
-		throwError(inst, sol, "HardFixing: Input solution is not valid");
+		throwError("HardFixing: Input solution is not valid");
 
     HardfixAllocatedMem hfAlloc = initHardfixAllocatedMem(sol);
 
     if ((errCode = CPXcallbacksetfunc(hfAlloc.cpx.env, hfAlloc.cpx.lp, CPX_CALLBACKCONTEXT_CANDIDATE, genericCallbackCandidate, &hfAlloc.cbData)) != 0)
-        throwHardFixError(&hfAlloc, sol, "HardFix: CPXcallbacksetfunc failed with code %d", errCode);
+        throwError("HardFix: CPXcallbacksetfunc failed with code %d", errCode);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
     double currentTime = cvtTimespec2Double(currT);
@@ -85,11 +81,11 @@ void HardFixing(Solution *sol, enum HardFixPolicy policy, double tlim)
             {
             case HARDFIX_POLICY_RANDOM:
                 if ((errCode = randomFix(&hfAlloc)) != 0)
-                    throwHardFixError(&hfAlloc, sol, "HardFix: randomFix failed with code %d", errCode);
+                    throwError("HardFix: randomFix failed with code %d", errCode);
                 break;
             case HARDFIX_POLICY_SMALLEST:
                 if ((errCode = smallestFix(&hfAlloc)) != 0)
-                    throwHardFixError(&hfAlloc, sol, "HardFix: smallestFix failed with code %d", errCode);
+                    throwError("HardFix: smallestFix failed with code %d", errCode);
                 break;
             }
         }
@@ -99,18 +95,18 @@ void HardFixing(Solution *sol, enum HardFixPolicy policy, double tlim)
         // update time limit
         double remainingTime = startTime + tlim - currentTime;
         if ((errCode = CPXsetdblparam(hfAlloc.cpx.env, CPX_PARAM_TILIM, remainingTime)) != 0)
-            throwHardFixError(&hfAlloc, sol, "HardFix: CPXsetdblparam failed with code %d", errCode);
+            throwError("HardFix: CPXsetdblparam failed with code %d", errCode);
 
         // update/set warm start solution
         if ((errCode = WarmStart(&hfAlloc.cpx, hfAlloc.cbData.bestSuccessors)) != 0)
-            throwHardFixError(&hfAlloc, sol, "HardFix: WarmStart failed with code %d", errCode);
+            throwError("HardFix: WarmStart failed with code %d", errCode);
 
         LOG(LOG_LVL_DEBUG, "HardFix: WarmStart was set");
 
         // run cplex
         LOG(LOG_LVL_NOTICE, "HardFix: Iteration %4d, running Branch&Cut method with %lu fixed edges", iterCount, hfAlloc.fixAmount);
         if ((errCode = CPXmipopt(hfAlloc.cpx.env, hfAlloc.cpx.lp)) != 0)
-            throwHardFixError(&hfAlloc, sol, "HardFix: CPXmipopt failed with code %d", errCode);
+            throwError("HardFix: CPXmipopt failed with code %d", errCode);
 
         LOG(LOG_LVL_DEBUG, "HardFix: CPXmipopt finished");
 
@@ -123,7 +119,7 @@ void HardFixing(Solution *sol, enum HardFixPolicy policy, double tlim)
         updateFixAmount(&hfAlloc);
 
         if ((errCode = resetBounds(&hfAlloc)) != 0)
-            throwHardFixError(&hfAlloc, sol, "HardFix: resetBounds failed with code %d", errCode);
+            throwError("HardFix: resetBounds failed with code %d", errCode);
 
         clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
         currentTime = cvtTimespec2Double(currT);
@@ -184,24 +180,6 @@ static void destroyHardfixAllocatedMem(HardfixAllocatedMem *hfAlloc)
     hfAlloc->bVal = NULL;
     hfAlloc->bType = NULL;
     hfAlloc->indexes = NULL;
-}
-
-static void throwHardFixError(HardfixAllocatedMem *hfAlloc, Solution *sol, char *msg, ...)
-{
-    printf("[\033[1;31mERR \033[0m] ");
-
-    va_list params;
-    va_start(params, msg);
-    vprintf(msg, params);
-    va_end(params);
-
-    printf("\n");
-
-    if (hfAlloc) destroyHardfixAllocatedMem(hfAlloc);
-    if (sol->instance) destroyInstance(sol->instance);
-    if (sol) destroySolution(sol);
-
-    exit(EXIT_FAILURE);
 }
 
 static void updateFixAmount(HardfixAllocatedMem *hfAlloc)
