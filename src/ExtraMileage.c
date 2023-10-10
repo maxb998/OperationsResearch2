@@ -212,11 +212,11 @@ static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, un
     thSpecific.workingSol=newSolution(inst);
 
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        thSpecific.X = malloc((inst->nNodes + AVX_VEC_SIZE) * 3 * sizeof(int));
+        thSpecific.X = malloc((inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(int));
         if (thSpecific.X == NULL)
             throwError("ExtraMileage -> initThreadSpecificData: Failed to allocate memory");
         thSpecific.Y = &thSpecific.X[inst->nNodes + AVX_VEC_SIZE];
-        thSpecific.costCache = &thSpecific.Y[inst->nNodes + AVX_VEC_SIZE];
+        thSpecific.costCache = NULL;
     #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE))
         thSpecific.costCache = malloc((inst->nNodes + AVX_VEC_SIZE) * sizeof(float));
         if (thSpecific.costCache == NULL)
@@ -299,9 +299,11 @@ static void initialization(ThreadSpecificData *thSpecific)
     #endif
     for (int i = 0; i < inst->nNodes + AVX_VEC_SIZE; i++)
         indexPath[i] = i;
-    // set all costCache to 0 to avoid issues with selection using avx
-    for (int i = 0; i < inst->nNodes + AVX_VEC_SIZE; i++)
-        thSpecific->costCache[i] = -INFINITY;
+    #if (COMPUTATION_TYPE != COMPUTE_OPTION_AVX)
+        // set all costCache to 0 to avoid issues with selection using avx
+        for (int i = 0; i < inst->nNodes + AVX_VEC_SIZE; i++)
+            thSpecific->costCache[i] = -INFINITY;
+    #endif
     
 
     switch (thShared->startOption)
@@ -465,14 +467,13 @@ static void applyExtraMileage_Internal(ThreadSpecificData *thSpecific, int nCove
     thSpecific->workingSol.indexPath[nCovered] = thSpecific->workingSol.indexPath[0];
 
     // setup costCache
-    for (int i = 0; i < nCovered; i++)
-        #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-            thSpecific->costCache[i] = computeEdgeCost(thSpecific->X[i], thSpecific->Y[i], thSpecific->X[i+1], thSpecific->Y[i+1], ewt, roundW);
-        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+        for (int i = 0; i < nCovered; i++)
             thSpecific->costCache[i] = computeEdgeCost(inst->X[indexPath[i]], inst->Y[indexPath[i]], inst->X[indexPath[i+1]], inst->Y[indexPath[i+1]], ewt, roundW);
-        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+        for (int i = 0; i < nCovered; i++)
             thSpecific->costCache[i] = inst->edgeCostMat[indexPath[i] * n + indexPath[i+1]];
-        #endif
+    #endif
 
     int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
 
@@ -538,7 +539,12 @@ static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCov
 
     nCovered++;
 
-    thSpecific->workingSol.cost -= cvtFloat2Cost(thSpecific->costCache[succ.anchor]);
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        Instance *inst = thSpecific->workingSol.instance;
+        thSpecific->workingSol.cost -= cvtFloat2Cost(computeEdgeCost(thSpecific->X[succ.anchor], thSpecific->Y[succ.anchor], thSpecific->X[succ.anchor+1], thSpecific->Y[succ.anchor+1], inst->params.edgeWeightType, inst->params.roundWeights));
+    #else
+        thSpecific->workingSol.cost -= cvtFloat2Cost(thSpecific->costCache[succ.anchor]);
+    #endif
     thSpecific->workingSol.cost += cvtFloat2Cost(succ.newCost0);
     thSpecific->workingSol.cost += cvtFloat2Cost(succ.newCost1);
 
@@ -581,7 +587,9 @@ static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCov
             thSpecific->Y[i+1] = thSpecific->Y[i];
         #endif
         indexPath[i+1] = indexPath[i];
-        thSpecific->costCache[i+1] = thSpecific->costCache[i];
+        #if (COMPUTATION_TYPE != COMPUTE_OPTION_AVX)
+            thSpecific->costCache[i+1] = thSpecific->costCache[i];
+        #endif
     }
 
     i++;
@@ -591,8 +599,10 @@ static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCov
         thSpecific->Y[i] = bestY;
     #endif
     indexPath[i] = bestIndex;
-    thSpecific->costCache[i-1] = succ.newCost0;
-    thSpecific->costCache[i] = succ.newCost1;
+    #if (COMPUTATION_TYPE != COMPUTE_OPTION_AVX)
+        thSpecific->costCache[i-1] = succ.newCost0;
+        thSpecific->costCache[i] = succ.newCost1;
+    #endif
 
     LOG(LOG_LVL_EVERYTHING, "Extra Mileage Solution Update: Node %d added to solution between nodes %d and %d", indexPath[i], indexPath[i-1], indexPath[i+1]);
 }
@@ -607,43 +617,49 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
     bool roundW = inst->params.roundWeights;
     int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
 
-    // Contains best cost values (extra cost, current cost, new cost 0 and new cost 1)
+    // Contains best mileage values
     __m256 bestExtraCostVec = _mm256_set1_ps(INFINITY);
-    __m256 bestAltEdgeCostVec0 = bestExtraCostVec, bestAltEdgeCostVec1 = bestExtraCostVec;
     // Contains the indexes of the nodes from which the best (chosen according to bestMileageVec) one will be added to the solution at the end of the iteration
     __m256i bestNodesVec = _mm256_set1_epi32(-1);
     // Contains the indexes corresponding to the edge that will be removed/ splitted to accomodate the new node
     __m256i bestAnchorsVec = _mm256_set1_epi32(-1);
 
-    for (int node = nCovered+1; node <= n; node++)
+    // we do this to avoid the need of checking the last elements loaded by _mm256_loadu -> exploit the "INFINITY" placed at the end of the last elements in sol.X and sol.Y
+    for (int i = 0; i < nCovered; i++)
     {
-        __m256 xNode = _mm256_broadcast_ss(&thSpecific->X[node]), yNode = _mm256_broadcast_ss(&thSpecific->Y[node]);
+        // Create vectors containig necessary data on the points attached to the edge i
+        __m256 x1Vec = _mm256_broadcast_ss(&thSpecific->X[i]), y1Vec = _mm256_broadcast_ss(&thSpecific->Y[i]);
+        __m256 x2Vec = _mm256_broadcast_ss(&thSpecific->X[i + 1]), y2Vec = _mm256_broadcast_ss(&thSpecific->Y[i + 1]);
 
-        // Vectors to keep track of the best node index and it's anchor index
-        __m256i currNodeIndex = _mm256_set1_epi32(node);
-        __m256i anchorsIndexesVec = _mm256_set_epi32(7, 6, 5, 4, 3, 2, 1, 0);
+        // Vector that contains only the cost of the current edge
+        __m256 curEdgeCostVec = computeEdgeCost_VEC(x1Vec, y1Vec, x2Vec, y2Vec, ewt, roundW);
+
+        // Vector that contains only the index of the current edge
+        __m256i curEdgeID = _mm256_set1_epi32(i);
+
+        // Vector that keeps track of the IDs of the best candidates for the current edge
+        __m256i idsVec = _mm256_add_epi32(_mm256_set_epi32(7, 6, 5, 4, 3, 2, 1, 0), _mm256_set1_epi32(nCovered + 1));
         __m256i incrementVec = _mm256_set1_epi32(AVX_VEC_SIZE);
 
-        for (int anchors = 0; anchors < nCovered; anchors+=AVX_VEC_SIZE)
+        // check for each edge which ones are the best
+        for (int u = nCovered + 1; u <= n; u += AVX_VEC_SIZE, idsVec = _mm256_add_epi32(idsVec, incrementVec))
         {
-            __m256 currEdgeCostVec = _mm256_loadu_ps(&thSpecific->costCache[anchors]);
-            
-            __m256 altEdgeCostVec0 = computeEdgeCost_VEC(xNode, yNode, _mm256_loadu_ps(&thSpecific->X[anchors]), _mm256_loadu_ps(&thSpecific->Y[anchors]), ewt, roundW);
-            __m256 altEdgeCostVec1 = computeEdgeCost_VEC(xNode, yNode, _mm256_loadu_ps(&thSpecific->X[anchors+1]), _mm256_loadu_ps(&thSpecific->Y[anchors+1]), ewt, roundW);
-            __m256 currExtraCostVec = _mm256_sub_ps(_mm256_add_ps(altEdgeCostVec0, altEdgeCostVec1), currEdgeCostVec);
+            __m256 curExtraMileageVec;
+            {
+                __m256 xuVec = _mm256_loadu_ps(&thSpecific->X[u]), yuVec = _mm256_loadu_ps(&thSpecific->Y[u]);
+                __m256 altEdge1CostVec = computeEdgeCost_VEC(xuVec, yuVec, x1Vec, y1Vec, ewt, roundW);
+                __m256 altEdge2CostVec = computeEdgeCost_VEC(xuVec, yuVec, x2Vec, y2Vec, ewt, roundW);
+                __m256 altEdgeCostVec = _mm256_add_ps(altEdge1CostVec, altEdge2CostVec);
+                curExtraMileageVec = _mm256_sub_ps(altEdgeCostVec, curEdgeCostVec);
+            }
 
-            // Compare extra cost and get binary mask
-            __m256 cmpMask = _mm256_cmp_ps(currExtraCostVec, bestExtraCostVec, _CMP_LT_OQ);
+            // Compare curExtraMileageCostVec with bestExtraMileageVec
+            __m256 cmpMask = _mm256_cmp_ps(curExtraMileageVec, bestExtraCostVec, _CMP_LT_OQ);
 
-            // keep only the best
-            bestExtraCostVec = _mm256_blendv_ps(bestExtraCostVec, currExtraCostVec, cmpMask);
-            bestAltEdgeCostVec0 = _mm256_blendv_ps(bestAltEdgeCostVec0, altEdgeCostVec0, cmpMask);
-            bestAltEdgeCostVec1 = _mm256_blendv_ps(bestAltEdgeCostVec1, altEdgeCostVec1, cmpMask);
-            bestAnchorsVec = _mm256_blendv_epi8(bestAnchorsVec, anchorsIndexesVec, _mm256_castps_si256(cmpMask));
-            bestNodesVec = _mm256_blendv_epi8(bestNodesVec, currNodeIndex, _mm256_castps_si256(cmpMask));
-            
-            // move to next operation
-            anchorsIndexesVec = _mm256_add_epi32(anchorsIndexesVec, incrementVec);
+            // Set new best according to comparison result
+            bestExtraCostVec = _mm256_blendv_ps(bestExtraCostVec, curExtraMileageVec, cmpMask);
+            bestAnchorsVec = _mm256_blendv_epi8(bestAnchorsVec, curEdgeID, _mm256_castps_si256(cmpMask));
+            bestNodesVec = _mm256_blendv_epi8(bestNodesVec, idsVec, _mm256_castps_si256(cmpMask));
         }
     }
     // at this point we must select a candidate(best or almost-best(grasp))
@@ -656,7 +672,7 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
     argsort(avxStoreFloat, sortedArgs, AVX_VEC_SIZE);
 
     int chosenIndex = sortedArgs[0];
-    if ((inst->params.graspType == GRASP_ALMOSTBEST) && (n - nCovered > AVX_VEC_SIZE + 1) && !(avxStoreFloat[sortedArgs[1]] == -INFINITY) && (graspThreshold > rand_r(&thSpecific->rndState)))
+    if ((inst->params.graspType == GRASP_ALMOSTBEST) && (n - nCovered > AVX_VEC_SIZE + 1)&& (graspThreshold > rand_r(&thSpecific->rndState)))
         for (int i = 1; i < AVX_VEC_SIZE - 1; i++)
             if ((avxStoreFloat[sortedArgs[i+1]] == -INFINITY) || (rand_r(&thSpecific->rndState) < graspThreshold))
                 break;
@@ -668,10 +684,8 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
     retVal.node = avxStoreInt[chosenIndex];
     _mm256_storeu_si256((__m256i_u *)avxStoreInt, bestAnchorsVec);
     retVal.anchor = avxStoreInt[chosenIndex];
-    _mm256_storeu_ps(avxStoreFloat, bestAltEdgeCostVec0);
-    retVal.newCost0 = avxStoreFloat[chosenIndex];
-    _mm256_storeu_ps(avxStoreFloat, bestAltEdgeCostVec1);
-    retVal.newCost1 = avxStoreFloat[chosenIndex];
+    retVal.newCost0 = computeEdgeCost(thSpecific->X[retVal.node], thSpecific->Y[retVal.node], thSpecific->X[retVal.anchor], thSpecific->Y[retVal.anchor], ewt, roundW);
+    retVal.newCost1 = computeEdgeCost(thSpecific->X[retVal.node], thSpecific->Y[retVal.node], thSpecific->X[retVal.anchor+1], thSpecific->Y[retVal.anchor+1], ewt, roundW);
 
     return retVal;
 }
