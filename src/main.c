@@ -150,6 +150,8 @@ static void runMetaheuristic(Solution *sol, enum Mode mode, double tlim)
     case MODE_TABU:
         printf("Tabu Search Starting...\n");
 
+        TabuSearch(sol, tlim, 0);
+
         printf("Tabu Search finished in %lf second\n", sol->execTime - startTime);
         printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));
         break;

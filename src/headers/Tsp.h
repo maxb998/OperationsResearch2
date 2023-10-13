@@ -253,4 +253,18 @@ void VariableNeighborhoodSearch(Solution *sol, double timeLimit, int nThreads);
 */
 void SimulatedAnnealing(Solution *sol, double timeLimit, int nThreads);
 
+
+//###################################################################################################################################
+// TABU_SEARCH
+//###################################################################################################################################
+
+/*!
+* @brief Runs Tabu Search on input solution sol.
+* @param sol Starting point solution.
+* @param timeLimit Time limit.
+* @param nThreads Specify the nuber of threads in which run Tabu Search on sol simultaneously
+*/
+void TabuSearch(Solution *sol, double timeLimit, int nThreads);
+
+
 #endif //TSP_FUNCTIONS_H

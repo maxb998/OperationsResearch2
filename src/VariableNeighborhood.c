@@ -205,7 +205,10 @@ static void *runVns(void *arg)
     {
         // after some non-improving iterations set the workingSol equal to the bestSol
         if (nonImprovingIterCount > VNS_RESTART_FROM_MAX_THRESHOLD)
+        {
             setupThSpecificOnBestSol(thSpecific);
+            nonImprovingIterCount = 0;
+        }
 
         kick(thSpecific);
 
