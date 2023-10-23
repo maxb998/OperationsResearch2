@@ -4,6 +4,8 @@
 #include <time.h>
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
+//#define DEBUG
+
 #define LOG_INTERVAL 30
 
 typedef struct
@@ -101,17 +103,16 @@ void apply2OptBestFix(Solution *sol)
 
 void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *costCache)
 {
-    Instance *inst = sol->instance;
-    int n = inst->nNodes;
-
     struct timespec timeStruct;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double startTime = cvtTimespec2Double(timeStruct);
     double printTimeSec = startTime;
 
     // check solution correspondence with X and Y when debugging
-    if (inst->params.logLevel >= LOG_LVL_DEBUG)
-    {
+    #ifdef DEBUG
+        Instance *inst = sol->instance;
+        int n = inst->nNodes;
+        
         if (!checkSolution(sol))
             throwError("apply2OptBestFix: Input solution is not valid");
         
@@ -130,8 +131,7 @@ void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *
                 if (costCache[i] != inst->edgeCostMat[sol->indexPath[i] * n + sol->indexPath[i+1]])
                     throwError("apply2OptBestFix_fastIteratively: input not valid: costCache isn't coherent with solution at position %d", i);
             #endif
-        
-    }
+    #endif
 
     _2optData data = { .sol=sol, .X=X, .Y=Y, .costCache=costCache, .iter=0 };
 
@@ -212,14 +212,10 @@ static inline void updateSolution(_2optData *data, _2optMoveData bestFix)
 
     int smallID = bestFix.edge0 + 1, bigID = bestFix.edge1;
 
-    static int updateCount = 0; // generate issues when running in multiple threads
-    updateCount++;
-
-    LOG(LOG_LVL_EVERYTHING, "2Opt: [%d] Updating solution by switching edge (%d,%d) with edge (%d,%d) improving cost by %f. New Cost = %lf", updateCount,
+    LOG(LOG_LVL_EVERYTHING, "2Opt: [%d] Updating solution by switching edge (%d,%d) with edge (%d,%d) improving cost by %f. New Cost = %lf", data->iter,
         sol->indexPath[bestFix.edge0], sol->indexPath[bestFix.edge0 + 1],
         sol->indexPath[bestFix.edge1], sol->indexPath[bestFix.edge1 + 1],
         bestFix.costOffset, cvtCost2Double(sol->cost));
-
 
     while (smallID < bigID)
     {
@@ -336,21 +332,11 @@ static inline _2optMoveData _2OptBestFix(_2optData *data)
 
     for (_2optMoveData currFix = { .edge0=0 }; currFix.edge0 < n - 1; currFix.edge0++) // check for one edge at a time every other edge(except already checked)
     {
-        float partSolEdgeWgt;
-        #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-            partSolEdgeWgt = computeEdgeCost(inst->X[sol->indexPath[currFix.edge0]], inst->Y[sol->indexPath[currFix.edge0]], inst->X[sol->indexPath[currFix.edge0 + 1]], inst->Y[sol->indexPath[currFix.edge0 + 1]], ewt, roundW);
-        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-            partSolEdgeWgt = inst->edgeCostMat[(size_t)sol->indexPath[currFix.edge0] * (size_t)n + (size_t)sol->indexPath[currFix.edge0 + 1]];
-        #endif
+        float partSolEdgeWgt = data->costCache[currFix.edge0];
 
         for (currFix.edge1 = 2 + currFix.edge0; (currFix.edge1 < n - 1) || ((currFix.edge1 < n) && (currFix.edge0 > 0)); currFix.edge1++)
         {
-            float solEdgeWgt;
-            #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-                solEdgeWgt = partSolEdgeWgt + computeEdgeCost(inst->X[sol->indexPath[currFix.edge1]], inst->Y[sol->indexPath[currFix.edge1]], inst->X[sol->indexPath[currFix.edge1 + 1]], inst->Y[sol->indexPath[currFix.edge1 + 1]], ewt, roundW);
-            #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-                solEdgeWgt = partSolEdgeWgt + inst->edgeCostMat[(size_t)sol->indexPath[currFix.edge1] * (size_t)n + (size_t)sol->indexPath[currFix.edge1 + 1]];
-            #endif
+            float solEdgeWgt = partSolEdgeWgt + data->costCache[currFix.edge1];
 
             // check the combined weight other combination of edges
             float altEdgeWgt;
