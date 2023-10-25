@@ -65,7 +65,7 @@ static inline int nProcessors()
     char *command = "nproc";
     char temp[10];
     commandPipe = (FILE*)popen(command, "r");
-    fgets(temp, sizeof(temp), commandPipe);
+    (void)fgets(temp, sizeof(temp), commandPipe);
     pclose(commandPipe);
     int numProcessors = atoi(temp);
     return numProcessors;
