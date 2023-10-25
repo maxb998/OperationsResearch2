@@ -7,9 +7,6 @@
 
 //#define DEBUG
 
-// Defines how big the tenure should be compared to the number of nodes
-#define TENURE_RATIO 1/10
-#define TENURE_MAX_SIZE 10
 // Defines how many non-improving iterations tabu must do before restarting from the best sol
 #define TABU__RESTART_FROM_BEST__THRESHOLD 100
 
@@ -51,7 +48,7 @@ typedef struct
 
 
 // Initializes mutex and variables
-static ThreadSharedData initThreadSharedData (Solution *sol, double timeLimit);
+static ThreadSharedData initThreadSharedData (Solution *sol, int tenureSize, double timeLimit);
 // Destroy mutex
 static void destroyThreadSharedData (ThreadSharedData *thShared);
 // Initializes variables (and allocates memory on .X, .Y when using COMPUTE_OPTION_AVX)
@@ -81,6 +78,11 @@ void TabuSearch(Solution *sol, double timeLimit, int nThreads)
 {
     Instance *inst = sol->instance;
 
+    if (inst->params.tabuTenureSize == -1)
+        inst->params.tabuTenureSize = (int)log2f((float)inst->nNodes);
+    LOG(LOG_LVL_NOTICE, "Tabu tenure size is set to %d", inst->params.tabuTenureSize);
+    
+
     // time limit management
     struct timespec timeStruct;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
@@ -105,7 +107,7 @@ void TabuSearch(Solution *sol, double timeLimit, int nThreads)
 
     apply2OptBestFix(sol); // isn't necessary since it's solution should already be 2-optimized, but just to be sure
 
-    ThreadSharedData thShared = initThreadSharedData(sol, startTime + timeLimit);
+    ThreadSharedData thShared = initThreadSharedData(sol, inst->params.tabuTenureSize, startTime + timeLimit);
     ThreadSpecificData thSpecifics[MAX_THREADS];
     pthread_t threads[MAX_THREADS];
     for (int i = 0; i < nThreads; i++)
@@ -132,12 +134,12 @@ void TabuSearch(Solution *sol, double timeLimit, int nThreads)
     LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)iterCount/execTime);
 }
 
-static ThreadSharedData initThreadSharedData (Solution *sol, double timeLimit)
+static ThreadSharedData initThreadSharedData (Solution *sol, int tenureSize, double timeLimit)
 {
-    ThreadSharedData thShared = { .timeLimit = timeLimit, .bestSol=sol, .tenureSize= sol->instance->nNodes * TENURE_RATIO };
+    ThreadSharedData thShared = { .timeLimit = timeLimit, .bestSol=sol, .tenureSize=tenureSize };
 
-    if (thShared.tenureSize > TENURE_MAX_SIZE)
-        thShared.tenureSize = TENURE_MAX_SIZE;
+    if (thShared.tenureSize > sol->instance->nNodes)
+        LOG(LOG_LVL_WARNING, "Specified Tenure size is bigger than the instance, %d vs %d nodes", thShared.tenureSize, sol->instance->nNodes);
 
     if (pthread_mutex_init(&thShared.mutex, NULL)) throwError("VariableNeighborhoodSearch -> initThreadSharedData: Failed to initialize mutex");
 
@@ -306,14 +308,15 @@ static void setupThSpecificOnBestSol(ThreadSpecificData *thSpecific)
         }
     #endif
 
-    int *path = thShared->bestSol->indexPath;
     for (int i = 0; i < n; i++) // build cost cache
     {
         #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
             thSpecific->costCache[i] = computeEdgeCost(thSpecific->X[i], thSpecific->Y[i], thSpecific->X[i+1], thSpecific->Y[i+1], inst->params.edgeWeightType, inst->params.roundWeights);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+            int *path = thShared->bestSol->indexPath;
             thSpecific->costCache[i] = computeEdgeCost(inst->X[path[i]], inst->Y[path[i]], inst->X[path[i+1]], inst->Y[path[i+1]], inst->params.edgeWeightType, inst->params.roundWeights);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+            int *path = thShared->bestSol->indexPath;
             thSpecific->costCache[i] = inst->edgeCostMat[path[i] * n + path[i+1]];
         #endif
     }

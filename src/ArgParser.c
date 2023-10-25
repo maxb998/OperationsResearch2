@@ -114,6 +114,7 @@ enum argpKeys{
 
     ARGP_NN_TRYALL,
     ARGP_EM_FARTHEST,
+    ARGP_TABU_TENURESIZE,
     ARGP_HARDFIX_SMALLEST,
 
     ARGP_SEED,
@@ -153,6 +154,7 @@ void argParse(Instance * inst, int argc, char *argv[])
 
         { .name="nn-tryall", .key=ARGP_NN_TRYALL, .arg=NULL, .flags=0, .doc="Specify to make Nearest Neighbor start from each node instead of chosing a random one each time\n", .group=4 },
         { .name="em-farthest", .key=ARGP_EM_FARTHEST, .arg=NULL, .flags=0, .doc="Specify to make Extra Mileage initialization the farthest nodes each time instead of a random one each time\n", .group=4 },
+        { .name="tabu-tenure-size", .key=ARGP_TABU_TENURESIZE, .arg="UINT", .flags=0, .doc="Specify how big the tenure should be in Tabu Search\n", .group=4 },
         { .name="hardfix-smallest", .key=ARGP_HARDFIX_SMALLEST, .arg=NULL, .flags=0, .doc="Specify to make Hard Fixing fix only edges with smallest cost instead of fixing random edges\n", .group=4 },
 
         { .name="seed", .key=ARGP_SEED, .arg="UINT", .flags=0, .doc="Random Seed [0,MAX_INT32] to use as random seed for the current run. If -1 seed will be random\n", .group=5 },
@@ -216,6 +218,17 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
     
     case ARGP_EM_FARTHEST:
         inst->params.emInitOption = EM_INIT_FARTHEST_POINTS;
+        break;
+
+    case ARGP_TABU_TENURESIZE:
+    {
+        char *endPtr = 0;
+        inst->params.tabuTenureSize = (int)strtol(arg, &endPtr, 10);
+        if (endPtr == arg)
+            throwError("Something went wrong when converting tenure size. Make sure that the value specified is an integer positive number");
+        if (inst->params.tabuTenureSize <= 0)
+            throwError("Tabu Tenure cannot be 0 or negative");
+    }
         break;
 
     case ARGP_HARDFIX_SMALLEST:

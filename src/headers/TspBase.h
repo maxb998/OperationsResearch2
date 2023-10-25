@@ -101,6 +101,7 @@ typedef struct
 	enum Mode matheurInitMode;
 	enum Mode warmStartMode;
 
+	int tabuTenureSize;
 	enum HardFixPolicy hardFixPolicy;
     
     int randomSeed;

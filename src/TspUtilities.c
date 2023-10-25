@@ -40,6 +40,7 @@ Instance newInstance ()
             .matheurInitMode = MODE_NN,
             .warmStartMode = MODE_NN,
 
+            .tabuTenureSize = -1,
             .hardFixPolicy = HARDFIX_POLICY_RANDOM,
 
             .randomSeed = -1,

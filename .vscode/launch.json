@@ -25,6 +25,7 @@
 
                 //"--nn-tryall",
                 //"--em-farthest",
+                //"--tabu-tenure-size", "5",
                 //"--hardfix-smallest",
 
                 //"--seed", "2023",
@@ -56,6 +57,7 @@
 
                 //"--nn-tryall",
                 //"--em-farthest",
+                //"--tabu-tenure-size", "5",
                 //"--hardfix-smallest",
 
                 //"--seed", "2023",
