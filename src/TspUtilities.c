@@ -41,6 +41,7 @@ Instance newInstance ()
             .warmStartMode = MODE_NN,
 
             .tabuTenureSize = -1,
+            .restartThreshold = 1000,
             .hardFixPolicy = HARDFIX_POLICY_RANDOM,
 
             .randomSeed = -1,
@@ -65,7 +66,8 @@ static inline int nProcessors()
     char *command = "nproc";
     char temp[10];
     commandPipe = (FILE*)popen(command, "r");
-    (void)fgets(temp, sizeof(temp), commandPipe);
+    (void)((int*)fgets(temp, sizeof(temp), commandPipe)+1); // evil warning anihilation
+    //fgets(temp, sizeof(temp), commandPipe) != NULL ? printf(" \b") : printf(" \b");
     pclose(commandPipe);
     int numProcessors = atoi(temp);
     return numProcessors;

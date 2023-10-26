@@ -9,7 +9,6 @@
 #define MIN_KICK_MAGNITUDE 5
 #define PERMUTATION_THRESHOLD (MAX_KICK_MAGNITUDE * 2)
 #define N_PERMUTATION(nNodes) (nNodes * 4)
-#define VNS_RESTART_FROM_MAX_THRESHOLD 10000
 
 typedef struct
 {
@@ -200,11 +199,12 @@ static void *runVns(void *arg)
             thSpecific->nodesToKick[i] = i;
 
     int nonImprovingIterCount = 0;
+    int restartThreshold = thSpecific->workingSol.instance->params.restartThreshold;
 
     while (currentTime < thShared->timeLimit)
     {
         // after some non-improving iterations set the workingSol equal to the bestSol
-        if (nonImprovingIterCount > VNS_RESTART_FROM_MAX_THRESHOLD)
+        if (nonImprovingIterCount > restartThreshold)
         {
             setupThSpecificOnBestSol(thSpecific);
             nonImprovingIterCount = 0;

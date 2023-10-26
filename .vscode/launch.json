@@ -13,7 +13,7 @@
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
                 "--file", "data/a280.tsp",
-                "--mode", "vns",
+                "--mode", "tabu",
 
                 "--grasp", "almostbest[0.02]",
                 //"--2opt",
@@ -26,6 +26,7 @@
                 //"--nn-tryall",
                 //"--em-farthest",
                 //"--tabu-tenure-size", "5",
+                //"restart-threshold", "1000",
                 //"--hardfix-smallest",
 
                 //"--seed", "2023",
@@ -33,7 +34,7 @@
                 "--roundcosts",
                 //"--plot", 
                 //"--save",
-                "--loglvl", "debug"
+                "--loglvl", "log"
             ],
             "cwd": "${workspaceFolder}"
        },
@@ -45,11 +46,11 @@
             "program": "${workspaceFolder}/bin/x64/main",
             "args": [
                 "--file", "data/a280.tsp",
-                "--mode", "vns",
+                "--mode", "tabu",
 
                 "--grasp", "almostbest[0.01]",
-                "--2opt",
-                "--tlim", "10",
+                //"--2opt",
+                "--tlim", "100",
 
                 //"--metaheur-init-mode", "nn",
                 //"--matheur-init-mode", "vns",
@@ -58,14 +59,15 @@
                 //"--nn-tryall",
                 //"--em-farthest",
                 //"--tabu-tenure-size", "5",
+                "--restart-threshold", "1000",
                 //"--hardfix-smallest",
 
                 //"--seed", "2023",
-                //"--threads", "8",
+                "--threads", "8",
                 //"--roundcosts",
                 //"--plot", 
                 //"--save",
-                "--loglvl", "debug"
+                "--loglvl", "log"
             ],
             "cwd": "${workspaceFolder}"
         }

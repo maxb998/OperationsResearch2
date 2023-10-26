@@ -7,9 +7,6 @@
 
 //#define DEBUG
 
-// Defines how many non-improving iterations tabu must do before restarting from the best sol
-#define TABU__RESTART_FROM_BEST__THRESHOLD 100
-
 typedef struct
 {
     int node0;
@@ -81,7 +78,7 @@ void TabuSearch(Solution *sol, double timeLimit, int nThreads)
     if (inst->params.tabuTenureSize == -1)
         inst->params.tabuTenureSize = (int)log2f((float)inst->nNodes);
     LOG(LOG_LVL_NOTICE, "Tabu tenure size is set to %d", inst->params.tabuTenureSize);
-    
+
 
     // time limit management
     struct timespec timeStruct;
@@ -96,12 +93,12 @@ void TabuSearch(Solution *sol, double timeLimit, int nThreads)
         srand(inst->params.randomSeed);
 
     if ((nThreads < 0) || (nThreads > MAX_THREADS))
-        throwError("VariableNeighborhood: nThreads value is not valid: %d", nThreads);
+        throwError("Tabu Search: nThreads value is not valid: %d", nThreads);
     else if (nThreads == 0)
         nThreads = inst->params.nThreads;
 
     if (!checkSolution(sol))
-        throwError("VariableNeighborhood: Input solution is not valid");
+        throwError("Tabu Search: Input solution is not valid");
 
     sol->indexPath[inst->nNodes] = sol->indexPath[0];
 
@@ -174,11 +171,11 @@ static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, un
     thSpecific.workingSol=newSolution(inst);
     
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        thSpecific.X = malloc((n + AVX_VEC_SIZE) * 3 * sizeof(int));
-        if (!thSpecific.X)
+        thSpecific.costCache = malloc((n + AVX_VEC_SIZE) * 3 * sizeof(int));
+        if (!thSpecific.costCache)
             throwError("Tabu -> initThreadSpecificData: Failed to allocate memory");
+        thSpecific.X = &thSpecific.costCache[n + AVX_VEC_SIZE];
         thSpecific.Y = &thSpecific.X[n + AVX_VEC_SIZE];
-        thSpecific.costCache = &thSpecific.Y[n + AVX_VEC_SIZE];
     #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
         thSpecific.X = thSpecific.Y = NULL;
         thSpecific.costCache = malloc((n + AVX_VEC_SIZE) * sizeof(float));
@@ -194,11 +191,7 @@ static void destroyThreadSpecificData(ThreadSpecificData *thSpecific)
     destroySolution(&thSpecific->workingSol);
 
     free(thSpecific->tenure);
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        free(thSpecific->X);
-    #else
-        free(thSpecific->costCache);
-    #endif
+    free(thSpecific->costCache);
 
     thSpecific->tenure = NULL;
     thSpecific->X = thSpecific->Y = thSpecific->costCache = NULL;
@@ -216,6 +209,7 @@ static void *runTabu(void *arg)
     setupThSpecificOnBestSol(thSpecific);
 
     int nonImprovingIterCount = 0;
+    int restartThreshold = thSpecific->workingSol.instance->params.restartThreshold;
 
     while (currentTime < thShared->timeLimit)
     {
@@ -253,7 +247,7 @@ static void *runTabu(void *arg)
         // use 2opt to optimize (setting edges in the costCache to -INFINITY effectively lock that edges)
         apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->X, thSpecific->Y, thSpecific->costCache);
 
-        if (nonImprovingIterCount > TABU__RESTART_FROM_BEST__THRESHOLD)
+        if (nonImprovingIterCount > restartThreshold)
         {
             setupThSpecificOnBestSol(thSpecific);
             nonImprovingIterCount = 0;
@@ -333,18 +327,12 @@ static void setupThSpecificOnBestSol(ThreadSpecificData *thSpecific)
 
 static inline int randomlySelectEdgeOutsideTenure(ThreadSpecificData *thSpecific, int forbiddenNode)
 {
-    int edge, n = thSpecific->workingSol.instance->nNodes;
-    // cannot choose any edge in the tenure and edge with the same value as 
-    bool rndValueNotValid = true;
-    while (rndValueNotValid)
-    {
-        edge = genRandom(&thSpecific->rndState, 0, n);
-        while(edge == forbiddenNode)
-            edge = genRandom(&thSpecific->rndState, 0, n);
+    int edge = forbiddenNode, n = thSpecific->workingSol.instance->nNodes;
 
-        if (thSpecific->costCache[edge] != -INFINITY)
-            rndValueNotValid = false;
-    }
+    // cannot choose any edge in the tenure and edge with the same value as 
+    while ((edge == forbiddenNode) || (thSpecific->costCache[edge] == -INFINITY))
+        edge = genRandom(&thSpecific->rndState, 0, n);
+
     return edge;
 }
 

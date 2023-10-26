@@ -115,6 +115,7 @@ enum argpKeys{
     ARGP_NN_TRYALL,
     ARGP_EM_FARTHEST,
     ARGP_TABU_TENURESIZE,
+    ARGP_RESTART_THRESHOLD,
     ARGP_HARDFIX_SMALLEST,
 
     ARGP_SEED,
@@ -155,6 +156,7 @@ void argParse(Instance * inst, int argc, char *argv[])
         { .name="nn-tryall", .key=ARGP_NN_TRYALL, .arg=NULL, .flags=0, .doc="Specify to make Nearest Neighbor start from each node instead of chosing a random one each time\n", .group=4 },
         { .name="em-farthest", .key=ARGP_EM_FARTHEST, .arg=NULL, .flags=0, .doc="Specify to make Extra Mileage initialization the farthest nodes each time instead of a random one each time\n", .group=4 },
         { .name="tabu-tenure-size", .key=ARGP_TABU_TENURESIZE, .arg="UINT", .flags=0, .doc="Specify how big the tenure should be in Tabu Search\n", .group=4 },
+        { .name="restart-threshold", .key=ARGP_RESTART_THRESHOLD, .arg="UINT", .flags=0, .doc="Specify the threshold for non-improving iterations of vns or tabu berfore restarting from best solution\n", .group=4 },
         { .name="hardfix-smallest", .key=ARGP_HARDFIX_SMALLEST, .arg=NULL, .flags=0, .doc="Specify to make Hard Fixing fix only edges with smallest cost instead of fixing random edges\n", .group=4 },
 
         { .name="seed", .key=ARGP_SEED, .arg="UINT", .flags=0, .doc="Random Seed [0,MAX_INT32] to use as random seed for the current run. If -1 seed will be random\n", .group=5 },
@@ -225,9 +227,20 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
         char *endPtr = 0;
         inst->params.tabuTenureSize = (int)strtol(arg, &endPtr, 10);
         if (endPtr == arg)
-            throwError("Something went wrong when converting tenure size. Make sure that the value specified is an integer positive number");
+            throwError("Something went wrong when reading tenure size. Make sure that the value specified is an integer positive number");
         if (inst->params.tabuTenureSize <= 0)
             throwError("Tabu Tenure cannot be 0 or negative");
+    }
+        break;
+    
+    case ARGP_RESTART_THRESHOLD:
+    {
+        char *endPtr = 0;
+        inst->params.restartThreshold = (int)strtol(arg, &endPtr, 10);
+        if (endPtr == arg)
+            throwError("Something went wrong when reading restart-threshold. Make sure that the value specified is an integer positive number");
+        if (inst->params.restartThreshold <= 0)
+            throwError("Restart Threshold cannot be 0 or negative");
     }
         break;
 

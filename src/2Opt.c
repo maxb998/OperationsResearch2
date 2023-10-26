@@ -6,6 +6,7 @@
 
 //#define DEBUG
 
+// in seconds
 #define LOG_INTERVAL 30
 
 typedef struct
@@ -53,11 +54,11 @@ void apply2OptBestFix(Solution *sol)
 
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
 
-        X = malloc((n + AVX_VEC_SIZE) * 3 * sizeof(float));
-        if (X == NULL)
+        costCache = malloc((n + AVX_VEC_SIZE) * 3 * sizeof(float));
+        if (costCache == NULL)
             throwError("apply2OptBestFix: Failed to allocate memory");
+        X = &costCache[n + AVX_VEC_SIZE];
         Y = &X[n + AVX_VEC_SIZE];
-        costCache = &Y[n + AVX_VEC_SIZE];
 
         for (int i = 0; i < n; i++) // fill X and Y
         {
@@ -94,11 +95,7 @@ void apply2OptBestFix(Solution *sol)
 
     apply2OptBestFix_fastIteratively(sol, X, Y, costCache);
 
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        free(X);
-    #else
-        free(costCache);
-    #endif
+    free(costCache);
 }
 
 void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *costCache)
@@ -138,10 +135,7 @@ void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *
     bool notFinishedFlag = true;
     while (notFinishedFlag) // runs 2opt until no more moves are made in one iteration of 2opt
     {
-        // setup local values to avoid calling mutex too often
-        _2optMoveData bestFix;
-
-        bestFix = _2OptBestFix(&data);
+        _2optMoveData bestFix = _2OptBestFix(&data);
 
         if (bestFix.costOffset < -EPSILON)
             updateSolution(&data, bestFix);
