@@ -1,150 +1,194 @@
 import os
 import argparse
 import subprocess
-import random
-from datetime import datetime
 import numpy as np
+from colorama import Fore
+from pathlib import Path
 import csv
+
+np.set_printoptions(precision=2)
 
 '''
 datadict = {
-    "instances", 
-    "exec", 
-    "solver_args", 
-    "out_fnames", 
-    "num_iters",
-    "mode",
-    "seed"
+    'instances', 
+    'execPath', 
+    'solverExtraArgs', 
+    'out_fnames',
+    'seeds',
+    'param2Tune',
+    'tuningVars'
 }
 '''
 
-#from matplotlib import pyplot
-
-#seeds_list = [ 2023, 567441, 25, 789632175, 5, 855699, 111111]
-
 def main():
-    random.seed(datetime.now().timestamp())
 
     datadict = arg_parser()
 
-    datadict["seed"] = np.zeros(datadict["num_iters"], dtype=np.int32)
+    os.system('clear')
 
-    runtimes_table = np.zeros([datadict["num_iters"], len(datadict["instances"])], dtype=float)
+    print('Selected Seeds are: ' + str(datadict['seeds']))
+    if len(datadict['param2Tune']) > 0:
+        print('Hyperparameter to tune is ' + datadict['param2Tune'] + ' to tune with values: ' + Fore.LIGHTYELLOW_EX + str(datadict['tuningVars']) + Fore.RESET)
+    
+    print('\n')
+
+    runtimes_table = np.zeros([len(datadict['instances']), len(datadict['tuningVars'])], dtype=float)
     costs_table = np.zeros(runtimes_table.shape, dtype=float)
 
-    for i in range(datadict["num_iters"]):
+    for instIndex in range(len(datadict['instances'])):
 
-        datadict["seed"][i] = random.randint(0, 2147483647)
-        print("Iteration seed = " + str(datadict["seed"][i]))
+        print('Running on instance: ' + Fore.WHITE + Path(datadict['instances'][instIndex]).stem + Fore.RESET)
 
-        for j in range(len(datadict["instances"])):
+        for tuneValIndex in range(len(datadict['tuningVars'])):
 
-            # run the solver on the first instance
-            cmd = get_cmd_list(datadict, j, i)
-            p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+            if len(datadict['param2Tune']) > 0:
+                print('\tRunning with ' + datadict['param2Tune'] + '  ' + Fore.LIGHTYELLOW_EX + datadict['tuningVars'][tuneValIndex] + Fore.RESET)
 
-            exec_out = []
+            # could also sum the result for direct average but might need this in the future
+            costResults = np.zeros(shape=len(datadict['seeds']), dtype=float)
+            runtimeResults = np.zeros(shape=len(datadict['seeds']), dtype=float)
 
-            for line in p.stdout:
-                line = str(line)
-                exec_out.append(line)
+            for seedIndex in range(len(datadict['seeds'])):
 
-                if "ERR" in line:
-                    for l in exec_out:
-                        print(l)
-                    exit(1)
+                # run the solver on the first instance
+                cmd = get_cmd_list(datadict, datadict['instances'][instIndex], datadict['tuningVars'][tuneValIndex], datadict['seeds'][seedIndex])
+                #print(cmd)
+                p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+
+                exec_out = []
+
+                for line in p.stdout:
+                    line = str(line)
+                    exec_out.append(line)
+
+                    if 'ERR' in line:
+                        for l in exec_out:
+                            print(l)
+                        exit(1)
+                    
+                    elif 'WARN' in line:
+                        print(line)
+
+                    elif 'Total runtime = ' in line:
+                        start_pos = line.find('=') + 2
+                        end_pos = line.find(' seconds',  start_pos)
+                        runtimeResults[seedIndex] = float(line[ start_pos : end_pos])
+
+                    elif 'Final cost = ' in line:
+                        start_pos = line.find('=') + 2
+                        end_pos = line.find('\\',  start_pos)
+                        costResults[seedIndex] = float(line[ start_pos : end_pos])
                 
-                elif "WARN" in line:
-                    print(line)
-
-                elif "Total runtime = " in line:
-                    start_pos = line.find("=") + 2
-                    end_pos = line.find(" seconds",  start_pos)
-                    runtimes_table[i,j] = float(line[ start_pos : end_pos])
-
-                elif "Final cost = " in line:
-                    start_pos = line.find("=") + 2
-                    end_pos = line.find("\\",  start_pos)
-                    costs_table[i,j] = float(line[ start_pos : end_pos])
+                
+                costLogStr = 'Cost = ' + str('{0:.2f}').format(costResults[seedIndex])
+                runtimeLogStr = 'Runtime = ' + str('{0:.2f}').format(runtimeResults[seedIndex]) + ' s'
+                seedLogStr = 'Seed = ' + str(datadict['seeds'][seedIndex])
+                print('\t\t' + f'{costLogStr: <35}{runtimeLogStr: <30}{seedLogStr}')
             
-            print("   Run for " + str(datadict["instances"][j]) + " has finished with cost " + str(costs_table[i,j]) + "   in " + str(runtimes_table[i,j]) + "seconds")
-    
-    write_csv(runtimes_table, datadict["out_fnames"][0], datadict)
-    write_csv(costs_table, datadict["out_fnames"][1], datadict)
+            runtimes_table[instIndex, tuneValIndex] = np.average(runtimeResults)
+            costs_table[instIndex, tuneValIndex] = np.average(costResults)
+
+            costLogStr = 'Avg Cost = ' + Fore.LIGHTGREEN_EX + str('{0:.2f}').format(costs_table[instIndex, tuneValIndex]) + Fore.RESET
+            runtimeLogStr = 'Avg Runtime = ' + Fore.LIGHTCYAN_EX + str('{0:.2f}').format(runtimes_table[instIndex, tuneValIndex]) + Fore.RESET + ' s'
+            print('\t' + f'{costLogStr: <35}{runtimeLogStr}')
+        
+    write_csv(runtimes_table, datadict['out_fnames'][0], datadict)
+    write_csv(costs_table, datadict['out_fnames'][1], datadict)
 
 
 
 def arg_parser() -> dict:
 
     # parse arguments
-    parser = argparse.ArgumentParser(prog='TspBenchmark', epilog='Tsp Solver Benchmarking Tool', description='Run tsp solver multiple times saving execution times, number of iterations and cost of the solutions found')
-    parser.add_argument('input_dir', type=str, help='Directory containing all the tsp file instances on which run the solver')
-    parser.add_argument('exec', type=str, help='Location of the exec')
-    parser.add_argument('solver_args', type=str, help='Commandline arguments to pass to the solver')
-    parser.add_argument('output_filename', type=str, help='Name of the output file')
-    parser.add_argument('-n', '--num_iters', metavar='ITERNUM', type=int, help='Number of runs per-instance')
+    parser = argparse.ArgumentParser(prog='TspBenchmark', epilog='Tsp Solver Benchmarking Tool', description='Run tsp solver multiple times saving execution times, number of iterations and cost of the solutions found.')
+    parser.add_argument('--inputDir', metavar='str', required=True, type=str, help='Directory containing all the tsp file instances on which run the solver.')
+    parser.add_argument('--execPath', metavar='str', required=True, type=str, help='Location of the exec.')
+    parser.add_argument('--outputFile', metavar='str', required=True, type=str, help='Name of the output file')
+    parser.add_argument('-s', '--seeds', metavar='int', type=int, nargs='+', help='List of seeds to use in each run. If not specified it will be random.')
+    parser.add_argument('-n', '--nIters', metavar='int', type=int, help='Number of times that the runs are repeated with a different random seed. Overrides values from --seeds')
+    parser.add_argument('--param2Tune', metavar='str', type=str, help='Specify an hyperparameter to tune.')
+    parser.add_argument('--tuningVars', metavar='float', type=str, nargs='+', help='Specify the values to assign to the hyperparameter specified by param2Tune to use.')
+    parser.add_argument('--solverExtraArgs', metavar='str', required=True, type=str, help='Extra commandline arguments to pass to the solver.')
 
     args = parser.parse_args()
     
     datadict = {}
 
-    if not os.path.isdir(args.input_dir):
-        print('input_dir must be a directory')
+    # PATHS
+    if not os.path.isdir(args.inputDir):
+        print('inputDir must be a directory')
         exit()
-    datadict["instances"] = filter( lambda x: os.path.splitext(x)[1] == '.tsp', os.listdir(args.input_dir) )
-    datadict["instances"] = sorted( filter( lambda x: os.path.isfile(os.path.join(args.input_dir, x)), iter(datadict["instances"]) ))
-    if (len(datadict["instances"]) == 0):
-        print('There are no compatible files in input_dir')
+    datadict['instances'] = filter( lambda x: os.path.splitext(x)[1] == '.tsp', os.listdir(args.inputDir) )
+    datadict['instances'] = sorted( filter( lambda x: os.path.isfile(os.path.join(args.inputDir, x)), iter(datadict['instances']) ))
+    for i in range(len(datadict['instances'])):
+        datadict['instances'][i] = os.path.join(args.inputDir, datadict['instances'][i])
+
+    if (len(datadict['instances']) == 0):
+        print('There are no compatible files in inputDir')
         exit()
 
-    if not os.path.isfile(args.exec):
-        print('exec is not detected/not a file')
+    if args.execPath == None or not os.path.isfile(args.execPath):
+        print('execPath is not detected/not a file')
         exit()
-    datadict["exec"] = args.exec
+    datadict['execPath'] = args.execPath
 
-    # check solver_args? no need but would be nice
-    datadict["solver_args"] = args.solver_args.split(' ')
-
-    for i in range(len(datadict["solver_args"])):
-        if "-m" in datadict["solver_args"][i] or "--mode" in datadict["solver_args"][i]:
-            datadict["mode"] = datadict["solver_args"][i+1]
-
-    datadict["out_fnames"] = [args.output_filename + "_costs.csv", args.output_filename + "runtimes.csv"]
-    for out_fname in datadict["out_fnames"]:
+    datadict['out_fnames'] = [args.outputFile + '_costs.csv', args.outputFile + 'runtimes.csv']
+    for out_fname in datadict['out_fnames']:
         if os.path.isfile(out_fname):
             while True:
                 print('File ' + out_fname + ' already exists. Overwrite? (y/n)')
-                c = input("")[0]
-                print ("\033[A                             \033[A")
+                c = input('')[0]
+                print ('\033[A                             \033[A')
                 if c == 'y':
                     print('File will be overwritten')
                     break
                 elif c == 'n':
                     print('File will not be overwritten. Quitting...')
                     exit()
-                print ("\033[A                             \033[A")
+                print ('\033[A                             \033[A')
 
-    datadict["num_iters"]: int = 1
-    if args.num_iters != None:
-        '''if args.num_iters <= 0 or args.num_iters > len(seeds_list):
-            print("Invalid number of iterations value. Must be between range(0, " + str(len(seeds_list)) + ")")
-            exit()'''
-        datadict["num_iters"]: int = args.num_iters
+    # SEED SETTINGS
+    if args.nIters == None:
+        if args.seeds == None:
+            print('An option between --nIters and --seeds must be selected')
+            exit()
+        datadict['seeds'] = args.seeds
+    else:
+        import time 
+        np.random.seed(seed=int(time.time())) 
+        datadict['seeds'] = np.random.randint(low=0, high=2147483648, size=args.nIters)
+
+    # get args for tsp solver
+    datadict['solverExtraArgs'] = args.solverExtraArgs.split(' ')
     
+    # get hyperparameter tuning values
+    if args.param2Tune != None:
+        if args.tuningVars == None:
+            print(Fore.LIGHTRED_EX + 'Must specify --tuningVars along with --param2Tune with the desired values to test' + Fore.RESET)
+            exit()
+        datadict['param2Tune'] = args.param2Tune
+        datadict['tuningVars'] = np.array(args.tuningVars)
+    else:
+        datadict['param2Tune'] = ['']
+        datadict['tuningVars'] = ['']
+
     return datadict
 
 
-def get_cmd_list(datadict:dict, instance_index:int, iteration:int) -> list[str]:
+def get_cmd_list(datadict:dict, inst:str, val:str, seed:int) -> list[str]:
     cmd = []
-    cmd.append(datadict["exec"])
-    for solver_arg in datadict["solver_args"]:
+    cmd.append(datadict['execPath'])
+    for solver_arg in datadict['solverExtraArgs']:
         cmd.append(solver_arg)
-    cmd.append("-f")
-    cmd.append(datadict["instances"][instance_index])
-    cmd.append("--seed")
-    cmd.append(str(datadict["seed"][iteration]))
-    cmd.append("--loglvl")
-    cmd.append("notice")
+    cmd.append('-f')
+    cmd.append(inst)
+    cmd.append('--seed')
+    cmd.append(str(seed))
+    cmd.append('--loglvl')
+    cmd.append('notice')
+    if len(datadict['param2Tune']) > 0:
+        cmd.append('--' + datadict['param2Tune'])
+        cmd.append(val)
     return cmd
 
 
@@ -154,13 +198,20 @@ def write_csv(table:np.ndarray, csv_filename:str, datadict:dict):
 
         csv_writer = csv.writer(csvfile, delimiter=' ')
 
-        csv_writer.writerow([ str(1) , datadict["mode"] ])
+        lineList = [ str(len(datadict['tuningVars'])) ]
+        for paramVal in datadict['tuningVars']:
+            lineList.append(datadict['param2Tune'] + '=' + paramVal)
 
-        for instance_num in range(table.shape[1]):
-            for iter_num in range(table.shape[0]):
-                csv_writer.writerow([ datadict["instances"][instance_num] + "_SEED=" + str(datadict["seed"][iter_num]) , str(table[iter_num, instance_num]) ])
+        csv_writer.writerow(lineList)
+
+        for instance_num in range(table.shape[0]):
+            lineList.clear()
+            lineList.append(Path(datadict['instances'][instance_num]).stem)
+            for iter_num in range(table.shape[1]):
+                lineList.append(str(table[instance_num, iter_num]))
+            csv_writer.writerow(lineList)
 
 
 
-if __name__ == "__main__" :
+if __name__ == '__main__' :
     main()
