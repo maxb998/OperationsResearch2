@@ -41,7 +41,7 @@ Instance newInstance ()
             .warmStartMode = MODE_NN,
 
             .tabuTenureSize = -1,
-            .restartThreshold = 1000,
+            .metaRestartThreshold = 1000,
             .hardFixPolicy = HARDFIX_POLICY_RANDOM,
 
             .randomSeed = -1,

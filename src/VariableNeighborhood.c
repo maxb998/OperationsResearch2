@@ -199,7 +199,7 @@ static void *runVns(void *arg)
             thSpecific->nodesToKick[i] = i;
 
     int nonImprovingIterCount = 0;
-    int restartThreshold = thSpecific->workingSol.instance->params.restartThreshold;
+    int restartThreshold = thSpecific->workingSol.instance->params.metaRestartThreshold;
 
     while (currentTime < thShared->timeLimit)
     {

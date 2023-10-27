@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <string.h>
 
-#define SUBOPT_BLANKSPACE "  "
+#define SUBOPT_BLANKSPACE " "
 
 #define SUBOPT_NN "nn"
 #define SUBOPT_EM "em"
@@ -28,21 +28,20 @@
 #define SUBOPT_LOG_DEBUG "debug"
 #define SUBOPT_LOG_ALL "all"
 
-
-#define DOC_NN SUBOPT_BLANKSPACE SUBOPT_NN "          : Use Nearest Neighbor\n"
-#define DOC_EM SUBOPT_BLANKSPACE SUBOPT_EM "          : Use Extra Mileage\n"
-#define DOC_TABU SUBOPT_BLANKSPACE SUBOPT_TABU "        : Use Tabu Search\n"
-#define DOC_VNS SUBOPT_BLANKSPACE SUBOPT_VNS "         : Use Variable Neighborhood Search\n"
-#define DOC_ANNEALING SUBOPT_BLANKSPACE SUBOPT_ANNEALING "   : Use Simulated Annealing\n"
-#define DOC_GENETIC SUBOPT_BLANKSPACE SUBOPT_GENETIC "     : Use Genetic Heuristic\n"
-#define DOC_BENDERS SUBOPT_BLANKSPACE SUBOPT_BENDERS "     : Use Benders method\n"
-#define DOC_BRANCHCUT SUBOPT_BLANKSPACE SUBOPT_BRANCHCUT "  : Use cplex generic callback to perform Branch & Cut\n"
-#define DOC_HARDFIX SUBOPT_BLANKSPACE SUBOPT_HARDFIX "     : Use Hard Fixing Matheuristic\n"
-#define DOC_LOCALBRANCHING SUBOPT_BLANKSPACE SUBOPT_LOCALBRANCHING " : Use Local Branching Matheuristic\n"
+#define DOC_NN SUBOPT_BLANKSPACE SUBOPT_NN "\t\t: Use Nearest Neighbor\n"
+#define DOC_EM SUBOPT_BLANKSPACE SUBOPT_EM "\t\t: Use Extra Mileage\n"
+#define DOC_TABU SUBOPT_BLANKSPACE SUBOPT_TABU "\t\t: Use Tabu Search\n"
+#define DOC_VNS SUBOPT_BLANKSPACE SUBOPT_VNS "\t\t: Use Variable Neighborhood Search\n"
+#define DOC_ANNEALING SUBOPT_BLANKSPACE SUBOPT_ANNEALING "\t: Use Simulated Annealing\n"
+#define DOC_GENETIC SUBOPT_BLANKSPACE SUBOPT_GENETIC "\t\t: Use Genetic Heuristic\n"
+#define DOC_BENDERS SUBOPT_BLANKSPACE SUBOPT_BENDERS "\t: Use Benders method\n"
+#define DOC_BRANCHCUT SUBOPT_BLANKSPACE SUBOPT_BRANCHCUT "\t: Use cplex generic callback to perform Branch & Cut\n"
+#define DOC_HARDFIX SUBOPT_BLANKSPACE SUBOPT_HARDFIX "\t: Use Hard Fixing Matheuristic\n"
+#define DOC_LOCALBRANCHING SUBOPT_BLANKSPACE SUBOPT_LOCALBRANCHING "\t: Use Local Branching Matheuristic\n"
 
 #define ARGP_MODE_DOC "\
-Specify the type of solver to use: \n"\
-DOC_NN DOC_EM DOC_TABU DOC_VNS DOC_ANNEALING DOC_GENETIC DOC_BENDERS DOC_BRANCHCUT DOC_HARDFIX DOC_LOCALBRANCHING
+Specify the type of solver to use \n"\
+DOC_NN DOC_EM DOC_TABU DOC_VNS DOC_ANNEALING DOC_GENETIC DOC_BENDERS DOC_BRANCHCUT DOC_HARDFIX
 
 #define HEURISTICS_MODES_COUNT 2
 #define METAHEUR_MODES_COUNT 4
@@ -64,11 +63,9 @@ static const char *modeStrings[] = {
 };
 
 #define GRASP_DOC "\
-Specify to Grasp mode (DEFAULT=random(0.1))\n" \
-SUBOPT_BLANKSPACE SUBOPT_GRASP_ALMOSTBEST " : The Use of grasp will be limited to selecting another good choice with default probability value\n" \
-SUBOPT_BLANKSPACE SUBOPT_GRASP_ALMOSTBEST "[<GRASP_CHANCE>] : Same as \"almostbest\" but the selection of the secondary choice happens with probability specified with <GRASP_CHANCE>\n" \
-SUBOPT_BLANKSPACE SUBOPT_GRASP_RANDOM "     : At every iteration have a completely random choice with default probability\n" \
-SUBOPT_BLANKSPACE SUBOPT_GRASP_RANDOM "[<GRASP_CHANCE>]     : Same as \"random\" but the probability of the random choice is specified with <GRASP_CHANCE>\n"
+Specify to Grasp mode (DEFAULT=random)\n" \
+SUBOPT_BLANKSPACE SUBOPT_GRASP_ALMOSTBEST "\t: The Use of grasp will be limited to selecting another good choice with default probability value\n" \
+SUBOPT_BLANKSPACE SUBOPT_GRASP_RANDOM "\t: At every iteration have a completely random choice with default probability\n"
 
 static const char *graspStrings[] = { SUBOPT_GRASP_ALMOSTBEST, SUBOPT_GRASP_RANDOM };
 
@@ -88,14 +85,14 @@ DOC_NN DOC_EM DOC_TABU DOC_VNS DOC_ANNEALING DOC_GENETIC
 #define WARM_START_MODES_COUNT (HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT)
 
 #define LOG_LEVEL_DOC "\
-Specify the log level (or verbosity level) of for the run. (DEFAULT=log\n" \
-SUBOPT_BLANKSPACE SUBOPT_LOG_ERROR "   : Show only error messages\n" \
-SUBOPT_BLANKSPACE SUBOPT_LOG_CRITICAL ": Show critical messages and all above\n" \
-SUBOPT_BLANKSPACE SUBOPT_LOG_WARNING " : Show warning and all above\n" \
-SUBOPT_BLANKSPACE SUBOPT_LOG_NOTICE "  : Show notice messages and all above\n" \
-SUBOPT_BLANKSPACE SUBOPT_LOG_LOG "     : Show log messages and all above\n" \
-SUBOPT_BLANKSPACE SUBOPT_LOG_DEBUG "   : Show debug messages and all above\n" \
-SUBOPT_BLANKSPACE SUBOPT_LOG_ALL "     : Show all messages\n"
+Specify the log level (DEFAULT=log)\n" \
+SUBOPT_BLANKSPACE SUBOPT_LOG_ERROR "\t\t: Show only error messages\n" \
+SUBOPT_BLANKSPACE SUBOPT_LOG_CRITICAL "\t: Show critical messages and all above\n" \
+SUBOPT_BLANKSPACE SUBOPT_LOG_WARNING "\t: Show warning and all above\n" \
+SUBOPT_BLANKSPACE SUBOPT_LOG_NOTICE "\t: Show notice messages and all above\n" \
+SUBOPT_BLANKSPACE SUBOPT_LOG_LOG "\t\t: Show log messages and all above\n" \
+SUBOPT_BLANKSPACE SUBOPT_LOG_DEBUG "\t\t: Show debug messages and all above\n" \
+SUBOPT_BLANKSPACE SUBOPT_LOG_ALL "\t\t: Show all messages\n"
 
 static const char *logLevelStrings[] = { SUBOPT_LOG_ERROR, SUBOPT_LOG_CRITICAL, SUBOPT_LOG_WARNING, SUBOPT_LOG_NOTICE, SUBOPT_LOG_LOG, SUBOPT_LOG_DEBUG, SUBOPT_LOG_ALL };
 static const int loglvlsCount = sizeof(logLevelStrings)/sizeof(*logLevelStrings);
@@ -104,13 +101,13 @@ enum argpKeys{
     ARGP_FILE='f',
     ARGP_MODE='m',
 
-    ARGP_GRASP='g',
+    ARGP_GRASP_MODE=1000,
+    ARGP_GRASP_CHANCE,
     ARGP_2OPT='2',
     ARGP_TLIM='t',
 
-    ARGP_METAHEURISTICS_INIT_MODE=257,
-    ARGP_MATHEURISTICS_INIT_MODE,
-    ARGP_WARM_START_MODE,
+    ARGP_META_INIT_MODE=257,
+    ARGP_CPLEX_INIT_MODE,
 
     ARGP_NN_TRYALL,
     ARGP_EM_FARTHEST,
@@ -128,15 +125,12 @@ enum argpKeys{
 
 error_t argpParser(int key, char *arg, struct argp_state *state);
 
-static int parseEnumOption(char *arg, int *savePtr, const char **optionsSet, const int from, const int to, const char *optionName);
+static void parseEnumOption(char *arg, int *savePtr, const char **optionsSet, const int from, const int to, const char *optionName);
 
-static int parseGrasp(char *arg, Instance *inst);
-static int parseTlim(char *arg, Instance *inst);
+static int parseUint(char *arg, const char *paramName);
+static double parseDouble(char *arg, const char *paramName);
 
-static int parseSeed(char *arg, Instance *inst);
-static int parseNThreads(char *arg, Instance *inst);
-
-static int checkEssentials(Instance *inst);
+static void checkEssentials(Instance *inst);
 
 
 void argParse(Instance * inst, int argc, char *argv[])
@@ -145,19 +139,19 @@ void argParse(Instance * inst, int argc, char *argv[])
         { .name="file", .key=ARGP_FILE, .arg="FILENAME", .flags=0, .doc="Location of the .tsp file containing the instance to use\n", .group=1 },
         { .name="mode", .key=ARGP_MODE, .arg="MODE", .flags=0, .doc=ARGP_MODE_DOC, .group=1 },
 
-        { .name="grasp", .key=ARGP_GRASP, .arg="STRING", .flags=0, .doc=GRASP_DOC, .group=2 },
+        { .name="graspType", .key=ARGP_GRASP_MODE, .arg="STRING", .flags=0, .doc=GRASP_DOC, .group=2 },
+        { .name="graspChance", .key=ARGP_GRASP_CHANCE, .arg="FLOAT", .flags=0, .doc="Probability for a \"gras event\" to happen", .group=2 },
         { .name="2opt", .key=ARGP_2OPT, .arg=NULL, .flags=0, .doc="Specify to use 2-opt at the end of the selected heuristic\n", .group=2 },
-        { .name="tlim", .key=ARGP_TLIM, .arg="UINT", .flags=0, .doc="Specify time limit for the execution\n", .group=2 },
+        { .name="tlim", .key=ARGP_TLIM, .arg="FLOAT", .flags=0, .doc="Specify time limit for the execution\n", .group=2 },
 
-        { .name="metaheur-init-mode", .key=ARGP_METAHEURISTICS_INIT_MODE, .arg="STRING", .flags=0, .doc=METAHEURISTICS_INIT_MODE_DOC, .group=3 },
-        { .name="matheur-init-mode", .key=ARGP_MATHEURISTICS_INIT_MODE, .arg="STRING", .flags=0, .doc=MATHEUR_INIT_MODE_DOC, .group=3 },
-        { .name="warm-start-mode", .key=ARGP_WARM_START_MODE, .arg="STRING", .flags=0, .doc=WARM_START_MODE_DOC, .group=3 },
+        { .name="metaInit", .key=ARGP_META_INIT_MODE, .arg="STRING", .flags=0, .doc=METAHEURISTICS_INIT_MODE_DOC, .group=3 },
+        { .name="cplexInit", .key=ARGP_CPLEX_INIT_MODE, .arg="STRING", .flags=0, .doc=MATHEUR_INIT_MODE_DOC, .group=3 },
 
-        { .name="nn-tryall", .key=ARGP_NN_TRYALL, .arg=NULL, .flags=0, .doc="Specify to make Nearest Neighbor start from each node instead of chosing a random one each time\n", .group=4 },
-        { .name="em-farthest", .key=ARGP_EM_FARTHEST, .arg=NULL, .flags=0, .doc="Specify to make Extra Mileage initialization the farthest nodes each time instead of a random one each time\n", .group=4 },
-        { .name="tabu-tenure-size", .key=ARGP_TABU_TENURESIZE, .arg="UINT", .flags=0, .doc="Specify how big the tenure should be in Tabu Search\n", .group=4 },
-        { .name="restart-threshold", .key=ARGP_RESTART_THRESHOLD, .arg="UINT", .flags=0, .doc="Specify the threshold for non-improving iterations of vns or tabu berfore restarting from best solution\n", .group=4 },
-        { .name="hardfix-smallest", .key=ARGP_HARDFIX_SMALLEST, .arg=NULL, .flags=0, .doc="Specify to make Hard Fixing fix only edges with smallest cost instead of fixing random edges\n", .group=4 },
+        { .name="nnTryall", .key=ARGP_NN_TRYALL, .arg=NULL, .flags=0, .doc="Specify to make Nearest Neighbor start from each node instead of chosing a random one each time\n", .group=4 },
+        { .name="emFarthest", .key=ARGP_EM_FARTHEST, .arg=NULL, .flags=0, .doc="Specify to make Extra Mileage initialization the farthest nodes each time instead of a random one each time\n", .group=4 },
+        { .name="tabuTenureSize", .key=ARGP_TABU_TENURESIZE, .arg="UINT", .flags=0, .doc="Specify how big the tenure should be in Tabu Search\n", .group=4 },
+        { .name="metaRestartThreshold", .key=ARGP_RESTART_THRESHOLD, .arg="UINT", .flags=0, .doc="Specify the threshold for non-improving iterations of vns or tabu berfore restarting from best solution\n", .group=4 },
+        { .name="hardfixSmallest", .key=ARGP_HARDFIX_SMALLEST, .arg=NULL, .flags=0, .doc="Specify to make Hard Fixing fix only edges with smallest cost instead of fixing random edges\n", .group=4 },
 
         { .name="seed", .key=ARGP_SEED, .arg="UINT", .flags=0, .doc="Random Seed [0,MAX_INT32] to use as random seed for the current run. If -1 seed will be random\n", .group=5 },
         { .name="threads", .key=ARGP_NTHREADS, .arg="UINT", .flags=0, .doc="Maximum number of threads to use. If not specified gets maximum automatically\n", .group=5 },
@@ -179,7 +173,6 @@ void argParse(Instance * inst, int argc, char *argv[])
 error_t argpParser(int key, char *arg, struct argp_state *state)
 {
     Instance *inst = state->input;
-    int retVal = 0;
 
     switch (key)
     {
@@ -193,26 +186,35 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
         break;
 
     case ARGP_MODE:
-        return parseEnumOption(arg, &inst->params.mode, modeStrings, 0, MODES_COUNT, "mode");
+        parseEnumOption(arg, &inst->params.mode, modeStrings, 0, MODES_COUNT, "mode");
+        break;
 
-    case ARGP_GRASP:
-        return parseGrasp(arg, inst);
+    case ARGP_GRASP_MODE:
+        parseEnumOption(arg, (int*)&inst->params.graspType, graspStrings, 0, 2, "graspType");
+        break;
+    
+    case ARGP_GRASP_CHANCE:
+        inst->params.graspChance = parseDouble(arg, "graspChance");
+        if ((inst->params.graspChance < 0.) || (inst->params.graspChance > 1.))
+            throwError("Grasp Chance must be inside the interval [0,1]");
 
     case ARGP_2OPT:
         inst->params.use2Opt = true;
         break;
     
     case ARGP_TLIM:
-        return parseTlim(arg, inst);
+        inst->params.tlim = parseDouble(arg, "tlim");
+        if (inst->params.tlim <= 0)
+            throwError("Time limit cannot be zero or negative");
+        break;
     
-    case ARGP_METAHEURISTICS_INIT_MODE:
-        return parseEnumOption(arg, (int*)&inst->params.metaheurInitMode, modeStrings, 0, HEURISTICS_MODES_COUNT, "metaheur-init-mode");
+    case ARGP_META_INIT_MODE:
+        parseEnumOption(arg, (int*)&inst->params.metaheurInitMode, modeStrings, 0, HEURISTICS_MODES_COUNT, "metaInit");
+        break;
     
-    case ARGP_MATHEURISTICS_INIT_MODE:
-        return parseEnumOption(arg, (int*)&inst->params.matheurInitMode, modeStrings, 0, HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT, "matheur-init-mode");
-
-    case ARGP_WARM_START_MODE:
-        return parseEnumOption(arg, (int*)&inst->params.warmStartMode, modeStrings, 0, HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT, "warm-start-mode");
+    case ARGP_CPLEX_INIT_MODE:
+        parseEnumOption(arg, (int*)&inst->params.matheurInitMode, modeStrings, 0, HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT, "cplexInit");
+        break;
 
     case ARGP_NN_TRYALL:
         inst->params.nnFirstNodeOption = NN_FIRST_TRYALL;
@@ -223,25 +225,11 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
         break;
 
     case ARGP_TABU_TENURESIZE:
-    {
-        char *endPtr = 0;
-        inst->params.tabuTenureSize = (int)strtol(arg, &endPtr, 10);
-        if (endPtr == arg)
-            throwError("Something went wrong when reading tenure size. Make sure that the value specified is an integer positive number");
-        if (inst->params.tabuTenureSize <= 0)
-            throwError("Tabu Tenure cannot be 0 or negative");
-    }
+        inst->params.tabuTenureSize = parseUint(arg, "tabuTenureSize");
         break;
     
     case ARGP_RESTART_THRESHOLD:
-    {
-        char *endPtr = 0;
-        inst->params.restartThreshold = (int)strtol(arg, &endPtr, 10);
-        if (endPtr == arg)
-            throwError("Something went wrong when reading restart-threshold. Make sure that the value specified is an integer positive number");
-        if (inst->params.restartThreshold <= 0)
-            throwError("Restart Threshold cannot be 0 or negative");
-    }
+        inst->params.metaRestartThreshold = parseUint(arg, "metaRestartThreshold");
         break;
 
     case ARGP_HARDFIX_SMALLEST:
@@ -249,10 +237,12 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
         break;
 
     case ARGP_SEED:
-        return parseSeed(arg, inst);
+        inst->params.randomSeed = parseUint(arg, "seed");
+        break;
 
     case ARGP_NTHREADS:
-        return parseNThreads(arg, inst);
+        inst->params.nThreads = parseUint(arg, "nThreads");
+        break;
 
     case ARGP_ROUND:
         inst->params.roundWeights = true;
@@ -267,13 +257,14 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
         break;
     
     case ARGP_LOG_LEVEL:
-        retVal = parseEnumOption(arg, (int*)&inst->params.logLevel, logLevelStrings, 0, loglvlsCount, "loglvl");
+        parseEnumOption(arg, (int*)&inst->params.logLevel, logLevelStrings, 0, loglvlsCount, "loglvl");
         setLogLevel(inst->params.logLevel);
-        return retVal;
+        break;
     
     case ARGP_KEY_END:
         // check if necessary flags have been provided
-        return checkEssentials(inst);
+        checkEssentials(inst);
+        break;
 
     default:
         return ARGP_ERR_UNKNOWN;
@@ -282,151 +273,57 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
     return 0;
 }
 
-static int parseEnumOption(char *arg, int *savePtr, const char **optionsSet, const int from, const int to, const char *optionName)
+static void parseEnumOption(char *arg, int *savePtr, const char **optionsSet, const int from, const int to, const char *optionName)
 {
     for (int i = from; i < to; i++)
     {
         if (strcmp(arg, optionsSet[i]) == 0)
         {
             *savePtr = i;
-            return 0;
+            return;
         }
     }
     
-    LOG(LOG_LVL_ERROR, "%s: argument not valid", optionName);
-    return ARGP_ERR_UNKNOWN;
+    throwError("%s: argument not valid", optionName);
 }
 
-static int parseGrasp(char *arg, Instance *inst)
-{
-    if (strncmp(arg, graspStrings[GRASP_ALMOSTBEST], strlen(graspStrings[GRASP_ALMOSTBEST])) == 0)
-    {
-        inst->params.graspType = GRASP_ALMOSTBEST;
-
-        // check if GRASP_CHANCE is also specified
-        int graspChancePosStart = (int)strlen(graspStrings[GRASP_ALMOSTBEST]);
-        if (arg[graspChancePosStart] == '[')
-        {
-            char *endPtr;
-            double cvt = strtod(&arg[graspChancePosStart + 1], &endPtr);
-            if (*endPtr != ']')
-            {
-                LOG(LOG_LVL_ERROR, "Couldn't find the ']' after GRASP_CHANCE. It must be placed directly after the number");
-                return ARGP_ERR_UNKNOWN;
-            }
-            if ((cvt <= 0) || (cvt > 1))
-            {
-                LOG(LOG_LVL_ERROR, "GRASP_CHANCE specified is not a valid number. It must be a number in (0,1]");
-                return ARGP_ERR_UNKNOWN;
-            }
-            if (endPtr[1] != 0)
-                LOG(LOG_LVL_WARNING, "There are elements after the ')'. They will be ignored");
-            inst->params.graspChance = cvt;
-        }
-    }
-    else if (strncmp(arg, graspStrings[GRASP_RANDOM], strlen(graspStrings[GRASP_RANDOM])) == 0)
-    {
-        inst->params.graspType = GRASP_RANDOM;
-
-        // check if GRASP_CHANCE is also specified
-        int graspChancePosStart = (int)strlen(graspStrings[GRASP_RANDOM]);
-        if (arg[graspChancePosStart] == '[')
-        {
-            char *endPtr;
-            double cvt = strtod(&arg[graspChancePosStart + 1], &endPtr);
-            if (*endPtr != ']')
-            {
-                LOG(LOG_LVL_ERROR, "Couldn't find the ']' after GRASP_CHANCE. It must be placed directly after the number");
-                return ARGP_ERR_UNKNOWN;
-            }
-            if ((cvt <= 0) || (cvt > 1))
-            {
-                LOG(LOG_LVL_ERROR, "GRASP_CHANCE specified is not a valid number. It must be a number in (0,1]");
-                return ARGP_ERR_UNKNOWN;
-            }
-            if (endPtr[1] != 0)
-                LOG(LOG_LVL_WARNING, "There are elements after the ']'. They will be ignored");
-            inst->params.graspChance = cvt;
-        }
-    }
-
-    return 0;
-}
-
-static int parseTlim(char *arg, Instance *inst)
+static int parseUint(char *arg, const char *paramName)
 {
     char *endPtr;
     long cvt = strtol(arg, &endPtr, 10);
     if (cvt <= 0)
-    {
-        LOG(LOG_LVL_ERROR, "The number specified as time limit must be in seconds and be > 0");
-        return ARGP_ERR_UNKNOWN;
-    }
+        throwError(LOG_LVL_ERROR, "The value specified as %s must be an interger value > 0", paramName);
     if (endPtr != &arg[strlen(arg)])
-        LOG(LOG_LVL_WARNING, "There are extra character after the time limit value");
+        LOG(LOG_LVL_WARNING, "There are extra character after the %s value", paramName);
 
-    inst->params.tlim = (double)cvt;
-    return 0;
+    return (int)cvt;
 }
 
-static int parseSeed(char *arg, Instance *inst)
+static double parseDouble(char *arg, const char *paramName)
 {
     char *endPtr;
-    long cvt = strtol(arg, &endPtr, 10);
+    double cvt = strtod(arg, &endPtr);
     if (cvt <= 0)
-    {
-        LOG(LOG_LVL_ERROR, "The number specified as seed must be an interger value > 0");
-        return ARGP_ERR_UNKNOWN;
-    }
+        throwError(LOG_LVL_ERROR, "The value specified as %s must be a real number", paramName);
     if (endPtr != &arg[strlen(arg)])
-        LOG(LOG_LVL_WARNING, "There are extra character after the seed value");
+        LOG(LOG_LVL_WARNING, "There are extra character after the %s value", paramName);
 
-    inst->params.randomSeed = (int)cvt;
-    return 0;
+    return cvt;
 }
 
-static int parseNThreads(char *arg, Instance *inst)
-{
-    char *endPtr;
-    long cvt = strtol(arg, &endPtr, 10);
-    if (cvt <= 0 || cvt > 32)
-    {
-        LOG(LOG_LVL_ERROR, "The number of threads must be an interger value > 0 and < %d", MAX_THREADS);
-        return ARGP_ERR_UNKNOWN;
-    }
-    if (endPtr != &arg[strlen(arg)])
-        LOG(LOG_LVL_WARNING, "There are extra character after the thread value");
-
-    inst->params.nThreads = (int)cvt;
-    return 0;
-}
-
-static int checkEssentials(Instance *inst)
+static void checkEssentials(Instance *inst)
 {
     if (inst->params.mode == MODE_NONE)
-    {
-        LOG(LOG_LVL_ERROR, "Missing --mode (-m) option in arguments. A mode must be specified. Check --help or --usage to check what modes are avilable");
-        return ARGP_ERR_UNKNOWN;
-    }
+        throwError("Missing --mode (-m) option in arguments. A mode must be specified. Check --help or --usage to check what modes are avilable");
     if (inst->params.inputFile[0] == 0)
-    {
-        LOG(LOG_LVL_ERROR, "Missing --file (-f) option in arguments. An input file must be specified");
-        return ARGP_ERR_UNKNOWN;
-    }
-    if (inst->params.tlim == -1)
+        throwError("Missing --file (-f) option in arguments. An input file must be specified");
+    if (inst->params.tlim == -1.)
     {
         if (inst->params.graspType != GRASP_NONE)
-        {
-            LOG(LOG_LVL_ERROR, "If grasp is used a time limit must be provided with option --tlim (-t)");
-            return ARGP_ERR_UNKNOWN;
-        }
+            throwError("If grasp is used a time limit must be provided with option --tlim (-t)");
         if (inst->params.mode >= MODE_VNS)
-        {
-            LOG(LOG_LVL_ERROR, "When using an heuristic that is intrinsically using grasp(like %s), a time limit must also be specified", modeStrings[inst->params.mode]);
-            return ARGP_ERR_UNKNOWN;
-        }
+            throwError("When using an heuristic that is intrinsically using grasp(like %s), a time limit must also be specified", modeStrings[inst->params.mode]);
     }
-    return 0;
 }
 
 

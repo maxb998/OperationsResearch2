@@ -209,7 +209,7 @@ static void *runTabu(void *arg)
     setupThSpecificOnBestSol(thSpecific);
 
     int nonImprovingIterCount = 0;
-    int restartThreshold = thSpecific->workingSol.instance->params.restartThreshold;
+    int restartThreshold = thSpecific->workingSol.instance->params.metaRestartThreshold;
 
     while (currentTime < thShared->timeLimit)
     {

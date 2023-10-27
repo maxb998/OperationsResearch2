@@ -102,7 +102,7 @@ typedef struct
 	enum Mode warmStartMode;
 
 	int tabuTenureSize;
-	int restartThreshold;
+	int metaRestartThreshold;
 	enum HardFixPolicy hardFixPolicy;
     
     int randomSeed;
