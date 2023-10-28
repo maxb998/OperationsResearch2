@@ -161,13 +161,13 @@ def compute_total_cost(x:np.ndarray, y:np.ndarray, edge_wgt_type:int) -> float:
     return cost
 
 def euc_2D(x1:float, y1:float, x2:float, y2:float) -> float:
-    return math.floor(math.sqrt((x1-x2)*(x1-x2) + (y1-y2)*(y1-y2)))
+    return round(math.sqrt((x1-x2)*(x1-x2) + (y1-y2)*(y1-y2)))
 
 def man_2D(x1:float, y1:float, x2:float, y2:float) -> float:
-    return math.floor(abs(x1-x2) + abs(y1-y2))
+    return round(abs(x1-x2) + abs(y1-y2))
 
 def max_2D(x1:float, y1:float, x2:float, y2:float) -> float:
-    return math.floor(max(abs(x1-x2), abs(y1-y2)))
+    return round(max(abs(x1-x2), abs(y1-y2)))
 
 def att(x1:float, y1:float, x2:float, y2:float) -> float:
     return math.ceil(math.sqrt( ((x1-x2)*(x1-x2) + (y1-y2)*(y1-y2)) / 10.0 ))

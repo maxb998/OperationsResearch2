@@ -32,6 +32,9 @@ int main (int argc, char *argv[])
     double fileReadTime = readFile(&inst);
     LOG (LOG_LVL_NOTICE, "file %s has been loaded succesfully in %lf milliseconds", inst.params.inputFile, fileReadTime * 1000.);
     printf("\n");
+
+    if (inst.params.edgeWeightType > 4)
+        throwError("Edge Weight Type is not supported. This solver only support: EUC_2D, MAN_2D, MAX_2D, CEIL_2D, ATT");
     
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
         printf(SEPARATOR_STR);
