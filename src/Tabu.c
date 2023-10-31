@@ -71,7 +71,7 @@ static void printTenure(ThreadSpecificData *thSpecific, char *strOut);
 
 
 
-void TabuSearch(Solution *sol, double timeLimit, int nThreads)
+void TabuSearch(Solution *sol, double timeLimit)
 {
     Instance *inst = sol->instance;
 
@@ -92,11 +92,6 @@ void TabuSearch(Solution *sol, double timeLimit, int nThreads)
     if (inst->params.logLevel == LOG_LVL_DEBUG)
         srand(inst->params.randomSeed);
 
-    if ((nThreads < 0) || (nThreads > MAX_THREADS))
-        throwError("Tabu Search: nThreads value is not valid: %d", nThreads);
-    else if (nThreads == 0)
-        nThreads = inst->params.nThreads;
-
     if (!checkSolution(sol))
         throwError("Tabu Search: Input solution is not valid");
 
@@ -107,14 +102,14 @@ void TabuSearch(Solution *sol, double timeLimit, int nThreads)
     ThreadSharedData thShared = initThreadSharedData(sol, inst->params.tabuTenureSize, startTime + timeLimit);
     ThreadSpecificData thSpecifics[MAX_THREADS];
     pthread_t threads[MAX_THREADS];
-    for (int i = 0; i < nThreads; i++)
+    for (int i = 0; i < inst->params.nThreads; i++)
     {
         thSpecifics[i] = initThreadSpecificData(&thShared, (unsigned int)rand());
         pthread_create(&threads[i], NULL, runTabu, &thSpecifics[i]);
     }
 
     int iterCount = 0;
-    for (int i = 0; i < nThreads; i++)
+    for (int i = 0; i < inst->params.nThreads; i++)
     {
         pthread_join(threads[i], NULL);
         iterCount += thSpecifics[i].iterCount;

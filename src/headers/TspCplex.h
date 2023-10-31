@@ -190,9 +190,9 @@ void destroyCallbackData(CallbackData *cbData);
 /*!
 * @brief Run Hard Fixing matheuristic on sol
 * @param sol Feasible solution to optimize with Hard-Fixing
-* @param tlim Time limit
+* @param timeLimit Time limit
 */
-void HardFixing(Solution *sol, enum HardFixPolicy policy, double tlim);
+void HardFixing(Solution *sol, double timeLimit);
 
 
 //###################################################################################################################################

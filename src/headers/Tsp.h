@@ -183,7 +183,7 @@ void printCostMatrix(Instance *inst);
 * @param useThread Set to 1 to use multithreading. Set to 0 for single thread.
 * @result Solution obtained using Nearest Neighbor.
 */
-Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, double timeLimit, int nThreads);
+Solution NearestNeighbor(Instance *inst, double timeLimit);
 
 
 //###################################################################################################################################
@@ -197,15 +197,7 @@ Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, do
 * @param tlim Time limit.
 * @result Solution obtained using Extra Mileage.
 */
-Solution ExtraMileage(Instance *inst, enum EMInitType emInitType, double timeLimit, int nThreads);
-
-/*!
-* @brief Applies Extra Mileage heuristic on a solution that is already not empty.
-* @param sol Pointer to a solution with first batch already inserted up to nCovered.
-* @param nCovered Number of elements representing the first part of the tour inside sol. The function will add all remaning nodes.
-*/
-void applyExtraMileage(Solution *sol, int nCovered, unsigned int *rndState);
-
+Solution ExtraMileage(Instance *inst, double timeLimit);
 
 //###################################################################################################################################
 // 2OPT
@@ -228,6 +220,17 @@ void apply2OptBestFix(Solution *sol);
 */
 void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *costCache);
 
+//###################################################################################################################################
+// TABU_SEARCH
+//###################################################################################################################################
+
+/*!
+* @brief Runs Tabu Search on input solution sol.
+* @param sol Starting point solution.
+* @param timeLimit Time limit.
+* @param nThreads Specify the nuber of threads in which run Tabu Search on sol simultaneously
+*/
+void TabuSearch(Solution *sol, double timeLimit);
 
 //###################################################################################################################################
 // VARIABLE_NEIGHBORHOOD
@@ -238,7 +241,7 @@ void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *
 * @param sol Starting point solution for the VNS algorithm.
 * @param timeLimit Time limit.
 */
-void VariableNeighborhoodSearch(Solution *sol, double timeLimit, int nThreads);
+void VariableNeighborhoodSearch(Solution *sol, double timeLimit);
 
 
 //###################################################################################################################################
@@ -252,19 +255,6 @@ void VariableNeighborhoodSearch(Solution *sol, double timeLimit, int nThreads);
 * @param nThreads Set to 0 to use single threading, to 1 to use multi threading.
 */
 void SimulatedAnnealing(Solution *sol, double timeLimit, int nThreads);
-
-
-//###################################################################################################################################
-// TABU_SEARCH
-//###################################################################################################################################
-
-/*!
-* @brief Runs Tabu Search on input solution sol.
-* @param sol Starting point solution.
-* @param timeLimit Time limit.
-* @param nThreads Specify the nuber of threads in which run Tabu Search on sol simultaneously
-*/
-void TabuSearch(Solution *sol, double timeLimit, int nThreads);
 
 
 #endif //TSP_FUNCTIONS_H

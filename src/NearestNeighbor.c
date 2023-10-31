@@ -9,8 +9,6 @@
 typedef struct
 {
     Solution bestSol;
-    
-    enum NNFirstNodeOptions startOption;
 
     pthread_mutex_t getStartNodeMutex;
     pthread_mutex_t saveSolutionMutex;
@@ -40,7 +38,7 @@ typedef struct
 
 
 // Setup internal variables and initializes mutexes
-static ThreadSharedData initThreadSharedData (Instance *inst, enum NNFirstNodeOptions startOption, double timeLimit);
+static ThreadSharedData initThreadSharedData (Instance *inst, double timeLimit);
 
 // Destroy mutexes
 static void destroyThreadSharedData (ThreadSharedData *thShared);
@@ -75,30 +73,24 @@ static inline SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, in
 #endif
 
 
-Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, double timeLimit, int nThreads)
+Solution NearestNeighbor(Instance *inst, double timeLimit)
 {
     struct timespec timeStruct;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double startTime = cvtTimespec2Double(timeStruct);
 
-    // check input
-    if ((nThreads < 0) || (nThreads > MAX_THREADS))
-        throwError("NearestNeighbor: nThreads value is not valid: %d", nThreads);
-    else if (nThreads == 0)
-        nThreads = inst->params.nThreads;
-
     // Create data structures and start threads
-    ThreadSharedData thShared = initThreadSharedData(inst, startOption, startTime + timeLimit);
+    ThreadSharedData thShared = initThreadSharedData(inst, startTime + timeLimit);
     ThreadSpecificData thSpecifics[MAX_THREADS];
     pthread_t threads[MAX_THREADS];
-    for (int i = 0; i < nThreads; i++)
+    for (int i = 0; i < inst->params.nThreads; i++)
     {
         thSpecifics[i] = initThreadSpecificData(&thShared, rand());
         pthread_create(&threads[i], NULL, loopNearestNeighbor, (void *)&thSpecifics[i]);
     }
 
     int iterCount = 0;
-    for (int i = 0; i < nThreads; i++)
+    for (int i = 0; i < inst->params.nThreads; i++)
     {
         pthread_join(threads[i], NULL);
         iterCount += thSpecifics[i].iterCount;
@@ -120,15 +112,14 @@ Solution NearestNeighbor(Instance *inst, enum NNFirstNodeOptions startOption, do
 }
 
 
-static ThreadSharedData initThreadSharedData (Instance *inst, enum NNFirstNodeOptions startOption, double timeLimit)
+static ThreadSharedData initThreadSharedData (Instance *inst, double timeLimit)
 {
     ThreadSharedData thShared = {
-        .startOption = startOption,
         .startingNode = 0,
         .timeLimit = timeLimit
     };
 
-    if (startOption == NN_FIRST_TRYALL) // syncronization in the selection of the starting node of the solution is only necessary when tryall option is used
+    if (inst->params.nnFirstNodeOption == NN_FIRST_TRYALL) // syncronization in the selection of the starting node of the solution is only necessary when tryall option is used
         if (pthread_mutex_init(&thShared.getStartNodeMutex, NULL)) throwError("NearestNeighbor -> initThreadSharedData: Failed to initialize getStartNodeMutex");
     if (pthread_mutex_init(&thShared.saveSolutionMutex, NULL)) throwError("NearestNeighbor -> initThreadSharedData: Failed to initialize saveSolutionMutex");
 
@@ -139,7 +130,7 @@ static ThreadSharedData initThreadSharedData (Instance *inst, enum NNFirstNodeOp
 
 static void destroyThreadSharedData (ThreadSharedData *thShared)
 {
-    if (thShared->startOption == NN_FIRST_TRYALL)
+    if (thShared->bestSol.instance->params.nnFirstNodeOption == NN_FIRST_TRYALL)
         if (pthread_mutex_init(&thShared->getStartNodeMutex, NULL)) throwError("NearestNeighbor -> destroyThreadSharedData: Failed to destroy getStartNodeMutex");
     if (pthread_mutex_init(&thShared->saveSolutionMutex, NULL)) throwError("NearestNeighbor -> destroyThreadSharedData: Failed to destroy saveSolutionMutex");
 
@@ -226,7 +217,7 @@ static inline int getStartingNode(ThreadSpecificData *thSpecific)
     int n = inst->nNodes;
 
     int iterNode;
-    if (thShared->startOption == NN_FIRST_TRYALL)
+    if (inst->params.nnFirstNodeOption == NN_FIRST_TRYALL)
     {
         pthread_mutex_lock(&thShared->getStartNodeMutex);
 

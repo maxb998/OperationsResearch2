@@ -119,7 +119,7 @@ static Solution runHeuristic(Instance *inst, enum Mode mode, double tlim)
     case MODE_NN:
         printf("Nearest Neighbor Starting...\n");
 
-        sol = NearestNeighbor(inst, inst->params.nnFirstNodeOption, tlim, 0);
+        sol = NearestNeighbor(inst, tlim);
 
         printf("Nearest Neighbor finished in %lf second\n", sol.execTime);
         printf("Solution Cost = %lf\n", cvtCost2Double(sol.cost));
@@ -128,7 +128,7 @@ static Solution runHeuristic(Instance *inst, enum Mode mode, double tlim)
     case MODE_EM:
         printf("Extra Mileage starting...\n");
 
-        sol = ExtraMileage(inst, inst->params.emInitOption, tlim, 0);
+        sol = ExtraMileage(inst, tlim);
 
         printf("Extra Mileage finished in %lf seconds\n", sol.execTime);
         printf("Solution Cost = %lf\n", cvtCost2Double(sol.cost));
@@ -153,7 +153,7 @@ static void runMetaheuristic(Solution *sol, enum Mode mode, double tlim)
     case MODE_TABU:
         printf("Tabu Search Starting...\n");
 
-        TabuSearch(sol, tlim, 0);
+        TabuSearch(sol, tlim);
 
         printf("Tabu Search finished in %lf second\n", sol->execTime - startTime);
         printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));
@@ -161,7 +161,7 @@ static void runMetaheuristic(Solution *sol, enum Mode mode, double tlim)
     case MODE_VNS:
         printf("Variable Neighborhood Search Starting...\n");
 
-        VariableNeighborhoodSearch(sol, tlim, 0);
+        VariableNeighborhoodSearch(sol, tlim);
 
         printf("Variable Neighborhood Search finished in %lf second\n", sol->execTime - startTime);
         printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));
@@ -227,7 +227,7 @@ static void runMatheuristic (Solution *sol, enum Mode mode, double tlim)
     case MODE_HARDFIX:
         printf("Hard Fixing Starting...\n");
 
-        HardFixing(sol, sol->instance->params.hardFixPolicy, tlim);
+        HardFixing(sol, tlim);
 
         printf("Hard Fixing finished in %lf second\n", sol->execTime - startTime);
         printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));

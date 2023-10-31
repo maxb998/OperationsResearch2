@@ -56,7 +56,7 @@ static void kick(ThreadSpecificData *thSpecific);
 
 
 
-void VariableNeighborhoodSearch(Solution *sol, double timeLimit, int nThreads)
+void VariableNeighborhoodSearch(Solution *sol, double timeLimit)
 {
     Instance *inst = sol->instance;
 
@@ -72,11 +72,6 @@ void VariableNeighborhoodSearch(Solution *sol, double timeLimit, int nThreads)
     if (inst->params.logLevel == LOG_LVL_DEBUG)
         srand(inst->params.randomSeed);
 
-    if ((nThreads < 0) || (nThreads > MAX_THREADS))
-        throwError("VariableNeighborhood: nThreads value is not valid: %d", nThreads);
-    else if (nThreads == 0)
-        nThreads = inst->params.nThreads;
-
     if (!checkSolution(sol))
         throwError("VariableNeighborhood: Input solution is not valid");
 
@@ -87,14 +82,14 @@ void VariableNeighborhoodSearch(Solution *sol, double timeLimit, int nThreads)
     ThreadSharedData thShared = initThreadSharedData(sol, startTime + timeLimit);
     ThreadSpecificData thSpecifics[MAX_THREADS];
     pthread_t threads[MAX_THREADS];
-    for (int i = 0; i < nThreads; i++)
+    for (int i = 0; i < inst->params.nThreads; i++)
     {
         thSpecifics[i] = initThreadSpecificData(&thShared, (unsigned int)rand());
         pthread_create(&threads[i], NULL, runVns, &thSpecifics[i]);
     }
 
     int iterCount = 0;
-    for (int i = 0; i < nThreads; i++)
+    for (int i = 0; i < inst->params.nThreads; i++)
     {
         pthread_join(threads[i], NULL);
         iterCount += thSpecifics[i].iterCount;

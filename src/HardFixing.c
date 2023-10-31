@@ -51,7 +51,7 @@ static int randomFix(HardfixAllocatedMem *hfAlloc);
 static int smallestFix(HardfixAllocatedMem *hfAlloc);
 
 
-void HardFixing(Solution *sol, enum HardFixPolicy policy, double tlim)
+void HardFixing(Solution *sol, double timeLimit)
 {
     struct timespec currT;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
@@ -71,13 +71,13 @@ void HardFixing(Solution *sol, enum HardFixPolicy policy, double tlim)
     double currentTime = cvtTimespec2Double(currT);
 
     int iterCount = 0;
-    while (currentTime < startTime + tlim)
+    while (currentTime < startTime + timeLimit)
     {
         iterCount++;
 
         if (hfAlloc.fixAmount > 0)
         {
-            switch (policy)
+            switch (sol->instance->params.hardFixPolicy)
             {
             case HARDFIX_POLICY_RANDOM:
                 if ((errCode = randomFix(&hfAlloc)) != 0)
@@ -93,7 +93,7 @@ void HardFixing(Solution *sol, enum HardFixPolicy policy, double tlim)
         LOG(LOG_LVL_DEBUG, "HardFix: Bounds were fixed");
 
         // update time limit
-        double remainingTime = startTime + tlim - currentTime;
+        double remainingTime = startTime + timeLimit - currentTime;
         if ((errCode = CPXsetdblparam(hfAlloc.cpx.env, CPX_PARAM_TILIM, remainingTime)) != 0)
             throwError("HardFix: CPXsetdblparam failed with code %d", errCode);
 
