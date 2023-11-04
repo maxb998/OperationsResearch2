@@ -50,11 +50,11 @@ int main (int argc, char *argv[])
     double tlim = inst.params.tlim;
     enum Mode m = inst.params.mode;
 
-    if ((m == MODE_NN) || (m == MODE_EM))
+    if ((m == MODE_NN) || (m == MODE_EM) || (m == MODE_GENETIC))
     {
         sol = runHeuristic(&inst, m, tlim);
     }
-    else if ((m >= MODE_TABU) && (m <= MODE_GENETIC))
+    else if ((m >= MODE_TABU) && (m <= MODE_ANNEALING))
     {
         sol = runHeuristic(&inst, inst.params.metaheurInitMode, tlim * METAHEUR_INIT_RATIO );
         run2Opt(&sol);
@@ -62,15 +62,9 @@ int main (int argc, char *argv[])
     }
     else
     {
-        enum Mode init;
-        if (m <= MODE_BRANCH_CUT)
-            init = inst.params.warmStartMode;
-        else
-            init = inst.params.matheurInitMode;
-
-        if (init <= MODE_EM)
+        if (inst.params.matheurInitMode <= MODE_EM)
         {
-            sol = runHeuristic(&inst, init, tlim * MATHEUR_INIT_RATIO);
+            sol = runHeuristic(&inst, inst.params.matheurInitMode, tlim * MATHEUR_INIT_RATIO);
             run2Opt(&sol);
         }
         else 
@@ -134,6 +128,15 @@ static Solution runHeuristic(Instance *inst, enum Mode mode, double tlim)
         printf("Solution Cost = %lf\n", cvtCost2Double(sol.cost));
         break;
 
+    case MODE_GENETIC:
+        printf("Genetic Search Starting...\n");
+
+        sol = GeneticAlgorithm(inst, tlim);
+
+        printf("Genetic Search finished in %lf second\n", sol.execTime);
+        printf("Solution Cost = %lf\n", cvtCost2Double(sol.cost));
+        break;
+
     default: throwError("runHeuristic: specified mode must be in [MODE_NN, MODE_EM]"); break;
     }
 
@@ -172,14 +175,8 @@ static void runMetaheuristic(Solution *sol, enum Mode mode, double tlim)
         printf("Simulated Annealing finished in %lf second\n", sol->execTime - startTime);
         printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));
         break;
-    case MODE_GENETIC:
-        printf("Genetic Search Starting...\n");
 
-        printf("Genetic Search finished in %lf second\n", sol->execTime - startTime);
-        printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));
-        break;
-
-    default: throwError("runMetaheuristic: specified mode must be in [MODE_TABU, MODE_VNS, MODE_ANNEALING, MODE_GENETIC]"); break;
+    default: throwError("runMetaheuristic: specified mode must be in [MODE_TABU, MODE_VNS, MODE_ANNEALING]"); break;
     }
 
     printf(SEPARATOR_STR"\n");

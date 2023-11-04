@@ -5,9 +5,7 @@
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 #include <stdio.h>
 
-#define MAX_KICK_MAGNITUDE 20
-#define MIN_KICK_MAGNITUDE 5
-#define PERMUTATION_THRESHOLD (MAX_KICK_MAGNITUDE * 2)
+#define PERMUTATION_THRESHOLD(maxKick) (maxKick * 2)
 #define N_PERMUTATION(nNodes) (nNodes * 4)
 
 typedef struct
@@ -26,8 +24,6 @@ typedef struct
     unsigned int rndState;
     int iterCount;
 
-    // max amount of nodes to kick per iteration
-    int maxKickMagnitude;
     // pointer to memory allocation where selected nodes to be kicked are stored
     int *nodesToKick;
 
@@ -125,8 +121,7 @@ static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, un
     ThreadSpecificData thSpecific = {
         .thShared=thShared,
         .rndState=rndState,
-        .iterCount=0,
-        .maxKickMagnitude=MAX_KICK_MAGNITUDE
+        .iterCount=0
     };
 
     Instance *inst = thShared->bestSol->instance;
@@ -134,12 +129,12 @@ static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, un
 
     thSpecific.workingSol=newSolution(inst);
 
-    if (MAX_KICK_MAGNITUDE > n)
-        thSpecific.maxKickMagnitude = n;
+    if (inst->params.vnsKickSize.Max > n)
+        throwError("Vns maximum kick cannot be greater than the size of the instance, at most equal");
 
     // allocate more memory if permutations are necessary
-    if (PERMUTATION_THRESHOLD < n)
-        thSpecific.nodesToKick = malloc(thSpecific.maxKickMagnitude * sizeof(int));
+    if (PERMUTATION_THRESHOLD(inst->params.vnsKickSize.Max) < n)
+        thSpecific.nodesToKick = malloc(inst->params.vnsKickSize.Max * sizeof(int));
     else
         thSpecific.nodesToKick = malloc((n - 1) * sizeof(int));
     if (!thSpecific.nodesToKick)
@@ -189,9 +184,9 @@ static void *runVns(void *arg)
     setupThSpecificOnBestSol(thSpecific);
 
     // init nodesToKick if using permutations to kick
-    if (inst->nNodes < PERMUTATION_THRESHOLD)
-        for (int i = 1; i < inst->nNodes; i++)
-            thSpecific->nodesToKick[i] = i;
+    if (inst->nNodes < PERMUTATION_THRESHOLD(inst->params.vnsKickSize.Max))
+        for (int i = 0; i < inst->nNodes-1; i++)
+            thSpecific->nodesToKick[i] = i+1;
 
     int nonImprovingIterCount = 0;
     int restartThreshold = thSpecific->workingSol.instance->params.metaRestartThreshold;
@@ -288,7 +283,7 @@ static void kick(ThreadSpecificData *thSpecific)
 
     int currentKickMagnitude;
 
-    if (n < PERMUTATION_THRESHOLD)
+    if (n < PERMUTATION_THRESHOLD(inst->params.vnsKickSize.Max))
     {
         currentKickMagnitude = n-1;
 
@@ -296,7 +291,7 @@ static void kick(ThreadSpecificData *thSpecific)
         {
             // get permutation indexes
             int rndIndex0 = genRandom(&thSpecific->rndState, 0, n-1), rndIndex1 = genRandom(&thSpecific->rndState, 0, n-1);
-            while (rndIndex0 == rndIndex1) rndIndex1 = genRandom(&thSpecific->rndState, 1, n);
+            while (rndIndex0 == rndIndex1) rndIndex1 = genRandom(&thSpecific->rndState, 1, n-1);
 
             register int temp;
             swapElems(nodesToKick[rndIndex0], nodesToKick[rndIndex1], temp);
@@ -304,7 +299,7 @@ static void kick(ThreadSpecificData *thSpecific)
     }
     else
     {
-        currentKickMagnitude = genRandom(&thSpecific->rndState, MIN_KICK_MAGNITUDE, MAX_KICK_MAGNITUDE);
+        currentKickMagnitude = genRandom(&thSpecific->rndState, inst->params.vnsKickSize.Min, inst->params.vnsKickSize.Max+1);
 
         for (int i = 0; i < currentKickMagnitude; i++)
         {

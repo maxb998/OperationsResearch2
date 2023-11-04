@@ -1,0 +1,3 @@
+Genetic
+https://en.wikipedia.org/wiki/Edge_recombination_operator#Comparison_with_other_operators
+https://user.ceng.metu.edu.tr/~ucoluk/research/publications/tspnew.pdf

@@ -257,4 +257,16 @@ void VariableNeighborhoodSearch(Solution *sol, double timeLimit);
 void SimulatedAnnealing(Solution *sol, double timeLimit, int nThreads);
 
 
+
+//###################################################################################################################################
+// GENETIC_ALGORITHM
+//###################################################################################################################################
+
+/*!
+* @brief Runs Simulated Annealing on input solution sol.
+* @param inst Instance
+* @param timeLimit Time limit.
+*/
+Solution GeneticAlgorithm(Instance *inst, double timeLimit);
+
 #endif //TSP_FUNCTIONS_H

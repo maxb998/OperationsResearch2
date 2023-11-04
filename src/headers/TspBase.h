@@ -79,6 +79,20 @@ enum EMInitType {
     EM_INIT_FARTHEST_POINTS
 };
 
+struct VnsKickSize
+{
+	int Max;
+	int Min;
+};
+
+struct GeneticParams
+{
+	int populationSize;
+	int crossoverAmount;
+	int mutationAmount;
+	int reintroductionAmount;
+};
+
 enum HardFixPolicy {
 	HARDFIX_POLICY_RANDOM,
 	HARDFIX_POLICY_SMALLEST
@@ -89,22 +103,24 @@ typedef struct
 {
 	char inputFile[1000];
 	enum Mode mode;
-
-	enum GraspOption graspType;
-	bool use2Opt;
 	double tlim;
 
+	enum GraspOption graspType;
+	double graspChance;
 	enum NNFirstNodeOptions nnFirstNodeOption;
 	enum EMInitType emInitOption;
 
 	enum Mode metaheurInitMode;
-	enum Mode matheurInitMode;
-	enum Mode warmStartMode;
-
-	int tabuTenureSize;
 	int metaRestartThreshold;
+	int tabuTenureSize;
+	struct VnsKickSize vnsKickSize;
+	struct GeneticParams geneticParams;
+
+	enum Mode matheurInitMode;	
 	enum HardFixPolicy hardFixPolicy;
     
+	bool use2Opt;
+
     int randomSeed;
 	int nThreads; // if no value has been specified as argument its default value is the number of processors in the machine
 	bool roundWeights;
@@ -114,7 +130,6 @@ typedef struct
 
 	enum EdgeWeightType edgeWeightType;
 	char name[200];
-	double graspChance;
 } Parameters;
 
 typedef struct

@@ -12,29 +12,32 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
-                "--file", "data/a280.tsp",
-                "--mode", "tabu",
+                "--file", "data/att48.tsp",
+                "--mode", "genetic",
+                "--tlim", "3",
 
-                "--graspType", "almostbest",
-                "--graspChance", "0.01",
-                //"--2opt",
-                "--tlim", "10",
-
-                //"--metaInit", "em",
-                //"--cplexInit", "em",
-
+                //"--graspType", "almostbest",
+                //"--graspChance", "0.01",
                 //"--nnTryall",
                 //"--emFarthest",
-                //"--tabuTenureSize", "5",
+
+                //"--metaInit", "em",
                 //"--metaRestartThreshold", "1000",
+                //"--tabuTenureSize", "5",
+                //"--vnsKickSize", "5,30",
+                "--geneticParams", "100,50,50,50",
+
+                //"--cplexInit", "em",
                 //"--hardfixSmallest",
 
-                //"--seed", "2023",
-                "--threads", "8",
+                //"--2opt",
+
+                "--seed", "2023",
+                "--threads", "1",
                 "--roundcosts",
                 //"--plot", 
                 //"--save",
-                "--loglvl", "log"
+                "--loglvl", "debug"
             ],
             "cwd": "${workspaceFolder}"
        },
@@ -45,27 +48,30 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/x64/main",
             "args": [
-                "--file", "data/a280.tsp",
-                "--mode", "tabu",
+                "--file", "data/d1291.tsp",
+                "--mode", "genetic",
+                "--tlim", "20",
 
-                "--graspType", "almostbest",
-                "--graspChance", "0.01",
-                //"--2opt",
-                "--tlim", "10",
-
-                //"--metaInit", "em",
-                //"--cplexInit", "em",
-
+                //"--graspType", "almostbest",
+                //"--graspChance", "0.01",
                 //"--nnTryall",
                 //"--emFarthest",
-                //"--tabuTenureSize", "5",
+
+                //"--metaInit", "em",
                 //"--metaRestartThreshold", "1000",
+                //"--tabuTenureSize", "5",
+                //"--vnsKickSize", "5,30",
+                "--geneticParams", "20,10,100,100",
+
+                //"--cplexInit", "em",
                 //"--hardfixSmallest",
 
+                //"--2opt",
+
                 //"--seed", "2023",
-                "--threads", "8",
+                "--threads", "1",
                 "--roundcosts",
-                //"--plot", 
+                "--plot", 
                 //"--save",
                 "--loglvl", "log"
             ],

@@ -72,8 +72,10 @@ static void updateBestSolution(ThreadSpecificData *thSpecific);
 // Called by initializations, does exactly what its name says
 static void farthestPointsInit(ThreadSpecificData *thSpecific);
 
+#ifdef DEBUG
 // Check whether solution is correctly structured to run extra mileage(after initialization or when initialized solution comes from outside)
 static void checkSolutionIntegrity(ThreadSpecificData *thSpecific, int nCovered);
+#endif
 
 // Add node specified in succ into the tour(from 0 to nCovered) inside thSpecific.workingSol without compromising integrity of the solution
 static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCovered, SuccessorData succ);
@@ -454,6 +456,7 @@ static void applyExtraMileage_Internal(ThreadSpecificData *thSpecific, int nCove
     }
 }
 
+#ifdef DEBUG
 static void checkSolutionIntegrity(ThreadSpecificData *thSpecific, int nCovered)
 {
     Instance *inst = thSpecific->workingSol.instance;
@@ -522,6 +525,7 @@ static void checkSolutionIntegrity(ThreadSpecificData *thSpecific, int nCovered)
     if (thSpecific->workingSol.cost != recomputedCost)
         throwError("ExtraMileage-checkSolutionIntegrity: Cost value is incorrect");
 }
+#endif
 
 static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCovered, SuccessorData succ)
 {

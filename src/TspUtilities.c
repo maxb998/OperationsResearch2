@@ -28,21 +28,22 @@ Instance newInstance ()
         .params = {
             .inputFile = { 0 },
             .mode=MODE_NONE,
+            .tlim=-1.,
             
             .graspType=GRASP_NONE,
-            .use2Opt=false,
-            .tlim=-1.,
-
             .nnFirstNodeOption = NN_FIRST_RANDOM,
             .emInitOption = EM_INIT_RANDOM,
 
             .metaheurInitMode = MODE_NN,
-            .matheurInitMode = MODE_NN,
-            .warmStartMode = MODE_NN,
-
-            .tabuTenureSize = -1,
             .metaRestartThreshold = 1000,
+            .tabuTenureSize = -1,
+            .vnsKickSize = { .Max=20, .Min=5},
+            .geneticParams = { .populationSize=50, .crossoverAmount=25, .mutationAmount=25 },
+            
+            .matheurInitMode = MODE_NN,
             .hardFixPolicy = HARDFIX_POLICY_RANDOM,
+
+            .use2Opt=false,
 
             .randomSeed = -1,
             .nThreads = nProcessors(),
@@ -106,9 +107,6 @@ void destroySolution (Solution *sol)
 
 void cloneSolution(Solution *src, Solution *dst)
 {
-    if (src->instance->nNodes != dst->instance->nNodes)
-        throwError("cloneSolution: Size of src and dst does not match");
-
     dst->cost = src->cost;
     dst->instance = src->instance;
     dst->execTime = src->execTime;
