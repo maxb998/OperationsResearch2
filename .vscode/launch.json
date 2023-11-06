@@ -25,7 +25,8 @@
                 //"--metaRestartThreshold", "1000",
                 //"--tabuTenureSize", "5",
                 //"--vnsKickSize", "5,30",
-                "--geneticParams", "100,50,50,50",
+                //"--geneticParams", "100,50,50,50",
+                "--annelTemp", "-0",
 
                 //"--cplexInit", "em",
                 //"--hardfixSmallest",
@@ -61,7 +62,8 @@
                 //"--metaRestartThreshold", "1000",
                 //"--tabuTenureSize", "5",
                 //"--vnsKickSize", "5,30",
-                "--geneticParams", "20,10,100,100",
+                //"--geneticParams", "20,10,100,100",
+                "--annelTemp", "1000",
 
                 //"--cplexInit", "em",
                 //"--hardfixSmallest",

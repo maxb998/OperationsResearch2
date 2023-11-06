@@ -100,12 +100,13 @@ enum argpKeys{
     ARGP_GRASP_CHANCE,
     ARGP_NN_TRYALL,
     ARGP_EM_FARTHEST,
-    ARGP_GENETIC_PARAMS,
     
     ARGP_META_INIT_MODE,
     ARGP_RESTART_THRESHOLD,
     ARGP_TABU_TENURESIZE,
     ARGP_VNS_KICKSIZE,
+    ARGP_GENETIC_PARAMS,
+    ARGP_ANNEAL_TEMP,
 
     ARGP_CPLEX_INIT_MODE,
     ARGP_HARDFIX_SMALLEST,
@@ -148,7 +149,8 @@ void argParse(Instance * inst, int argc, char *argv[])
         { .name="metaInit", .key=ARGP_META_INIT_MODE, .arg="STRING", .flags=0, .doc=METAHEURISTICS_INIT_MODE_DOC, .group=3 },
         { .name="tabuTenureSize", .key=ARGP_TABU_TENURESIZE, .arg="UINT", .flags=0, .doc="Specify how big the tenure should be in Tabu Search\n", .group=3 },
         { .name="vnsKickSize", .key=ARGP_VNS_KICKSIZE, .arg="UINT,UINT", .flags=0, .doc="Specify the size of the random \"kick\" that randomizes the solution in vns. Eg: --vnsKickSize 2,6\n", .group=3 },
-        { .name="geneticParams", .key=ARGP_GENETIC_PARAMS, .arg="UINT,UINT,UINT", .flags=0, .doc="Specify the sizes of Population, Crossover, Mutation and Reintroduction in that order in the genetic algorithm. Eg: --geneticParams 50,25,25\n", .group=2 },
+        { .name="geneticParams", .key=ARGP_GENETIC_PARAMS, .arg="UINT,UINT,UINT", .flags=0, .doc="Specify the sizes of Population, Crossover, Mutation and Reintroduction in that order in the genetic algorithm. Eg: --geneticParams 50,25,25\n", .group=3 },
+        { .name="annelTemp", .key=ARGP_ANNEAL_TEMP, .arg="UINT", .flags=0, .doc="Specify temperature for Simulated Annealing procedure\n", .group=3 },
 
         { .name="cplexInit", .key=ARGP_CPLEX_INIT_MODE, .arg="STRING", .flags=0, .doc=MATHEUR_INIT_MODE_DOC, .group=4 },
         { .name="hardfixSmallest", .key=ARGP_HARDFIX_SMALLEST, .arg=NULL, .flags=0, .doc="Specify to make Hard Fixing fix only edges with smallest cost instead of fixing random edges\n", .group=4 },
@@ -237,6 +239,10 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
     
     case ARGP_GENETIC_PARAMS:
         parseUintList(arg, ',', (int*)&inst->params.geneticParams, 4, "geneticParams");
+        break;
+    
+    case ARGP_ANNEAL_TEMP:
+        inst->params.annealingTemperature = parseUint(arg, 0, "annelTemp");
         break;
 
     case ARGP_CPLEX_INIT_MODE:

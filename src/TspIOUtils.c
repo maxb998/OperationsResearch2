@@ -48,7 +48,7 @@ const char * wgtTypeStr[] = {
 // file parsing functions
 
 // gets the string specified in the "NAME" keyword in the file
-static void getNameFromFile(char * line, int lineSize, char out[], Instance *inst);
+static void getNameFromLine(char * line, int lineSize, char out[], Instance *inst);
 // checks that the file type is "TSP"
 static void checkFileType(char * line, int lineSize, Instance *inst);
 // get the value related with the keyword "DIMENSION" and returns it as a int
@@ -101,7 +101,7 @@ double readFile (Instance *inst)
         switch (keywordID)
         {
         case NAME_KEYWORD_ID:
-            getNameFromFile(line, lineSize, inst->params.name, inst);
+            getNameFromLine(line, lineSize, inst->params.name, inst);
             // set flag
             keywordsFound[NAME_KEYWORD_ID] = 1;
             break;
@@ -205,7 +205,7 @@ double readFile (Instance *inst)
 }
 
 
-static void getNameFromFile(char * line, int lineSize, char out[], Instance *inst)
+static void getNameFromLine(char * line, int lineSize, char out[], Instance *inst)
 {
     memset(out, 0, 200); // set name array to 0
 
@@ -328,6 +328,7 @@ static void readTspLine(char *line, int length, int index, Instance *inst, int k
     inst->Y[index] = numbers[2];
 }
 
+// cmd flags that are not meaningful to the output of the run, therefore not worth printing in the file with the solution
 #define MEANINGLESS_FLAGS_COUNT 4
 const char *meaninglessFlags[] = {
     "--plot",
@@ -335,6 +336,7 @@ const char *meaninglessFlags[] = {
     "--save",
     "-s"
 };
+// cmd params that are not meaningful to the output of the run, therefore not worth printing in the file with the solution
 #define MEANINGLESS_ARGS_COUNT 4
 const char *meaninglessArgs[] = {
     "--loglvl",

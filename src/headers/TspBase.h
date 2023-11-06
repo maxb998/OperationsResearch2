@@ -115,6 +115,7 @@ typedef struct
 	int tabuTenureSize;
 	struct VnsKickSize vnsKickSize;
 	struct GeneticParams geneticParams;
+	int annealingTemperature;
 
 	enum Mode matheurInitMode;	
 	enum HardFixPolicy hardFixPolicy;
