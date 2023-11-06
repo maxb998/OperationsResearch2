@@ -13,9 +13,36 @@ typedef struct
 
 }SwapInformation;
 
-static inline SwapInformation randomSwap(Solution *sol);
+typedef struct
+{
+    Solution *bestSol;
+    pthread_mutex_t mutex;
+    double startingTemperature;
 
-static inline void updateT(float *temperature);
+    double timeLimit;
+
+} ThreadSharedData;
+
+typedef struct
+{
+    ThreadSharedData *thShared;
+    Solution thSol;
+    unsigned int rndState;
+    int iterations;
+    int iterationsSinceUpdate;
+    double threshold;
+    double temperature;
+
+} ThreadSpecificData;
+
+static inline ThreadSharedData initThreadSharedData(Solution *sol, double timeLimit);
+static inline void destroyThreadSharedData(ThreadSharedData *thShared);
+static inline ThreadSpecificData initThreadSpecificData(Solution *sol, ThreadSharedData *thShared, unsigned int rndState);
+static inline void destroyThreadSpecificData(ThreadSpecificData *thSpecific);
+
+static inline SwapInformation randomSwap(Solution *sol, unsigned int * rndState);
+
+static inline void updateTemperature(float *temperature);
 
 static inline void normalizeDelta(double *deltaCost, Solution *sol);
 
@@ -23,6 +50,7 @@ static bool keepMove(double threshold);
 
 void SimulatedAnnealing(Solution *sol, double timeLimit)
 {
+
     // time limit management
     struct timespec timeStruct;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
@@ -31,64 +59,122 @@ void SimulatedAnnealing(Solution *sol, double timeLimit)
     // check of the input solution
     if (!checkSolution(sol))
     throwError(sol->instance, sol, "SimulatedAnnealing: Input solution is not valid");
+}
 
-    // initialization of variables
-    int iterations = 0;
-    float T = 10000;    // BETTER IF CHANGES WRT #NODES
-    double offset = 0.0;
-    double threshold = 0.0;
+static inline ThreadSharedData initThreadSharedData(Solution *sol, double timeLimit)
+{
+    ThreadSharedData thShared = { 
+        .timeLimit=timeLimit,
+        .bestSol=sol
+    };
+    if(sol->instance->params.annealingTemperature > 0) thShared.startingTemperature = sol->instance->params.annealingTemperature;
+    else thShared.startingTemperature = 10000;
+    pthread_mutex_init(&thShared.mutex, NULL);
+    return thShared;
+}
 
-    // Contains a copy of the current indexPath, which will be modified and from which we will update the solution
-    int *newIndexPath = malloc(sizeof(int) * sol->instance->nNodes);
-    for (int i = 0; i < sol->instance->nNodes; i++)
-    {
-        newIndexPath[i] = sol->indexPath[i];
-    }
+static inline void destroyThreadSharedData(ThreadSharedData *thShared)
+{
+    pthread_mutex_destroy(&thShared->mutex);
+}
+
+static inline ThreadSpecificData initThreadSpecificData(Solution *sol, ThreadSharedData *thShared, unsigned int rndState)
+{
+    ThreadSpecificData thSpecific = {
+        .iterations = 0,
+        .iterationsSinceUpdate = 0,
+        .rndState = rndState,
+        .threshold = 0.0,
+        .thShared = thShared,
+        .thSol = NULL,
+        .temperature = thShared->startingTemperature
+    };
+    cloneSolution(sol, &thSpecific.thSol);
+
+    return thSpecific;
+}
+
+static inline void destroyThreadSpecificData(ThreadSpecificData *thSpecific)
+{
+
+}
+
+static void * runSimulatedAnnealing(void * arg)
+{
+    ThreadSpecificData *thSpecific = (ThreadSpecificData*)arg;
+    ThreadSharedData *thShared = thSpecific->thShared;
+
+    // time limit management
+    struct timespec timeStruct;
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    double startTime = cvtTimespec2Double(timeStruct);
+ 
+    SwapInformation swapInfo = {
+        .index1 = -1,
+        .index2 = -1,
+        .offset = 0
+    };  
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double currentTime = cvtTimespec2Double(timeStruct);
 
-    while (currentTime < startTime + timeLimit)
+    while (currentTime < startTime + thShared->timeLimit)
     {
-        iterations++;
-        offset = randomSwap(newIndexPath, sol->instance);
+        thSpecific->iterations++;
+        thSpecific->iterationsSinceUpdate++;
+        swapInfo = randomSwap(&thSpecific->thSol, thSpecific->rndState);
 
-        if (offset < 0) // then we keep the swap
+        if (swapInfo.offset < 0) // then we keep the swap
         {
-            for (int i = 0; i < sol->instance->nNodes; i++) sol->indexPath[i] = newIndexPath[i];
-            sol->cost = computeSolutionCost(sol);
+            swapElems(thSpecific->thSol.indexPath[swapInfo.index1], thSpecific->thSol.indexPath[swapInfo.index2]);
+            thSpecific->thSol.cost = computeSolutionCost(&thSpecific->thSol);
+            LOG(LOG_LVL_LOG, "Better solution found at iteration: %d\t new cost: %lf", thSpecific->iterations, cvtCost2Double(thSpecific->thSol.cost));
+            thSpecific->iterationsSinceUpdate = 0;
         }
         else // we implement the move with some probability
         {
-            normalizeDelta(&offset, sol);
-            threshold = exp(-offset/T);
+            normalizeDelta(&swapInfo.offset, &thSpecific->thSol);
+            thSpecific->iterations = exp(-swapInfo.offset/thSpecific->temperature);
 
-            if (keepMove(threshold)) // then we keep the swap
+            if (keepMove(thSpecific->threshold)) // then we keep the swap
             {
-                for (int i = 0; i < sol->instance->nNodes; i++) sol->indexPath[i] = newIndexPath[i];
-                sol->cost = computeSolutionCost(sol);
+                swapElems(thSpecific->thSol.indexPath[swapInfo.index1], thSpecific->thSol.indexPath[swapInfo.index2]);
+                thSpecific->thSol.cost = computeSolutionCost(&thSpecific->thSol);
+                LOG(LOG_LVL_EVERYTHING, "Accepting bad move at iteration: %d\t, new cost: %lf", thSpecific->iterations, cvtCost2Double(thSpecific->thSol.cost));
+                thSpecific->iterationsSinceUpdate = 0;
             }
             
-            updateT(&T);
+            updateTemperature(&thSpecific->temperature);
+        }
+
+        // if newSol has better cost than sol we update sol
+        pthread_mutex_lock(&thShared->mutex);
+        if(thSpecific->thSol.cost < thShared->bestSol->cost) 
+            cloneSolution(&thSpecific->thSol, thShared->bestSol);
+        pthread_mutex_unlock(&thShared->mutex);
+
+        // if solution has not been updated for metaRestartThreshold iterations, and the time limit hasn't passed yet, we restart the annealing process from the best solution found so far
+        if(thSpecific->iterationsSinceUpdate == thShared->bestSol->instance->params.metaRestartThreshold)
+        {
+            LOG(LOG_LVL_DEBUG, "Restarting Simulated Annealing from best solution found so far");
+            thSpecific->iterationsSinceUpdate = 0;
+            thSpecific->temperature = thShared->startingTemperature;
+            cloneSolution(thShared->bestSol, &thSpecific->thSol);
+
         }
     }
-    
-    free(newIndexPath);
 }
 
-static inline SwapInformation randomSwap(Solution *sol)
+static inline SwapInformation randomSwap(Solution *sol, unsigned int * rndState)
 {
     int nNodes = sol->instance->nNodes;
     int *X = sol->instance->X;
     int *Y = sol->instance->Y;
-    int edgeWeightType = sol->instance->params.edgeWeightType;
+    int *indexPath = sol->indexPath;
 
-    int index1 = (int)((long)rand() * (long)nNodes / ((long)RAND_MAX+1L));
-    int index2 = (int)((long)rand() * (long)nNodes / ((long)RAND_MAX+1L));
-    {
-        register int temp;
-        if(index2 < index1) swapElems(index1, index2, temp);
-    }// we want index1 < index2
+    int index1 = genRandom(rndState, 1, nNodes); 
+    int index2 = genRandom(rndState, 1, nNodes);
+    while (fabsf(index1 - index2) < 2) index2 = genRandom(rndState, 1, nNodes);
 
     double oldArcsCost = 0;
     double newArcsCost = 0;
@@ -97,55 +183,25 @@ static inline SwapInformation randomSwap(Solution *sol)
     double costEdge3 = 0;   // cost edge (index2-1, index2)
     double costEdge4 = 0;   // cost edge (index2, index2+1)
 
-    int *path = malloc(sizeof(int) * sol->instance->nNodes);
-    for (int i = 0; i < sol->instance->nNodes; i++) path[i] = sol->indexPath[i];
-
-    costEdge2 = exactEdgeCost(X[index1], Y[index1], X[index2], Y[index2], edgeWeightType);
-    
-    if (index1 == 0) costEdge1 = exactEdgeCost(X[path[nNodes-1]], Y[path[nNodes-1]], X[path[index1]], Y[path[index1]], edgeWeightType);
-    else costEdge1 = exactEdgeCost(X[path[index1-1]], Y[path[index1-1]], X[path[index1]], Y[path[index1]], edgeWeightType);
-
-    if (index1 == nNodes-1) costEdge2 = exactEdgeCost(X[path[index1]], Y[path[index1]], X[path[0]], Y[path[0]], edgeWeightType);
-    else costEdge2 = exactEdgeCost(X[path[index1]], Y[path[index1]], X[path[index1+1]], Y[path[index1+1]], edgeWeightType);
-    
-    if (index2 == 0) costEdge3 = exactEdgeCost(X[path[nNodes-1]], Y[path[nNodes-1]], X[path[index2]], Y[path[index2]], edgeWeightType);
-    else costEdge3 = exactEdgeCost(X[path[index2-1]], Y[path[index2-1]], X[path[index2]], Y[path[index2]], edgeWeightType);
-
-    if (index2 == nNodes-1) costEdge4 = exactEdgeCost(X[path[index2]], Y[path[index2]], X[path[0]], Y[path[0]], edgeWeightType);
-    else costEdge4 = exactEdgeCost(X[path[index2]], Y[path[index2]], X[path[index2+1]], Y[path[index2+1]], edgeWeightType);
-
+    costEdge1 = computeEdgeCost(X[indexPath[index1-1]], Y[indexPath[index1-1]], X[indexPath[index1]], Y[indexPath[index1]], sol->instance);
+    costEdge2 = computeEdgeCost(X[indexPath[index1]], Y[indexPath[index1]], X[indexPath[index1+1]], Y[indexPath[index1+1]], sol->instance);
+    costEdge3 = computeEdgeCost(X[indexPath[index2-1]], Y[indexPath[index2-1]], X[indexPath[index2]], Y[indexPath[index2]], sol->instance);
+    costEdge4 = computeEdgeCost(X[indexPath[index2]], Y[indexPath[index2]], X[indexPath[index2+1]], Y[indexPath[index2+1]], sol->instance);
     oldArcsCost = costEdge1 + costEdge2 + costEdge3 + costEdge4;
-    // if the nodes are adjacent we have to remove an edge that we counted twice
-    if(index2 - index1 == 1 || index2 - index1 == nNodes-1) oldArcsCost -= exactEdgeCost(X[path[index1]], Y[path[index1]], X[path[index2]], Y[path[index2]], edgeWeightType);
 
-    {
-        register int temp;
-        swapElems(path[index1], path[index2], temp);
-    }
-
-    if (index1 == 0) costEdge1 = exactEdgeCost(X[path[nNodes-1]], Y[path[nNodes-1]], X[path[index1]], Y[path[index1]], edgeWeightType);
-    else costEdge1 = exactEdgeCost(X[path[index1-1]], Y[path[index1-1]], X[path[index1]], Y[path[index1]], edgeWeightType);
-
-    if (index1 == nNodes-1) costEdge2 = exactEdgeCost(X[path[index1]], Y[path[index1]], X[path[0]], Y[path[0]], edgeWeightType);
-    else costEdge2 = exactEdgeCost(X[path[index1]], Y[path[index1]], X[path[index1+1]], Y[path[index1+1]], edgeWeightType);
-    
-    if (index2 == 0) costEdge3 = exactEdgeCost(X[path[nNodes-1]], Y[path[nNodes-1]], X[path[index2]], Y[path[index2]], edgeWeightType);
-    else costEdge3 = exactEdgeCost(X[path[index2-1]], Y[path[index2-1]], X[path[index2]], Y[path[index2]], edgeWeightType);
-
-    if (index2 == nNodes-1) costEdge4 = exactEdgeCost(X[path[index2]], Y[path[index2]], X[path[0]], Y[path[0]], edgeWeightType);
-    else costEdge4 = exactEdgeCost(X[path[index2]], Y[path[index2]], X[path[index2+1]], Y[path[index2+1]], edgeWeightType);
-
+    // now we compute the weights as if we swapped the nodes in the path
+    costEdge1 = computeEdgeCost(X[indexPath[index1-1]], Y[indexPath[index1-1]], X[indexPath[index2]], Y[indexPath[index2]], sol->instance);
+    costEdge2 = computeEdgeCost(X[indexPath[index2]], Y[indexPath[index2]], X[indexPath[index1+1]], Y[indexPath[index1+1]], sol->instance);
+    costEdge3 = computeEdgeCost(X[indexPath[index2-1]], Y[indexPath[index2-1]], X[indexPath[index1]], Y[indexPath[index1]], sol->instance);
+    costEdge4 = computeEdgeCost(X[indexPath[index1]], Y[indexPath[index1]], X[indexPath[index2+1]], Y[indexPath[index2+1]], sol->instance);
     newArcsCost = costEdge1 + costEdge2 + costEdge3 + costEdge4;
-    // if the nodes are adjacent we have to remove an edge that we counted twice
-    if(index2 - index1 == 1 || index2 - index1 == nNodes-1) newArcsCost -= exactEdgeCost(X[path[index1]], Y[path[index1]], X[path[index2]], Y[path[index2]], edgeWeightType);
 
     SwapInformation swapInfo = {.offset = newArcsCost - oldArcsCost, .index1 = index1, .index2 = index2};
-    free(path);
 
     return swapInfo;
 }
 
-static inline void updateT(float *temperature)
+static inline void updateTemperature(float *temperature)
 {
     *temperature = 0.99 * (*temperature);
 }
