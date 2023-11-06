@@ -60,8 +60,6 @@ __uint128_t PatchingHeuristic(SubtoursData *sub, Instance *inst)
 static inline void findBestSubtourMerge(SubtoursData *sub, int subtoursCount, Instance *inst, int mergeIndexes[2], int *invertOrientation)
 {
 	float *X = inst->X, *Y =inst->Y;
-	enum EdgeWeightType ewt = inst->params.edgeWeightType ;
-	bool roundFlag = inst->params.roundWeights;
 
 	float min = INFINITY;
 
@@ -95,7 +93,7 @@ static inline void findBestSubtourMerge(SubtoursData *sub, int subtoursCount, In
 					// successor of j'th node
 					int succJ = sub->successors[j];
 
-					float cost = computeEdgeCost(X[i], Y[i], X[succJ], Y[succJ], ewt, roundFlag) + computeEdgeCost(X[succI], Y[succI], X[j], Y[j], ewt, roundFlag);
+					float cost = computeEdgeCost(X[i], Y[i], X[succJ], Y[succJ], inst) + computeEdgeCost(X[succI], Y[succI], X[j], Y[j], inst);
 
 					if (cost < min)
 					{
@@ -104,7 +102,7 @@ static inline void findBestSubtourMerge(SubtoursData *sub, int subtoursCount, In
 						*invertOrientation = 0;
 					}
 					
-					cost = computeEdgeCost(X[i], Y[i], X[j], Y[j], ewt, roundFlag) + computeEdgeCost(X[succI], Y[succI], X[succJ], Y[succJ], ewt, roundFlag);
+					cost = computeEdgeCost(X[i], Y[i], X[j], Y[j], inst) + computeEdgeCost(X[succI], Y[succI], X[succJ], Y[succJ], inst);
 
 					if (cost < min)
 					{

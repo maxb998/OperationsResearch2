@@ -55,8 +55,8 @@ void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointC
 // UTILITIES
 //###################################################################################################################################
 
-// Swap elem1 and elem2. Can be done with any type of variable, however a temporary variable "tmp" of the same type of elem1 and elem2 MUST be provided.
-#define swapElems(elem1,elem2,tmp) tmp = elem1; elem1 = elem2; elem2 = tmp
+// Swap elem1 and elem2. 
+#define swapElems(elem1,elem2) { register typeof(elem1) swapVarTemp = elem1; elem1 = elem2; elem2 = swapVarTemp; }
 
 // Convert timespec struct to a double time in seconds
 #define cvtTimespec2Double(t) (double)t.tv_sec + (double)t.tv_nsec / 1000000000.0

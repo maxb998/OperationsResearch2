@@ -245,11 +245,6 @@ static void applyNearestNeighbor(ThreadSpecificData *thSpecific, int firstNode)
     Instance *inst = thSpecific->workingSol.instance;
     int n = inst->nNodes;
 
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_AVX))
-        enum EdgeWeightType ewt = inst->params.edgeWeightType ;
-        bool roundFlag = inst->params.roundWeights;
-    #endif
-
     #if ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
         int *workSolPath = thSpecific->workingSol.indexPath;
     #endif
@@ -279,9 +274,9 @@ static void applyNearestNeighbor(ThreadSpecificData *thSpecific, int firstNode)
             successor.node = genRandom(&thSpecific->rndState, (i+1), n);
 
             #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-                successor.cost = computeEdgeCost(thSpecific->X[i], thSpecific->Y[i], thSpecific->X[successor.node], thSpecific->Y[successor.node], ewt, roundFlag);
+                successor.cost = computeEdgeCost(thSpecific->X[i], thSpecific->Y[i], thSpecific->X[successor.node], thSpecific->Y[successor.node], inst);
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-                successor.cost = computeEdgeCost(inst->X[workSolPath[i]], inst->Y[workSolPath[i]], inst->X[workSolPath[successor.node]], inst->Y[workSolPath[successor.node]], ewt, roundFlag);
+                successor.cost = computeEdgeCost(inst->X[workSolPath[i]], inst->Y[workSolPath[i]], inst->X[workSolPath[successor.node]], inst->Y[workSolPath[successor.node]], inst);
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
                 successor.cost = inst->edgeCostMat[(size_t)workSolPath[i] * (size_t)n + (size_t)workSolPath[successor.node]];
             #endif
@@ -308,11 +303,11 @@ static void applyNearestNeighbor(ThreadSpecificData *thSpecific, int firstNode)
 
     // add cost of the two remaining edges
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        secondToLastCost = computeEdgeCost(thSpecific->X[n - 2], thSpecific->Y[n - 2], thSpecific->X[n - 1], thSpecific->Y[n - 1], ewt, roundFlag);
-        lastCost = computeEdgeCost(thSpecific->X[n - 1], thSpecific->Y[n - 1], thSpecific->X[0], thSpecific->Y[0], ewt, roundFlag);
+        secondToLastCost = computeEdgeCost(thSpecific->X[n - 2], thSpecific->Y[n - 2], thSpecific->X[n - 1], thSpecific->Y[n - 1], inst);
+        lastCost = computeEdgeCost(thSpecific->X[n - 1], thSpecific->Y[n - 1], thSpecific->X[0], thSpecific->Y[0], inst);
     #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-        secondToLastCost = computeEdgeCost(inst->X[workSolPath[n-2]], inst->Y[workSolPath[n-2]], inst->X[workSolPath[n-1]], inst->Y[workSolPath[n-1]], ewt, roundFlag);
-        lastCost = computeEdgeCost(inst->X[workSolPath[n-1]], inst->Y[workSolPath[n-1]], inst->X[workSolPath[0]],   inst->Y[workSolPath[0]],   ewt, roundFlag);
+        secondToLastCost = computeEdgeCost(inst->X[workSolPath[n-2]], inst->Y[workSolPath[n-2]], inst->X[workSolPath[n-1]], inst->Y[workSolPath[n-1]], inst);
+        lastCost = computeEdgeCost(inst->X[workSolPath[n-1]], inst->Y[workSolPath[n-1]], inst->X[workSolPath[0]],   inst->Y[workSolPath[0]],   inst);
     #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
         secondToLastCost = inst->edgeCostMat[(size_t)workSolPath[n-2] * (size_t)n + (size_t)workSolPath[n-1]];
         lastCost = inst->edgeCostMat[(size_t)workSolPath[n-1] * (size_t)n + (size_t)workSolPath[0]];
@@ -325,12 +320,10 @@ static void applyNearestNeighbor(ThreadSpecificData *thSpecific, int firstNode)
 static inline void swapElemsInThSpecific(ThreadSpecificData *thSpecific, int pos1, int pos2)
 {
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX) //thSpecific->X in not used otherwise
-        register float tempFloat;
-        swapElems(thSpecific->X[pos1], thSpecific->X[pos2], tempFloat);
-        swapElems(thSpecific->Y[pos1], thSpecific->Y[pos2], tempFloat);
+        swapElems(thSpecific->X[pos1], thSpecific->X[pos2])
+        swapElems(thSpecific->Y[pos1], thSpecific->Y[pos2])
     #endif
-    register int tempInt;
-    swapElems(thSpecific->workingSol.indexPath[pos1], thSpecific->workingSol.indexPath[pos2], tempInt);
+    swapElems(thSpecific->workingSol.indexPath[pos1], thSpecific->workingSol.indexPath[pos2])
 }
 
 static void updateBestSolution(ThreadSpecificData *thSpecific)
@@ -348,16 +341,13 @@ static void updateBestSolution(ThreadSpecificData *thSpecific)
 
     LOG(LOG_LVL_LOG, "Found better solution: cost = %lf", cvtCost2Double(newBest->cost));
 
-    register int *temp;
-    swapElems(bestSol->indexPath, newBest->indexPath, temp);
+    swapElems(bestSol->indexPath, newBest->indexPath)
 }
 
 #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
 static inline SuccessorData findSuccessorVectorized(ThreadSpecificData *thSpecific, int lastAddedPos)
 {
     Instance *inst = thSpecific->workingSol.instance;
-    enum EdgeWeightType ewt = inst->params.edgeWeightType ;
-    bool roundFlag = inst->params.roundWeights;
 
     // to keep track of the first best distance
     __m256 minVec = _mm256_set1_ps(INFINITY);
@@ -376,7 +366,7 @@ static inline SuccessorData findSuccessorVectorized(ThreadSpecificData *thSpecif
     {
         // get distance first
         __m256 x2 = _mm256_loadu_ps(&thSpecific->X[i]), y2 = _mm256_loadu_ps(&thSpecific->Y[i]);
-        __m256 dist = noSquaredRootEdgeCost_VEC(x1, y1, x2, y2, ewt);
+        __m256 dist = noSquaredRootEdgeCost_VEC(x1, y1, x2, y2, inst);
 
         // get first minimum
         __m256i mask = _mm256_castps_si256(_mm256_cmp_ps(dist, minVec, _CMP_LT_OQ)); // set for "non-signaling" -> if one element is NaN than set as false
@@ -413,7 +403,7 @@ static inline SuccessorData findSuccessorVectorized(ThreadSpecificData *thSpecif
 
     int nextPos = minIDsVecStore[successorSubIndex];
     SuccessorData succ = {
-        .cost=computeEdgeCost(thSpecific->X[lastAddedPos], thSpecific->Y[lastAddedPos], thSpecific->X[nextPos], thSpecific->Y[nextPos], ewt, roundFlag), 
+        .cost=computeEdgeCost(thSpecific->X[lastAddedPos], thSpecific->Y[lastAddedPos], thSpecific->X[nextPos], thSpecific->Y[nextPos], inst), 
         .node=minIDsVecStore[successorSubIndex]
     };
 
@@ -425,11 +415,6 @@ static inline SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, in
     Instance *inst = thSpecific->workingSol.instance;
     int n = inst->nNodes;
     int *indexPath = thSpecific->workingSol.indexPath;
-
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-        enum EdgeWeightType ewt = inst->params.edgeWeightType;
-        bool roundFlag = inst->params.roundWeights;
-    #endif
 
     // initialize array with stored best successors(1st best, 2nd best, 3rd best, ...)
     SuccessorData bestSuccs[BASE_GRASP_BEST_SAVE_BUFFER_SIZE];
@@ -453,7 +438,7 @@ static inline SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, in
         SuccessorData currentSucc = { .node=node };
 
         #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-            currentSucc.cost = noSquaredRootEdgeCost(x1, y1, inst->X[indexPath[node]], inst->Y[indexPath[node]], ewt);
+            currentSucc.cost = noSquaredRootEdgeCost(x1, y1, inst->X[indexPath[node]], inst->Y[indexPath[node]], inst);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
             currentSucc.cost = inst->edgeCostMat[(size_t)lastAddedIndex * (size_t)n + (size_t)indexPath[node]];
         #endif
@@ -461,10 +446,7 @@ static inline SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, in
         for (int i = 0; i < BASE_GRASP_BEST_SAVE_BUFFER_SIZE; i++)
         {
             if (currentSucc.cost < bestSuccs[i].cost)
-            {
-                SuccessorData temp;
-                swapElems(bestSuccs[i], currentSucc, temp);
-            }
+                swapElems(bestSuccs[i], currentSucc)
         }
     }
 
@@ -482,7 +464,7 @@ static inline SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, in
     }
 
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-        bestSuccs[successorSubIndex].cost = computeEdgeCost(x1, y1, inst->X[indexPath[bestSuccs[successorSubIndex].node]], inst->Y[indexPath[bestSuccs[successorSubIndex].node]], ewt, roundFlag);
+        bestSuccs[successorSubIndex].cost = computeEdgeCost(x1, y1, inst->X[indexPath[bestSuccs[successorSubIndex].node]], inst->Y[indexPath[bestSuccs[successorSubIndex].node]], inst);
     #endif
 
     return bestSuccs[successorSubIndex];

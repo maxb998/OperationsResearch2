@@ -300,10 +300,10 @@ static void setupThSpecificOnBestSol(ThreadSpecificData *thSpecific)
     for (int i = 0; i < n; i++) // build cost cache
     {
         #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-            thSpecific->costCache[i] = computeEdgeCost(thSpecific->X[i], thSpecific->Y[i], thSpecific->X[i+1], thSpecific->Y[i+1], inst->params.edgeWeightType, inst->params.roundWeights);
+            thSpecific->costCache[i] = computeEdgeCost(thSpecific->X[i], thSpecific->Y[i], thSpecific->X[i+1], thSpecific->Y[i+1], inst);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
             int *path = thShared->bestSol->indexPath;
-            thSpecific->costCache[i] = computeEdgeCost(inst->X[path[i]], inst->Y[path[i]], inst->X[path[i+1]], inst->Y[path[i+1]], inst->params.edgeWeightType, inst->params.roundWeights);
+            thSpecific->costCache[i] = computeEdgeCost(inst->X[path[i]], inst->Y[path[i]], inst->X[path[i+1]], inst->Y[path[i+1]], inst);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
             int *path = thShared->bestSol->indexPath;
             thSpecific->costCache[i] = inst->edgeCostMat[path[i] * n + path[i+1]];
@@ -367,29 +367,21 @@ static void addEdgeToTenure(ThreadSpecificData *thSpecific, int indexPathIndex)
 static inline void performNonImproving2OptMove(ThreadSpecificData *thSpecific, int edge0, int edge1)
 {
     Solution *sol = &thSpecific->workingSol;
+    Instance *inst = sol->instance;
 
     if (edge0 > edge1)
-    {
-        register int temp;
-        swapElems(edge0, edge1, temp);
-    }
+        swapElems(edge0, edge1)
 
     float altEdge0Cost, altEdge1Cost;
 
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        enum EdgeWeightType ewt = sol->instance->params.edgeWeightType;
-        bool roundW = sol->instance->params.roundWeights;
-        altEdge0Cost = computeEdgeCost(thSpecific->X[edge0], thSpecific->Y[edge0], thSpecific->X[edge1], thSpecific->Y[edge1], ewt, roundW);
-        altEdge1Cost = computeEdgeCost(thSpecific->X[edge0+1], thSpecific->Y[edge0+1], thSpecific->X[edge1+1], thSpecific->Y[edge1+1], ewt, roundW);
+        altEdge0Cost = computeEdgeCost(thSpecific->X[edge0], thSpecific->Y[edge0], thSpecific->X[edge1], thSpecific->Y[edge1], inst);
+        altEdge1Cost = computeEdgeCost(thSpecific->X[edge0+1], thSpecific->Y[edge0+1], thSpecific->X[edge1+1], thSpecific->Y[edge1+1], inst);
     #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-        Instance *inst = sol->instance;
         int *indexPath = sol->indexPath;
-        enum EdgeWeightType ewt = inst->params.edgeWeightType;
-        bool roundW = inst->params.roundWeights;
-        altEdge0Cost = computeEdgeCost(inst->X[indexPath[edge0]], inst->Y[indexPath[edge0]], inst->X[indexPath[edge1]], inst->Y[indexPath[edge1]], ewt, roundW);
-        altEdge1Cost = computeEdgeCost(inst->X[indexPath[edge0+1]], inst->Y[indexPath[edge0+1]], inst->X[indexPath[edge1+1]], inst->Y[indexPath[edge1+1]], ewt, roundW);
+        altEdge0Cost = computeEdgeCost(inst->X[indexPath[edge0]], inst->Y[indexPath[edge0]], inst->X[indexPath[edge1]], inst->Y[indexPath[edge1]], inst);
+        altEdge1Cost = computeEdgeCost(inst->X[indexPath[edge0+1]], inst->Y[indexPath[edge0+1]], inst->X[indexPath[edge1+1]], inst->Y[indexPath[edge1+1]], inst);
     #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-        Instance *inst = sol->instance;
         int *indexPath = sol->indexPath;
         altEdge0Cost = inst->edgeCostMat[(size_t)indexPath[edge0] * (size_t)inst->nNodes + (size_t)indexPath[edge1]];
         altEdge1Cost = inst->edgeCostMat[(size_t)indexPath[edge0+1] * (size_t)inst->nNodes + (size_t)indexPath[edge1+1]];
@@ -407,12 +399,10 @@ static inline void performNonImproving2OptMove(ThreadSpecificData *thSpecific, i
 
     while (smallID < bigID)
     {
-        register int tempInt;
-        swapElems(sol->indexPath[smallID], sol->indexPath[bigID], tempInt);
+        swapElems(sol->indexPath[smallID], sol->indexPath[bigID])
         #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-            register float tempFloat;
-            swapElems(thSpecific->X[smallID], thSpecific->X[bigID], tempFloat);
-            swapElems(thSpecific->Y[smallID], thSpecific->Y[bigID], tempFloat);
+            swapElems(thSpecific->X[smallID], thSpecific->X[bigID])
+            swapElems(thSpecific->Y[smallID], thSpecific->Y[bigID])
         #endif
 
         smallID++;
@@ -428,8 +418,7 @@ static inline void performNonImproving2OptMove(ThreadSpecificData *thSpecific, i
 
     while (smallID < bigID)
     {
-        register float tempFloat;
-        swapElems(thSpecific->costCache[smallID], thSpecific->costCache[bigID], tempFloat);
+        swapElems(thSpecific->costCache[smallID], thSpecific->costCache[bigID])
 
         smallID++;
         bigID--;

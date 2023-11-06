@@ -31,8 +31,6 @@ CplexData initCplexData(Instance *inst)
 		throwError("buildCPXModel: error at CPXcreateprob with code %d", errno);
 
     int n = inst->nNodes;
-    enum EdgeWeightType ewt = inst->params.edgeWeightType ;
-    bool roundFlag = inst->params.roundWeights;
 
 	char binary = CPX_BINARY; 
 
@@ -46,7 +44,7 @@ CplexData initCplexData(Instance *inst)
 		for ( int j = i+1; j < n; j++ )
 		{
 			sprintf(cname[0], "x(%d,%d)", i+1,j+1);  		// ... x(1,2), x(1,3) ....
-			double obj = computeEdgeCost(inst->X[i], inst->Y[i], inst->X[j], inst->Y[j], ewt, roundFlag); // cost == distance
+			double obj = computeEdgeCost(inst->X[i], inst->Y[i], inst->X[j], inst->Y[j], inst); // cost == distance
 			double ub = 1.0;
 			if ( CPXnewcols(cpxData.env, cpxData.lp, 1, &obj, NULL, &ub, &binary, cname) )
 				throwError("initCplexData: wrong CPXnewcols on x var.s");
@@ -98,10 +96,7 @@ int xpos(int i, int j, int n)
     if (i == j)
         throwError("xpos: i == j");
     if (i > j)
-    {
-        register int temp;
-        swapElems(i, j, temp);
-    }
+        swapElems(i, j)
 
     int pos = i * n + j - ((i + 1) * (i + 2)) / 2;
     return pos;
@@ -225,8 +220,6 @@ __uint128_t computeSuccessorsSolCost(int *successors, Instance *inst)
 		throwError("computeSuccessorsSolCost: successors array passed as input is not feasible");
 
 	int n = inst->nNodes;
-	enum EdgeWeightType ewt = inst->params.edgeWeightType ;
-	bool roundFlag = inst->params.roundWeights;
 
 	__uint128_t cost = 0LL;
 
@@ -235,7 +228,7 @@ __uint128_t computeSuccessorsSolCost(int *successors, Instance *inst)
 	do
 	{
 		int succ = successors[i];
-		cost += cvtFloat2Cost(computeEdgeCost(inst->X[i], inst->Y[i], inst->X[succ], inst->Y[succ], ewt, roundFlag));
+		cost += cvtFloat2Cost(computeEdgeCost(inst->X[i], inst->Y[i], inst->X[succ], inst->Y[succ], inst));
 		i = succ;
 
 		if (counter > n)

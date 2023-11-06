@@ -58,8 +58,7 @@ void benders(Solution *sol, double tlim)
 		if (sub.subtoursCount == 1) // means that there is only one subtour
 		{
 			LOG(LOG_LVL_LOG, "Optimal Solution found.");
-			register int *temp;
-			swapElems(bestSuccessorsSol, sub.successors, temp);
+			swapElems(bestSuccessorsSol, sub.successors)
 			break;
 		}
 
@@ -77,8 +76,7 @@ void benders(Solution *sol, double tlim)
 
 		if (cost < bestCost)
 		{
-			register int *temp;
-			swapElems(bestSuccessorsSol, sub.successors, temp);
+			swapElems(bestSuccessorsSol, sub.successors)
 			bestCost = cost;
 		}
 

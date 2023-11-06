@@ -196,12 +196,10 @@ __uint128_t computeSolutionCost(Solution *sol)
     __uint128_t cost = 0;
 
     #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-        enum EdgeWeightType ewt = inst->params.edgeWeightType ;
-        bool roundFlag = inst->params.roundWeights;
         for (int i = 0; i < n - 1; i++)
-            cost += cvtFloat2Cost(computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i+1]], inst->Y[sol->indexPath[i+1]], ewt, roundFlag));
+            cost += cvtFloat2Cost(computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i+1]], inst->Y[sol->indexPath[i+1]], inst));
         
-        cost += cvtFloat2Cost(computeEdgeCost(inst->X[sol->indexPath[n-1]], inst->Y[sol->indexPath[n-1]], inst->X[sol->indexPath[0]], inst->Y[sol->indexPath[0]], ewt, roundFlag));
+        cost += cvtFloat2Cost(computeEdgeCost(inst->X[sol->indexPath[n-1]], inst->Y[sol->indexPath[n-1]], inst->X[sol->indexPath[0]], inst->Y[sol->indexPath[0]], inst));
     #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
         for (int i = 0; i < n - 1; i++)
             cost += cvtFloat2Cost(inst->edgeCostMat[(size_t)sol->indexPath[i] * (size_t)n + (size_t)sol->indexPath[i+1]]);
@@ -217,10 +215,7 @@ static void quicksort_internal(float *arr, int low, int high)
     if ((high < SIZE_MAX) && (low < high))
     {
         int pivot = (int)(((long)rand() + 1) * (long)(high - low) / (long)RAND_MAX) + low;
-        {
-            register float temp;
-            swapElems(arr[high], arr[pivot], temp);
-        }
+        swapElems(arr[high], arr[pivot])
 
         int i = (low - 1);
 
@@ -229,13 +224,11 @@ static void quicksort_internal(float *arr, int low, int high)
             if (arr[j] <= arr[high])
             {
                 i++;
-                register float tempf;
-                swapElems(arr[i], arr[j], tempf);
+                swapElems(arr[i], arr[j])
             }
         }
 
-        register float tempf;
-        swapElems(arr[i + 1], arr[high], tempf);
+        swapElems(arr[i + 1], arr[high])
 
         quicksort_internal(arr, low, i);
         quicksort_internal(arr, i + 2, high);
@@ -252,10 +245,7 @@ static void quickargsort_internal(float *arr, int *indexes, int low, int high)
     if ((high < SIZE_MAX) && (low < high))
     {
         int pivot = (int)(((long)rand() + 1) * (long)(high - low) / (long)RAND_MAX) + low;
-        {
-            register int tempi;
-            swapElems(indexes[high], indexes[pivot], tempi);
-        }
+        swapElems(indexes[high], indexes[pivot])
 
         int i = (low - 1);
         for (int j = low; j <= high - 1; j++)
@@ -263,13 +253,11 @@ static void quickargsort_internal(float *arr, int *indexes, int low, int high)
             if (arr[indexes[j]] <= arr[indexes[high]])
             {
                 i++;
-                register int tempi;
-                swapElems(indexes[i], indexes[j], tempi);
+                swapElems(indexes[i], indexes[j])
             }
         }
 
-        register int tempi;
-        swapElems(indexes[i + 1], indexes[high], tempi);
+        swapElems(indexes[i + 1], indexes[high])
 
         quickargsort_internal(arr, indexes, low, i);
         quickargsort_internal(arr, indexes, i + 2, high);

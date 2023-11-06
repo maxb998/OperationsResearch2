@@ -1,9 +1,9 @@
 #include "Tsp.h"
 
-#include <pthread.h>
-#include <time.h>
-#include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
-#include <stdio.h>
+#include "pthread.h"
+#include "time.h"
+#include "unistd.h" // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
+#include "stdio.h"
 
 //#define DEBUG
 
@@ -285,10 +285,7 @@ static void * runGenetic(void *arg)
             }
 
             if ((*(float *)&thSpecific->population[populIndexWorst]->cost > *(float *)&thSpecific->crossovers[j]->cost) && !alreadyInPopulation)
-            {
-                register Solution *temp;
-                swapElems(thSpecific->population[populIndexWorst], thSpecific->crossovers[j], temp);
-            }
+                swapElems(thSpecific->population[populIndexWorst], thSpecific->crossovers[j])
         }
         
         #ifdef DEBUG
@@ -333,8 +330,7 @@ static inline void permuteSolution(Solution *sol, unsigned int *rndState)
         while (index0 == index1)
             index1 = genRandom(rndState,1,n);
         
-        register int temp;
-        swapElems(sol->indexPath[index0], sol->indexPath[index1], temp);
+        swapElems(sol->indexPath[index0], sol->indexPath[index1])
     }
 }
 
@@ -359,10 +355,8 @@ static inline void EdgeRecombinationCrossover(Solution *out, Solution *in0, Solu
         for (nodeToAddPos = i+1; nodeToAddPos < n; nodeToAddPos++)
             if (out->indexPath[nodeToAddPos] == nodeToAdd)
                 break;
-        {
-            register int temp;
-            swapElems(out->indexPath[i+1], out->indexPath[nodeToAddPos], temp);
-        }
+
+        swapElems(out->indexPath[i+1], out->indexPath[nodeToAddPos])
 
         removeNodeFromAdiacencyMatrix(thSpecific, out->indexPath[i]);
     }
@@ -471,10 +465,6 @@ static inline void mutateSolution(Solution *sol, unsigned int *rndState)
     Instance *inst = sol->instance;
     int n = inst->nNodes;
     int *path = sol->indexPath;
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-        enum EdgeWeightType ewt = inst->params.edgeWeightType; 
-        bool roundW = inst->params.roundWeights;
-    #endif
 
     switch (genRandom(rndState, 0, 1))
     {
@@ -485,17 +475,14 @@ static inline void mutateSolution(Solution *sol, unsigned int *rndState)
             edge1 = genRandom(rndState, 1, n);
 
         if (edge0 > edge1)
-        {
-            register int temp;
-            swapElems(edge0, edge1, temp);
-        }
+            swapElems(edge0, edge1)
 
         // update cost
         #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-            *(float*)&sol->cost -= computeEdgeCost(inst->X[path[edge0]], inst->Y[path[edge0]], inst->X[path[edge0+1]], inst->Y[path[edge0+1]], ewt, roundW);
-            *(float*)&sol->cost -= computeEdgeCost(inst->X[path[edge1]], inst->Y[path[edge1]], inst->X[path[edge1+1]], inst->Y[path[edge1+1]], ewt, roundW);
-            *(float*)&sol->cost += computeEdgeCost(inst->X[path[edge0]], inst->Y[path[edge0]], inst->X[path[edge1]], inst->Y[path[edge1]], ewt, roundW);
-            *(float*)&sol->cost += computeEdgeCost(inst->X[path[edge0+1]], inst->Y[path[edge0+1]], inst->X[path[edge1+1]], inst->Y[path[edge1+1]], ewt, roundW);
+            *(float*)&sol->cost -= computeEdgeCost(inst->X[path[edge0]], inst->Y[path[edge0]], inst->X[path[edge0+1]], inst->Y[path[edge0+1]], inst);
+            *(float*)&sol->cost -= computeEdgeCost(inst->X[path[edge1]], inst->Y[path[edge1]], inst->X[path[edge1+1]], inst->Y[path[edge1+1]], inst);
+            *(float*)&sol->cost += computeEdgeCost(inst->X[path[edge0]], inst->Y[path[edge0]], inst->X[path[edge1]], inst->Y[path[edge1]], inst);
+            *(float*)&sol->cost += computeEdgeCost(inst->X[path[edge0+1]], inst->Y[path[edge0+1]], inst->X[path[edge1+1]], inst->Y[path[edge1+1]], inst);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
             *(float*)&sol->cost -= inst->edgeCostMat[(size_t)path[edge0] * (size_t)inst->nNodes + (size_t)path[edge0+1]];
             *(float*)&sol->cost -= inst->edgeCostMat[(size_t)path[edge1] * (size_t)inst->nNodes + (size_t)path[edge1+1]];
@@ -504,10 +491,8 @@ static inline void mutateSolution(Solution *sol, unsigned int *rndState)
         #endif
 
         for (int smallI = edge0 + 1, bigI = edge1; smallI < bigI; smallI++, bigI--)
-        {
-            register int temp;
-            swapElems(path[smallI], path[bigI], temp);
-        }
+            swapElems(path[smallI], path[bigI])
+
         break;
     }
     
@@ -523,8 +508,8 @@ static inline void mutateSolution(Solution *sol, unsigned int *rndState)
         {
             // subtract old cost
             #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-                *(float*)&sol->cost -= computeEdgeCost(inst->X[path[edges[i]-1]], inst->Y[path[edges[i]-1]], inst->X[path[edges[i]]],   inst->Y[path[edges[i]]],   ewt, roundW);
-                *(float*)&sol->cost -= computeEdgeCost(inst->X[path[edges[i]]],   inst->Y[path[edges[i]]],   inst->X[path[edges[i]+1]], inst->Y[path[edges[i]+1]], ewt, roundW);
+                *(float*)&sol->cost -= computeEdgeCost(inst->X[path[edges[i]-1]], inst->Y[path[edges[i]-1]], inst->X[path[edges[i]]],   inst->Y[path[edges[i]]],   inst);
+                *(float*)&sol->cost -= computeEdgeCost(inst->X[path[edges[i]]],   inst->Y[path[edges[i]]],   inst->X[path[edges[i]+1]], inst->Y[path[edges[i]+1]], inst);
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
                 *(float*)&sol->cost -= inst->edgeCostMat[(size_t)path[edges[i]] * (size_t)n + (size_t)path[edges[i]-1]];
                 *(float*)&sol->cost -= inst->edgeCostMat[(size_t)path[edges[i]] * (size_t)n + (size_t)path[edges[i]+1]];
@@ -538,8 +523,8 @@ static inline void mutateSolution(Solution *sol, unsigned int *rndState)
 
             // add new cost
             #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-                *(float*)&sol->cost += computeEdgeCost(inst->X[path[edges[i]-1]], inst->Y[path[edges[i]-1]], inst->X[path[edges[i]]],   inst->Y[path[edges[i]]],   ewt, roundW);
-                *(float*)&sol->cost += computeEdgeCost(inst->X[path[edges[i]]],   inst->Y[path[edges[i]]],   inst->X[path[edges[i]+1]], inst->Y[path[edges[i]+1]], ewt, roundW);
+                *(float*)&sol->cost += computeEdgeCost(inst->X[path[edges[i]-1]], inst->Y[path[edges[i]-1]], inst->X[path[edges[i]]],   inst->Y[path[edges[i]]],   inst);
+                *(float*)&sol->cost += computeEdgeCost(inst->X[path[edges[i]]],   inst->Y[path[edges[i]]],   inst->X[path[edges[i]+1]], inst->Y[path[edges[i]+1]], inst);
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
                 *(float*)&sol->cost += inst->edgeCostMat[(size_t)path[edges[i]] * (size_t)n + (size_t)path[edges[i]-1]];
                 *(float*)&sol->cost += inst->edgeCostMat[(size_t)path[edges[i]] * (size_t)n + (size_t)path[edges[i]+1]];
@@ -574,7 +559,7 @@ static inline float fitness(ThreadSpecificData *thSpecific, Solution *sol)
     {
         __m256 x1 = _mm256_loadu_ps(&thSpecific->X[i]), y1 = _mm256_loadu_ps(&thSpecific->Y[i]);
         __m256 x2 = _mm256_loadu_ps(&thSpecific->X[i+1]), y2 = _mm256_loadu_ps(&thSpecific->Y[i+1]);
-        __m256 cost = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType, inst->params.roundWeights);
+        __m256 cost = computeEdgeCost_VEC(x1, y1, x2, y2, inst);
         costSumVec = _mm256_add_ps(costSumVec, cost);
     }
     
@@ -593,7 +578,7 @@ static inline float fitness(ThreadSpecificData *thSpecific, Solution *sol)
     float cost = 0.F;
     for (int i = 0; i < inst->nNodes; i++)
         #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-            cost += computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i+1]], inst->Y[sol->indexPath[i+1]], inst->params.edgeWeightType, inst->params.roundWeights);
+            cost += computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i+1]], inst->Y[sol->indexPath[i+1]], inst);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
             cost += inst->edgeCostMat[sol->indexPath[i] * inst->nNodes + sol->indexPath[i+1]];
         #endif

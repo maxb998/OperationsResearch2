@@ -183,12 +183,10 @@ static void destroyThreadSpecificData(ThreadSpecificData *thSpecific)
 static inline void swapElemsInThSpecific(ThreadSpecificData *thSpecific, int pos1, int pos2)
 {
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        register float tempFloat;
-        swapElems(thSpecific->X[pos1], thSpecific->X[pos2], tempFloat);
-        swapElems(thSpecific->Y[pos1], thSpecific->Y[pos2], tempFloat);
+        swapElems(thSpecific->X[pos1], thSpecific->X[pos2])
+        swapElems(thSpecific->Y[pos1], thSpecific->Y[pos2])
     #endif
-    register int tempInt;
-    swapElems(thSpecific->workingSol.indexPath[pos1], thSpecific->workingSol.indexPath[pos2], tempInt);
+    swapElems(thSpecific->workingSol.indexPath[pos1], thSpecific->workingSol.indexPath[pos2])
 }
 
 static void *runExtraMileage(void * arg)
@@ -209,16 +207,11 @@ static void *runExtraMileage(void * arg)
             int *indexPath = thSpecific->workingSol.indexPath;
         #endif
 
-        #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-            enum EdgeWeightType ewt = thSpecific->workingSol.instance->params.edgeWeightType;
-            bool roundW = thSpecific->workingSol.instance->params.roundWeights;
-        #endif
-
         // setup costCache
         #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-            thSpecific->costCache[0] = thSpecific->costCache[1] = computeEdgeCost(thSpecific->X[0], thSpecific->Y[0], thSpecific->X[1], thSpecific->Y[1], ewt, roundW);
+            thSpecific->costCache[0] = thSpecific->costCache[1] = computeEdgeCost(thSpecific->X[0], thSpecific->Y[0], thSpecific->X[1], thSpecific->Y[1], inst);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-            thSpecific->costCache[0] = thSpecific->costCache[1] = computeEdgeCost(inst->X[indexPath[0]], inst->Y[indexPath[0]], inst->X[indexPath[1]], inst->Y[indexPath[1]], ewt, roundW);
+            thSpecific->costCache[0] = thSpecific->costCache[1] = computeEdgeCost(inst->X[indexPath[0]], inst->Y[indexPath[0]], inst->X[indexPath[1]], inst->Y[indexPath[1]], inst);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
             thSpecific->costCache[0] = thSpecific->costCache[1] = inst->edgeCostMat[indexPath[0] * inst->nNodes + indexPath[1]];
         #endif
@@ -288,7 +281,7 @@ static void initialization(ThreadSpecificData *thSpecific)
     // update cost
     float firstEdgeCost;
     #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-        firstEdgeCost = computeEdgeCost(inst->X[indexPath[0]], inst->Y[indexPath[0]], inst->X[indexPath[1]], inst->Y[indexPath[1]], inst->params.edgeWeightType , inst->params.roundWeights);
+        firstEdgeCost = computeEdgeCost(inst->X[indexPath[0]], inst->Y[indexPath[0]], inst->X[indexPath[1]], inst->Y[indexPath[1]], inst);
         thSpecific->workingSol.cost = cvtFloat2Cost(firstEdgeCost) * 2;
     #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
         firstEdgeCost = inst->edgeCostMat[(size_t)indexPath[0] * (size_t)inst->nNodes + (size_t)indexPath[1]];
@@ -321,7 +314,7 @@ static inline void farthestPointsInit(ThreadSpecificData *thSpecific)
                 }
 
                 __m256 x2 = _mm256_loadu_ps(&inst->X[j]), y2 = _mm256_loadu_ps(&inst->Y[j]);
-                __m256 costVec = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType, inst->params.roundWeights);
+                __m256 costVec = computeEdgeCost_VEC(x1, y1, x2, y2, inst);
 
                 // check if there are costier connections in this iteration and save results
                 __m256 mask = _mm256_cmp_ps(costVec, rowMaxCostVec, _CMP_GT_OQ);
@@ -360,7 +353,7 @@ static inline void farthestPointsInit(ThreadSpecificData *thSpecific)
             {
                 float currentCost;
                 #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-                    currentCost = computeEdgeCost(x1, y1, inst->X[j], inst->Y[j], inst->params.edgeWeightType, inst->params.roundWeights);
+                    currentCost = computeEdgeCost(x1, y1, inst->X[j], inst->Y[j], inst);
                 #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
                     currentCost = inst->edgeCostMat[(size_t)i * (size_t)n + (size_t)j];
                 #endif
@@ -394,19 +387,13 @@ static void updateBestSolution(ThreadSpecificData *thSpecific)
     
     LOG(LOG_LVL_LOG, "Found better solution: cost = %lf", cvtCost2Double(newBest->cost));
 
-    register int *temp;
-    swapElems(bestSol->indexPath, newBest->indexPath, temp);
+    swapElems(bestSol->indexPath, newBest->indexPath)
 }
 
 static void applyExtraMileage_Internal(ThreadSpecificData *thSpecific, int nCovered)
 {
     Instance *inst = thSpecific->workingSol.instance;
     int n = inst->nNodes;
-
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-        enum EdgeWeightType ewt = thSpecific->workingSol.instance->params.edgeWeightType;
-        bool roundW = thSpecific->workingSol.instance->params.roundWeights;
-    #endif
 
     // save element to last position & close the tour at index nCovered
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
@@ -434,13 +421,13 @@ static void applyExtraMileage_Internal(ThreadSpecificData *thSpecific, int nCove
             succ.anchor = genRandom(&thSpecific->rndState, 0, nCovered);
 
             #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-                succ.newCost0 = computeEdgeCost(thSpecific->X[succ.node], thSpecific->Y[succ.node], thSpecific->X[succ.anchor], thSpecific->Y[succ.anchor], ewt, roundW);
-                succ.newCost1 = computeEdgeCost(thSpecific->X[succ.node], thSpecific->Y[succ.node], thSpecific->X[succ.anchor+1], thSpecific->Y[succ.anchor+1], ewt, roundW);
+                succ.newCost0 = computeEdgeCost(thSpecific->X[succ.node], thSpecific->Y[succ.node], thSpecific->X[succ.anchor], thSpecific->Y[succ.anchor], inst);
+                succ.newCost1 = computeEdgeCost(thSpecific->X[succ.node], thSpecific->Y[succ.node], thSpecific->X[succ.anchor+1], thSpecific->Y[succ.anchor+1], inst);
             
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
                 int *indexPath = thSpecific->workingSol.indexPath;
-                succ.newCost0 = computeEdgeCost(inst->X[indexPath[succ.node]], inst->Y[indexPath[succ.node]], inst->X[indexPath[succ.anchor]], inst->Y[indexPath[succ.anchor]], ewt, roundW);
-                succ.newCost1 = computeEdgeCost(inst->X[indexPath[succ.node]], inst->Y[indexPath[succ.node]], inst->X[indexPath[succ.anchor+1]], inst->Y[indexPath[succ.anchor+1]], ewt, roundW);
+                succ.newCost0 = computeEdgeCost(inst->X[indexPath[succ.node]], inst->Y[indexPath[succ.node]], inst->X[indexPath[succ.anchor]], inst->Y[indexPath[succ.anchor]], inst);
+                succ.newCost1 = computeEdgeCost(inst->X[indexPath[succ.node]], inst->Y[indexPath[succ.node]], inst->X[indexPath[succ.anchor+1]], inst->Y[indexPath[succ.anchor+1]], inst);
 
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
                 int *indexPath = thSpecific->workingSol.indexPath;
@@ -506,14 +493,10 @@ static void checkSolutionIntegrity(ThreadSpecificData *thSpecific, int nCovered)
     for (int i = 0; i < nCovered; i++)
     {
         #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-            enum EdgeWeightType ewt = inst->params.edgeWeightType;
-            bool roundW = inst->params.roundWeights;
-            float currEdgeCost = computeEdgeCost(thSpecific->X[i], thSpecific->Y[i], thSpecific->X[i+1], thSpecific->Y[i+1], ewt, roundW);
+            float currEdgeCost = computeEdgeCost(thSpecific->X[i], thSpecific->Y[i], thSpecific->X[i+1], thSpecific->Y[i+1], inst);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-            enum EdgeWeightType ewt = inst->params.edgeWeightType;
-            bool roundW = inst->params.roundWeights;
             int *indexPath = thSpecific->workingSol.indexPath;
-            float currEdgeCost = computeEdgeCost(inst->X[indexPath[i]], inst->Y[indexPath[i]], inst->X[indexPath[i+1]], inst->Y[indexPath[i+1]], ewt, roundW);
+            float currEdgeCost = computeEdgeCost(inst->X[indexPath[i]], inst->Y[indexPath[i]], inst->X[indexPath[i+1]], inst->Y[indexPath[i+1]], inst);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
             int *indexPath = thSpecific->workingSol.indexPath;
             float currEdgeCost = inst->edgeCostMat[(size_t)indexPath[i] * (size_t)n + (size_t)indexPath[i+1]];
@@ -584,8 +567,6 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
     // shortcuts/decluttering
     Instance *inst = thSpecific->workingSol.instance;
     int n = inst->nNodes;
-    enum EdgeWeightType ewt = inst->params.edgeWeightType ;
-    bool roundW = inst->params.roundWeights;
     int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
 
     // Contains best mileage values
@@ -603,7 +584,7 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
         __m256 x2Vec = _mm256_broadcast_ss(&thSpecific->X[i + 1]), y2Vec = _mm256_broadcast_ss(&thSpecific->Y[i + 1]);
 
         // Vector that contains only the cost of the current edge
-        __m256 curEdgeCostVec = _mm256_broadcast_ss(&thSpecific->costCache[i]); //computeEdgeCost_VEC(x1Vec, y1Vec, x2Vec, y2Vec, ewt, roundW);
+        __m256 curEdgeCostVec = _mm256_broadcast_ss(&thSpecific->costCache[i]); //computeEdgeCost_VEC(x1Vec, y1Vec, x2Vec, y2Vec, inst);
 
         // Vector that contains only the index of the current edge
         __m256i curEdgeID = _mm256_set1_epi32(i);
@@ -618,8 +599,8 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
             __m256 curExtraMileageVec;
             {
                 __m256 xuVec = _mm256_loadu_ps(&thSpecific->X[u]), yuVec = _mm256_loadu_ps(&thSpecific->Y[u]);
-                __m256 altEdge1CostVec = computeEdgeCost_VEC(xuVec, yuVec, x1Vec, y1Vec, ewt, roundW);
-                __m256 altEdge2CostVec = computeEdgeCost_VEC(xuVec, yuVec, x2Vec, y2Vec, ewt, roundW);
+                __m256 altEdge1CostVec = computeEdgeCost_VEC(xuVec, yuVec, x1Vec, y1Vec, inst);
+                __m256 altEdge2CostVec = computeEdgeCost_VEC(xuVec, yuVec, x2Vec, y2Vec, inst);
                 __m256 altEdgeCostVec = _mm256_add_ps(altEdge1CostVec, altEdge2CostVec);
                 curExtraMileageVec = _mm256_sub_ps(altEdgeCostVec, curEdgeCostVec);
             }
@@ -655,8 +636,8 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
     retVal.node = avxStoreInt[chosenIndex];
     _mm256_storeu_si256((__m256i_u *)avxStoreInt, bestAnchorsVec);
     retVal.anchor = avxStoreInt[chosenIndex];
-    retVal.newCost0 = computeEdgeCost(thSpecific->X[retVal.node], thSpecific->Y[retVal.node], thSpecific->X[retVal.anchor], thSpecific->Y[retVal.anchor], ewt, roundW);
-    retVal.newCost1 = computeEdgeCost(thSpecific->X[retVal.node], thSpecific->Y[retVal.node], thSpecific->X[retVal.anchor+1], thSpecific->Y[retVal.anchor+1], ewt, roundW);
+    retVal.newCost0 = computeEdgeCost(thSpecific->X[retVal.node], thSpecific->Y[retVal.node], thSpecific->X[retVal.anchor], thSpecific->Y[retVal.anchor], inst);
+    retVal.newCost1 = computeEdgeCost(thSpecific->X[retVal.node], thSpecific->Y[retVal.node], thSpecific->X[retVal.anchor+1], thSpecific->Y[retVal.anchor+1], inst);
 
     return retVal;
 }
@@ -670,11 +651,6 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
     int *indexPath = thSpecific->workingSol.indexPath;
     int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
 
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-        enum EdgeWeightType ewt = inst->params.edgeWeightType ;
-        bool roundW = inst->params.roundWeights;
-    #endif
-
     SuccessorData bestSuccs[BASE_GRASP_BEST_SAVE_BUFFER_SIZE];
     for (int i = 0; i < BASE_GRASP_BEST_SAVE_BUFFER_SIZE; i++)
         bestSuccs[i].extraCost = INFINITY;
@@ -684,7 +660,7 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
     {
         float altEdgeCost0, altEdgeCost1;
         #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-            altEdgeCost1 = computeEdgeCost(inst->X[indexPath[0]], inst->Y[indexPath[0]], inst->X[indexPath[node]], inst->Y[indexPath[node]], ewt, roundW);
+            altEdgeCost1 = computeEdgeCost(inst->X[indexPath[0]], inst->Y[indexPath[0]], inst->X[indexPath[node]], inst->Y[indexPath[node]], inst);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
             altEdgeCost1 = inst->edgeCostMat[indexPath[node] * n + indexPath [0]]; 
         #endif
@@ -693,7 +669,7 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
         {
             altEdgeCost0 = altEdgeCost1;
             #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-                altEdgeCost1 = computeEdgeCost(inst->X[indexPath[anchor+1]], inst->Y[indexPath[anchor+1]], inst->X[indexPath[node]], inst->Y[indexPath[node]], ewt, roundW);
+                altEdgeCost1 = computeEdgeCost(inst->X[indexPath[anchor+1]], inst->Y[indexPath[anchor+1]], inst->X[indexPath[node]], inst->Y[indexPath[node]], inst);
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
                 altEdgeCost1 = inst->edgeCostMat[indexPath[node] * n + indexPath[anchor+1]];
             #endif
@@ -709,10 +685,7 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
             for (int i = 0; i < BASE_GRASP_BEST_SAVE_BUFFER_SIZE; i++)
             {
                 if (currSucc.extraCost < bestSuccs[i].extraCost)
-                {
-                    SuccessorData temp;
-                    swapElems(currSucc, bestSuccs[i], temp);
-                }
+                    swapElems(currSucc, bestSuccs[i])
             }
         }   
     }

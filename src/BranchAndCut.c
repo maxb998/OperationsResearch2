@@ -98,8 +98,7 @@ int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG co
 	// set new incumbent if found
 	if (cost < cbData->bestCost)
 	{
-		int *temp;
-		swapElems(cbData->bestSuccessors, sub.successors, temp);
+		swapElems(cbData->bestSuccessors, sub.successors)
 
 		enum LogLevel lvl = LOG_LVL_NOTICE;
 		if (inst->params.mode != MODE_BRANCH_CUT) lvl = LOG_LVL_LOG;

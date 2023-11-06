@@ -242,8 +242,7 @@ static int randomFix(HardfixAllocatedMem *hfAlloc)
         int pos1 = (int)((long)rand() * (long)hfAlloc->fixAmount / (long)RAND_MAX), pos2 = (int)((long)rand() * (long)hfAlloc->fixAmount / (long)RAND_MAX);
         while (pos2 == pos1) pos2 = (int)((long)rand() * (long)hfAlloc->fixAmount / (long)RAND_MAX);
 
-        register int temp;
-        swapElems(hfAlloc->indexes[pos1], hfAlloc->indexes[pos2], temp);
+        swapElems(hfAlloc->indexes[pos1], hfAlloc->indexes[pos2])
     }
     
     // setup arrays to fix bounds
@@ -280,7 +279,7 @@ static int smallestFix(HardfixAllocatedMem *hfAlloc)
         __m256i indexesSucc = _mm256_loadu_si256((__m256i_u*)&successors[i]);
         __m256 x2 = _mm256_i32gather_ps(inst->X, indexesSucc, 4), y2 = _mm256_i32gather_ps(inst->Y, indexesSucc, 4);
 
-        __m256 cost = computeEdgeCost_VEC(x1, y1, x2, y2, inst->params.edgeWeightType, inst->params.roundWeights);
+        __m256 cost = computeEdgeCost_VEC(x1, y1, x2, y2, inst);
 
         increment = _mm256_add_epi32(indexes, increment);
 

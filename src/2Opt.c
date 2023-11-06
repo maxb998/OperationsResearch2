@@ -85,7 +85,7 @@ void apply2OptBestFix(Solution *sol)
     // build cost cache
     for (int i = 0; i < n; i++)
         #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-            costCache[i] = computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i + 1]], inst->Y[sol->indexPath[i + 1]], inst->params.edgeWeightType, inst->params.roundWeights);
+            costCache[i] = computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i + 1]], inst->Y[sol->indexPath[i + 1]], inst);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
             costCache[i] = inst->edgeCostMat[sol->indexPath[i] * n + sol->indexPath[i+1]];
         #endif
@@ -166,24 +166,19 @@ void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *
 static inline void updateSolution(_2optData *data, _2optMoveData bestFix)
 {
     Solution *sol = data->sol;
+    Instance *inst = sol->instance;
 
     //float oldEdge0Cost, oldEdge1Cost;
     float altEdge0Cost, altEdge1Cost;
 
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        enum EdgeWeightType ewt = sol->instance->params.edgeWeightType;
-        bool roundWeights = sol->instance->params.roundWeights;
-        altEdge0Cost = computeEdgeCost(data->X[bestFix.edge0], data->Y[bestFix.edge0], data->X[bestFix.edge1], data->Y[bestFix.edge1], ewt, roundWeights);
-        altEdge1Cost = computeEdgeCost(data->X[bestFix.edge0+1], data->Y[bestFix.edge0+1], data->X[bestFix.edge1+1], data->Y[bestFix.edge1+1], ewt, roundWeights);
+        altEdge0Cost = computeEdgeCost(data->X[bestFix.edge0], data->Y[bestFix.edge0], data->X[bestFix.edge1], data->Y[bestFix.edge1], inst);
+        altEdge1Cost = computeEdgeCost(data->X[bestFix.edge0+1], data->Y[bestFix.edge0+1], data->X[bestFix.edge1+1], data->Y[bestFix.edge1+1], inst);
     #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-        Instance *inst = sol->instance;
         int *indexPath = sol->indexPath;
-        enum EdgeWeightType ewt = inst->params.edgeWeightType;
-        bool roundWeights = inst->params.roundWeights;
-        altEdge0Cost = computeEdgeCost(inst->X[indexPath[bestFix.edge0]], inst->Y[indexPath[bestFix.edge0]], inst->X[indexPath[bestFix.edge1]], inst->Y[indexPath[bestFix.edge1]], ewt, roundWeights);
-        altEdge1Cost = computeEdgeCost(inst->X[indexPath[bestFix.edge0+1]], inst->Y[indexPath[bestFix.edge0+1]], inst->X[indexPath[bestFix.edge1+1]], inst->Y[indexPath[bestFix.edge1+1]], ewt, roundWeights);
+        altEdge0Cost = computeEdgeCost(inst->X[indexPath[bestFix.edge0]], inst->Y[indexPath[bestFix.edge0]], inst->X[indexPath[bestFix.edge1]], inst->Y[indexPath[bestFix.edge1]], inst);
+        altEdge1Cost = computeEdgeCost(inst->X[indexPath[bestFix.edge0+1]], inst->Y[indexPath[bestFix.edge0+1]], inst->X[indexPath[bestFix.edge1+1]], inst->Y[indexPath[bestFix.edge1+1]], inst);
     #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-        Instance *inst = sol->instance;
         int *indexPath = sol->indexPath;
         int n = inst->nNodes;
         altEdge0Cost = inst->edgeCostMat[(size_t)indexPath[bestFix.edge0] * (size_t)n + (size_t)indexPath[bestFix.edge1]];
@@ -213,12 +208,10 @@ static inline void updateSolution(_2optData *data, _2optMoveData bestFix)
 
     while (smallID < bigID)
     {
-        register int tempInt;
-        swapElems(sol->indexPath[smallID], sol->indexPath[bigID], tempInt);
+        swapElems(sol->indexPath[smallID], sol->indexPath[bigID])
         #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-            register float tempFloat;
-            swapElems(data->X[smallID], data->X[bigID], tempFloat);
-            swapElems(data->Y[smallID], data->Y[bigID], tempFloat);
+            swapElems(data->X[smallID], data->X[bigID])
+            swapElems(data->Y[smallID], data->Y[bigID])
         #endif
 
         smallID++;
@@ -234,8 +227,7 @@ static inline void updateSolution(_2optData *data, _2optMoveData bestFix)
 
     while (smallID < bigID)
     {
-        register float tempFloat;
-        swapElems(data->costCache[smallID], data->costCache[bigID], tempFloat);
+        swapElems(data->costCache[smallID], data->costCache[bigID])
 
         smallID++;
         bigID--;
@@ -249,9 +241,6 @@ static inline _2optMoveData _2OptBestFix(_2optData *data)
     Instance *inst = sol->instance;
     int n = inst->nNodes;
     float *X = data->X, *Y = data->Y;
-
-    enum EdgeWeightType ewt = inst->params.edgeWeightType;
-    bool roundW = inst->params.roundWeights;
 
     _2optMoveData bestFix = { .costOffset=0 };
 
@@ -275,7 +264,7 @@ static inline _2optMoveData _2OptBestFix(_2optData *data)
                 __m256 x4 = _mm256_loadu_ps(&X[i + 1]), y4 = _mm256_loadu_ps(&Y[i + 1]);
                 solEdgeWgt = _mm256_add_ps(partialSolEdgeWgt, _mm256_loadu_ps(&data->costCache[i]));
 
-                altEdgeWgt = _mm256_add_ps(computeEdgeCost_VEC(x1, y1, x3, y3, ewt, roundW), computeEdgeCost_VEC(x2, y2, x4, y4, ewt, roundW));
+                altEdgeWgt = _mm256_add_ps(computeEdgeCost_VEC(x1, y1, x3, y3, inst), computeEdgeCost_VEC(x2, y2, x4, y4, inst));
             }
 
             __m256 offsetVec = _mm256_sub_ps(altEdgeWgt, solEdgeWgt); // value is negative if altEdgeWgt is better
@@ -317,10 +306,6 @@ static inline _2optMoveData _2OptBestFix(_2optData *data)
     Solution *sol = data->sol;
     Instance *inst = sol->instance;
     int n = inst->nNodes;
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-        enum EdgeWeightType ewt = inst->params.edgeWeightType;
-        bool roundW = inst->params.roundWeights;
-    #endif
 
     _2optMoveData bestFix = { .costOffset=0 };
 
@@ -335,8 +320,8 @@ static inline _2optMoveData _2OptBestFix(_2optData *data)
             // check the combined weight other combination of edges
             float altEdgeWgt;
             #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-                altEdgeWgt = computeEdgeCost(inst->X[sol->indexPath[currFix.edge0]], inst->Y[sol->indexPath[currFix.edge0]], inst->X[sol->indexPath[currFix.edge1]], inst->Y[sol->indexPath[currFix.edge1]], ewt, roundW) + 
-                             computeEdgeCost(inst->X[sol->indexPath[currFix.edge0 + 1]], inst->Y[sol->indexPath[currFix.edge0 + 1]], inst->X[sol->indexPath[currFix.edge1 + 1]], inst->Y[sol->indexPath[currFix.edge1 + 1]], ewt, roundW);
+                altEdgeWgt = computeEdgeCost(inst->X[sol->indexPath[currFix.edge0]], inst->Y[sol->indexPath[currFix.edge0]], inst->X[sol->indexPath[currFix.edge1]], inst->Y[sol->indexPath[currFix.edge1]], inst) + 
+                             computeEdgeCost(inst->X[sol->indexPath[currFix.edge0 + 1]], inst->Y[sol->indexPath[currFix.edge0 + 1]], inst->X[sol->indexPath[currFix.edge1 + 1]], inst->Y[sol->indexPath[currFix.edge1 + 1]], inst);
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
                 altEdgeWgt = inst->edgeCostMat[(size_t)sol->indexPath[currFix.edge0] * (size_t)n + (size_t)sol->indexPath[currFix.edge1]] + 
                              inst->edgeCostMat[(size_t)sol->indexPath[currFix.edge1 + 1] * (size_t)n + (size_t)sol->indexPath[currFix.edge0 + 1]];
