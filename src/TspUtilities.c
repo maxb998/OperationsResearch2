@@ -39,6 +39,7 @@ Instance newInstance ()
             .tabuTenureSize = -1,
             .vnsKickSize = { .Max=20, .Min=5},
             .geneticParams = { .populationSize=50, .crossoverAmount=25, .mutationAmount=25 },
+            .annealingTemperature = -1,
             
             .matheurInitMode = MODE_NN,
             .hardFixPolicy = HARDFIX_POLICY_RANDOM,
