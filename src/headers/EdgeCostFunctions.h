@@ -9,7 +9,7 @@
 static inline float noSquaredRootEdgeCost (float x1, float y1, float x2, float y2, Instance *inst)
 {
 	register float costSquared;
-	if(inst->params.edgeWeightType == MAN_2D)
+	if (inst->params.edgeWeightType == MAN_2D)
 		costSquared = fabsf(x1-x2) + fabsf(y1-y2);
 	else if (inst->params.edgeWeightType == MAX_2D)
 	{
@@ -18,7 +18,7 @@ static inline float noSquaredRootEdgeCost (float x1, float y1, float x2, float y
 		if (diffY > costSquared)
 			costSquared = diffY;
 	}
-	else // either euc2d or att
+	else // either euc2d, ceil2d or att
 	{
 		register float diffX = x1 - x2, diffY = y1 - y2;
 		costSquared = (diffX * diffX) + (diffY * diffY);
@@ -34,12 +34,12 @@ static inline float computeEdgeCost (float x1, float y1, float x2, float y2, Ins
 {
 	register float cost = noSquaredRootEdgeCost(x1, y1, x2, y2, inst);
 
-	if ((inst->params.edgeWeightType == EUC_2D) || (inst->params.edgeWeightType == ATT))
+	if (inst->params.edgeWeightType >= EUC_2D)
 		cost = sqrtf(cost);
 
 	if (inst->params.roundWeights)
 	{
-		if (inst->params.edgeWeightType == ATT)
+		if (inst->params.edgeWeightType >= CEIL_2D)
 			cost = ceilf(cost);
 		else
 			cost = roundf(cost);
@@ -77,7 +77,7 @@ static inline __m256 noSquaredRootEdgeCost_VEC (__m256 x1, __m256 y1, __m256 x2,
 
 		costSquared = _mm256_max_ps(xDiff, yDiff);
 	}
-	else // either euc2d or att
+	else // either euc2d, ceil2d or att
 	{
 		register __m256 xDiff = _mm256_sub_ps(x1, x2);
 		register __m256 yDiff = _mm256_sub_ps(y1, y2);
@@ -94,12 +94,12 @@ static inline __m256 computeEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2, __m2
 {
 	register __m256 costVec = noSquaredRootEdgeCost_VEC (x1, y1, x2, y2, inst);
 
-	if ((inst->params.edgeWeightType == EUC_2D) || (inst->params.edgeWeightType == ATT))
+	if (inst->params.edgeWeightType >= EUC_2D)
 		costVec = _mm256_sqrt_ps(costVec);
 
 	if (inst->params.roundWeights)
 	{
-		if (inst->params.edgeWeightType == ATT)
+		if (inst->params.edgeWeightType >= CEIL_2D)
 			return _mm256_ceil_ps(costVec);
 		else
 			return _mm256_round_ps(costVec, _MM_FROUND_TO_NEAREST_INT |_MM_FROUND_NO_EXC); // round to nearest, and suppress exceptions
@@ -112,12 +112,12 @@ static inline __m256 computeEdgeCost_VEC_APPROX(__m256 x1, __m256 y1,  __m256 x2
 {
 	register __m256 costVec = noSquaredRootEdgeCost_VEC (x1, y1, x2, y2, inst);
 
-	if ((inst->params.edgeWeightType == EUC_2D) || (inst->params.edgeWeightType == ATT))
+	if (inst->params.edgeWeightType >= EUC_2D)
 		costVec = _mm256_rcp_ps(_mm256_rsqrt_ps(costVec));
 
 	if (inst->params.roundWeights)
 	{
-		if (inst->params.edgeWeightType == ATT)
+		if (inst->params.edgeWeightType >= CEIL_2D)
 			return _mm256_ceil_ps(costVec);
 		else
 			return _mm256_round_ps(costVec, _MM_FROUND_TO_NEAREST_INT |_MM_FROUND_NO_EXC); // round to nearest, and suppress exceptions

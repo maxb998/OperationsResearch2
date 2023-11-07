@@ -49,12 +49,12 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/x64/main",
             "args": [
-                "--file", "data/400-500/d493.tsp",
-                "--mode", "benders",
-                "--tlim", "10",
+                "--file", "data/33000-86000/pla85900.tsp",
+                "--mode", "nn",
+                "--tlim", "60",
 
                 "--graspType", "almostbest",
-                "--graspChance", "0.005",
+                "--graspChance", "0.002",
                 //"--nnTryall",
                 //"--emFarthest",
 
@@ -71,7 +71,7 @@
                 "--2opt",
 
                 //"--seed", "2023",
-                "--threads", "8",
+                //"--threads", "8",
                 "--roundcosts",
                 //"--plot", 
                 //"--save",

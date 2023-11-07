@@ -122,7 +122,7 @@ void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *
         // check costCache
         for (int i = 0; i < n; i++)
             #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-                if (costCache[i] != computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i + 1]], inst->Y[sol->indexPath[i + 1]], inst->params.edgeWeightType, inst->params.roundWeights))
+                if (costCache[i] != computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i + 1]], inst->Y[sol->indexPath[i + 1]], inst))
                     throwError("apply2OptBestFix_fastIteratively: input not valid: costCache isn't coherent with solution at position %d", i);
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
                 if (costCache[i] != inst->edgeCostMat[sol->indexPath[i] * n + sol->indexPath[i+1]])
@@ -246,7 +246,6 @@ static inline _2optMoveData _2OptBestFix(_2optData *data)
 
     for (int edge0 = 0; edge0 < n - 1; edge0++) // check for one edge at a time every other edge(except already checked)
     {
-
         __m256 x1 = _mm256_broadcast_ss(&X[edge0]), y1 = _mm256_broadcast_ss(&Y[edge0]);
         __m256 x2 = _mm256_broadcast_ss(&X[edge0 + 1]), y2 = _mm256_broadcast_ss(&Y[edge0 + 1]);
         __m256 partialSolEdgeWgt = _mm256_broadcast_ss(&data->costCache[edge0]);
