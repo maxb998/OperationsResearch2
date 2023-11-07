@@ -78,7 +78,7 @@ Instance newInstance ();
 
 /*!
 * @brief Initialize a solution struct for the specified instance
-* @param inst 
+* @param inst Instance related to the new solution
 * @result Empty Solution with allocated memory
 */
 Solution newSolution (Instance *inst);
@@ -96,10 +96,9 @@ void destroyInstance (Instance *inst);
 void destroySolution (Solution *sol);
 
 /*!
-* @brief Fully clones the passed Solution. Pointers are not just copied over, they point to new memory allocation that will contain a copy of the memory pointed by the pointers in sol.
+* @brief Fully clones the passed Solution. Pointers are not copied over, but every element inside indexPath is copied from as well as all other data.
 * @param src Solution to clone
 * @param dst Destination solution (the size of the instance must be the same)
-* @result Cloned Solution
 */
 void cloneSolution(Solution *src, Solution *dst);
 
@@ -112,15 +111,13 @@ void setLogLevel(enum LogLevel lvl);
 /*!
 * @brief Print a message on output
 * @param lvl Desired level of logging priority. If this value is greater than global value than LOG does not print anything.
-* @param line Arguments that are directly fed to printf
+* @param line Message with by printf format args
 */
 void LOG (enum LogLevel lvl, char * line, ...);
 
 /*!
-* @brief Print a message with LOG_LVL_ERROR and then destroys the passed Instance and Solution when available.
-* @param inst Pointer to the Instance to destroy. Can be NULL.
-* @param sol Pointer to the Solution to destroy. Can be NULL.
-* @param line Error message.
+* @brief Print a message with LOG_LVL_ERROR and then exit the program.
+* @param line Error message with by printf format args
 */
 void throwError (char * line, ...);
 
@@ -176,11 +173,9 @@ void printCostMatrix(Instance *inst);
 //###################################################################################################################################
 
 /*!
-* @brief Find a the best Solution using Nearest Neighbor Heuristic withing a specified time limit.
+* @brief Find a the best Solution using Nearest Neighbor Heuristic
 * @param inst Instance to solve.
-* @param startOption Defines the way in which the first point has to be chosen
-* @param tlim Time Limit
-* @param useThread Set to 1 to use multithreading. Set to 0 for single thread.
+* @param timeLimit Time Limit.
 * @result Solution obtained using Nearest Neighbor.
 */
 Solution NearestNeighbor(Instance *inst, double timeLimit);
@@ -191,10 +186,9 @@ Solution NearestNeighbor(Instance *inst, double timeLimit);
 //###################################################################################################################################
 
 /*!
-* @brief Find a the best Solution using Extra Mileage Heuristic withing a specified time limit.
+* @brief Find a the best Solution using Extra Mileage Heuristic.
 * @param inst Instance to solve.
-* @param emInitType Defines the way in which the Solution is initialized.
-* @param tlim Time limit.
+* @param timeLimit Time limit.
 * @result Solution obtained using Extra Mileage.
 */
 Solution ExtraMileage(Instance *inst, double timeLimit);
@@ -215,7 +209,7 @@ void set2OptPerformanceBenchmarkLog(bool val);
 void apply2OptBestFix(Solution *sol);
 
 /*!
-* @brief  Same as apply2OptBestFix, but if using COMPUTE_OPTION_AVX then this function expect a correctly ordered copy of the points coordinates in X and Y. Useful when calling 2opt a lot and it doesn't do a lot of moves
+* @brief  Same as apply2OptBestFix, but expects costCache array and, if using AVX, X and Y arrays all coherent with sol.indexPath. If not using AVX pass X = Y = NULL
 * @param sol Solution to optimize.
 */
 void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *costCache);
@@ -228,7 +222,6 @@ void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *
 * @brief Runs Tabu Search on input solution sol.
 * @param sol Starting point solution.
 * @param timeLimit Time limit.
-* @param nThreads Specify the nuber of threads in which run Tabu Search on sol simultaneously
 */
 void TabuSearch(Solution *sol, double timeLimit);
 
@@ -262,9 +255,10 @@ void SimulatedAnnealing(Solution *sol, double timeLimit);
 //###################################################################################################################################
 
 /*!
-* @brief Runs Simulated Annealing on input solution sol.
+* @brief Runs Genetic Algorithm with population, crossover, population and reintroduction amount specified in inst.params
 * @param inst Instance
 * @param timeLimit Time limit.
+* @result Best solution inside the population after the time limit.
 */
 Solution GeneticAlgorithm(Instance *inst, double timeLimit);
 

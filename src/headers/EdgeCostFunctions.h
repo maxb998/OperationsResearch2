@@ -50,6 +50,7 @@ static inline float computeEdgeCost (float x1, float y1, float x2, float y2, Ins
 
 
 
+#if COMPUTATION_TYPE == COMPUTE_OPTION_AVX
 
 // ###########################################################################################################
 
@@ -126,5 +127,7 @@ static inline __m256 computeEdgeCost_VEC_APPROX(__m256 x1, __m256 y1,  __m256 x2
 	
 	return costVec;
 }
+
+#endif
 
 #endif // EDGE_COST_FUNCTIONS
