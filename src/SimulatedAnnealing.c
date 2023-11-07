@@ -40,9 +40,11 @@ static inline void destroyThreadSharedData(ThreadSharedData *thShared);
 static inline ThreadSpecificData initThreadSpecificData(Solution *sol, ThreadSharedData *thShared, unsigned int rndState);
 static inline void destroyThreadSpecificData(ThreadSpecificData *thSpecific);
 
+static void * runSimulatedAnnealing(void * arg);
+
 static inline SwapInformation randomSwap(Solution *sol, unsigned int * rndState);
 
-static inline void updateTemperature(float *temperature);
+static inline void updateTemperature(double *temperature);
 
 static inline void normalizeDelta(double *deltaCost, Solution *sol);
 
@@ -58,7 +60,7 @@ void SimulatedAnnealing(Solution *sol, double timeLimit)
 
     // check of the input solution
     if (!checkSolution(sol))
-    throwError(sol->instance, sol, "SimulatedAnnealing: Input solution is not valid");
+        throwError("SimulatedAnnealing: Input solution is not valid");
 
     // initialization of threads data
     ThreadSharedData thShared = initThreadSharedData(sol, timeLimit, startTime);
@@ -78,11 +80,13 @@ void SimulatedAnnealing(Solution *sol, double timeLimit)
         iterations += thSpecific[i].iterations;
     }
 
-    cloneSolution(thShared.bestSol, &sol);
-    checkSolution(&sol);
+    cloneSolution(thShared.bestSol, sol);
+    if (!checkSolution(sol))
+        throwError("SimulatedAnnealing: Output solution is not valid");
 
     for (int i = 0; i < sol->instance->params.nThreads; i++)
         destroyThreadSpecificData(&thSpecific[i]);
+    destroyThreadSharedData(&thShared);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double currentTime = cvtTimespec2Double(timeStruct);
@@ -116,9 +120,10 @@ static inline ThreadSpecificData initThreadSpecificData(Solution *sol, ThreadSha
         .rndState = rndState,
         .threshold = 0.0,
         .thShared = thShared,
-        .thSol = NULL,
         .temperature = thShared->startingTemperature,
     };
+
+    thSpecific.thSol = newSolution(sol->instance);
     cloneSolution(sol, &thSpecific.thSol);
 
     return thSpecific;
@@ -133,11 +138,6 @@ static void * runSimulatedAnnealing(void * arg)
 {
     ThreadSpecificData *thSpecific = (ThreadSpecificData*)arg;
     ThreadSharedData *thShared = thSpecific->thShared;
-
-    // time limit management
-    struct timespec timeStruct;
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
-    double startTime = cvtTimespec2Double(timeStruct);
  
     SwapInformation swapInfo = {
         .index1 = -1,
@@ -145,6 +145,7 @@ static void * runSimulatedAnnealing(void * arg)
         .offset = 0
     };  
 
+    struct timespec timeStruct;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double currentTime = cvtTimespec2Double(timeStruct);
 
@@ -152,7 +153,7 @@ static void * runSimulatedAnnealing(void * arg)
     {
         thSpecific->iterations++;
         thSpecific->iterationsSinceUpdate++;
-        swapInfo = randomSwap(&thSpecific->thSol, thSpecific->rndState);
+        swapInfo = randomSwap(&thSpecific->thSol, &thSpecific->rndState);
 
         if (swapInfo.offset < 0) // then we keep the swap
         {
@@ -182,9 +183,11 @@ static void * runSimulatedAnnealing(void * arg)
 
         // if newSol has better cost than sol we update sol
         pthread_mutex_lock(&thShared->mutex);
-        if(thSpecific->thSol.cost < thShared->bestSol->cost) 
+        if(thSpecific->thSol.cost < thShared->bestSol->cost)
+        {
             cloneSolution(&thSpecific->thSol, thShared->bestSol);
             thShared->bestSol->execTime += currentTime - thShared->startTime;
+        }
         pthread_mutex_unlock(&thShared->mutex);
 
 
@@ -199,25 +202,27 @@ static void * runSimulatedAnnealing(void * arg)
         }
         
     }
+    return NULL;
 }
 
 static inline SwapInformation randomSwap(Solution *sol, unsigned int * rndState)
 {
     int nNodes = sol->instance->nNodes;
-    int *X = sol->instance->X;
-    int *Y = sol->instance->Y;
+    float *X = sol->instance->X;
+    float *Y = sol->instance->Y;
     int *indexPath = sol->indexPath;
 
     int index1 = genRandom(rndState, 1, nNodes); 
     int index2 = genRandom(rndState, 1, nNodes);
-    while (fabsf(index1 - index2) < 2) index2 = genRandom(rndState, 1, nNodes);
+    while (abs(index1 - index2) < 2)
+        index2 = genRandom(rndState, 1, nNodes);
 
-    double oldArcsCost = 0;
-    double newArcsCost = 0;
-    double costEdge1 = 0;   // cost edge (index1-1, index1)
-    double costEdge2 = 0;   // cost edge (index1, index1+1)
-    double costEdge3 = 0;   // cost edge (index2-1, index2)
-    double costEdge4 = 0;   // cost edge (index2, index2+1)
+    float oldArcsCost = 0;
+    float newArcsCost = 0;
+    float costEdge1 = 0;   // cost edge (index1-1, index1)
+    float costEdge2 = 0;   // cost edge (index1, index1+1)
+    float costEdge3 = 0;   // cost edge (index2-1, index2)
+    float costEdge4 = 0;   // cost edge (index2, index2+1)
 
     costEdge1 = computeEdgeCost(X[indexPath[index1-1]], Y[indexPath[index1-1]], X[indexPath[index1]], Y[indexPath[index1]], sol->instance);
     costEdge2 = computeEdgeCost(X[indexPath[index1]], Y[indexPath[index1]], X[indexPath[index1+1]], Y[indexPath[index1+1]], sol->instance);
@@ -237,9 +242,9 @@ static inline SwapInformation randomSwap(Solution *sol, unsigned int * rndState)
     return swapInfo;
 }
 
-static inline void updateTemperature(float *temperature)
+static inline void updateTemperature(double *temperature)
 {
-    *temperature = 0.99 * (*temperature);
+    *temperature *= 0.99;
 }
 
 static inline void normalizeDelta(double *offset, Solution *sol)

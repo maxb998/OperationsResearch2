@@ -114,6 +114,7 @@ Solution GeneticAlgorithm(Instance *inst, double timeLimit)
 
     for (int i = 0; i < inst->params.nThreads; i++)
         destroyThreadSpecificData(&thSpecific[i]);
+    destroyThreadSharedData(&thShared);
 
     // needed since the cost is a float 32 saved into a 128 bit fixed point
     sol.cost = computeSolutionCost(&sol);
@@ -471,7 +472,7 @@ static inline void mutateSolution(Solution *sol, unsigned int *rndState)
     case 0: // swap two edges (same as performing random 2opt move)
     {
         int edge0 = genRandom(rndState, 1, n), edge1 = genRandom(rndState, 1, n);
-        while (fabsf(edge0 - edge1) < 2)
+        while (abs(edge0 - edge1) < 2)
             edge1 = genRandom(rndState, 1, n);
 
         if (edge0 > edge1)

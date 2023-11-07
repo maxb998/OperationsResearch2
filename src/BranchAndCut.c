@@ -75,7 +75,7 @@ int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG co
 	int *indexes = (int*)&xstar[cbData->ncols];
 
 	if ((errCode = CPXcallbackgetcandidatepoint(context, xstar, 0, cbData->ncols-1, NULL)) != 0) 
-		throwError(LOG_LVL_ERROR, "subtourEliminationCallback: CPXgetcallbacknodex failed with code %d", errCode);
+		throwError("subtourEliminationCallback: CPXgetcallbacknodex failed with code %d", errCode);
 
 	SubtoursData sub = initSubtoursData(inst->nNodes);
 	
