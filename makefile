@@ -18,7 +18,7 @@ LDFLAGS2 = -lcplex -lm
 ifeq ($(MODE),exec)
 OBJ_DIR = obj/x64/
 BIN_DIR = bin/x64/
-CFLAGS = -O3 -c -mavx2 -march=native -Isrc/headers
+CFLAGS = -O3 -c -mavx2 -march=native -mtune=native -Isrc/headers
 LDFLAGS1 = -L/opt/ibm/ILOG/CPLEX_Studio2211/cplex/lib/x86-64_linux/static_pic/
 LDFLAGS2 = -lcplex -lm
 endif

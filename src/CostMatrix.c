@@ -89,14 +89,10 @@ static void * computeDistMatThread(void* arg)
 
     while ( (pthread_mutex_lock(&th->mutex) == 0) && (th->nextRow < th->inst->nNodes) )    // lock mutex before checking nextRow
     {
-        // CRITICAL REGION STARTED(INCLUDING WHILE CONDITION) ######################
-        // here thread gets it's workspace
-
         int j = th->nextRow;
         th->nextRow++; // prevent other threads threads to access this thread working row
 
         pthread_mutex_unlock (&th->mutex);
-        // CRITICAL REGION END #####################################################
 
         // now the thread can compute the distance matrix inside it's workspace (row)
         __m256 x1 = _mm256_set1_ps(th->inst->X[j]);
