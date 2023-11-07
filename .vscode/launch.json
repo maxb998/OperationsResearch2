@@ -26,7 +26,7 @@
                 //"--tabuTenureSize", "5",
                 //"--vnsKickSize", "5,30",
                 //"--geneticParams", "100,50,50,50",
-                "--annelTemp", "-0",
+                "--annelTemp", "1000",
 
                 //"--cplexInit", "em",
                 //"--hardfixSmallest",
@@ -49,12 +49,12 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/x64/main",
             "args": [
-                "--file", "data/d1291.tsp",
-                "--mode", "genetic",
-                "--tlim", "20",
+                "--file", "data/400-500/d493.tsp",
+                "--mode", "benders",
+                "--tlim", "10",
 
-                //"--graspType", "almostbest",
-                //"--graspChance", "0.01",
+                "--graspType", "almostbest",
+                "--graspChance", "0.005",
                 //"--nnTryall",
                 //"--emFarthest",
 
@@ -63,17 +63,17 @@
                 //"--tabuTenureSize", "5",
                 //"--vnsKickSize", "5,30",
                 //"--geneticParams", "20,10,100,100",
-                "--annelTemp", "1000",
+                //"--annelTemp", "1000",
 
                 //"--cplexInit", "em",
                 //"--hardfixSmallest",
 
-                //"--2opt",
+                "--2opt",
 
                 //"--seed", "2023",
-                "--threads", "1",
+                "--threads", "8",
                 "--roundcosts",
-                "--plot", 
+                //"--plot", 
                 //"--save",
                 "--loglvl", "log"
             ],

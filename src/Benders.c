@@ -42,7 +42,7 @@ void benders(Solution *sol, double tlim)
 		// set time limit as remainig time from starting time
 		clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     	currentTime = cvtTimespec2Double(timeStruct);
-		CPXsetdblparam(cpx.env, CPX_PARAM_TILIM, currentTime + tlim - startTime);
+		CPXsetdblparam(cpx.env, CPX_PARAM_TILIM, tlim + startTime - currentTime);
 
 
 		if (CPXmipopt(cpx.env, cpx.lp))

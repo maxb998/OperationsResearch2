@@ -13,16 +13,18 @@ static int PostSolution(CPXCALLBACKCONTEXTptr context, Instance *inst, int ncols
 
 
 
-void BranchAndCut(Solution *sol, double tlim)
+void BranchAndCut(Solution *sol, double timeLimit)
 {
 	struct timespec timeStruct;
-    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+	clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double startTime = cvtTimespec2Double(timeStruct);
 
 	Instance *inst = sol->instance;
 
-	if (!checkSolution(sol))
-		throwError("benders: Input solution is not valid");
+	#ifdef DEBUG
+		if (!checkSolution(sol))
+			throwError("benders: Input solution is not valid");
+	#endif
 
 	CplexData cpx = initCplexData(inst);
 	int errCode = 0;
@@ -40,6 +42,8 @@ void BranchAndCut(Solution *sol, double tlim)
 	
 	if (CPXsetintparam(cpx.env, CPX_PARAM_THREADS, inst->params.nThreads))
 		throwError("BranchAndCut: error on CPXsetintparam(CPX_PARAM_THREADS)");
+
+	CPXsetdblparam(cpx.env, CPX_PARAM_TILIM, timeLimit);
 
 	if (CPXmipopt(cpx.env, cpx.lp))
 		throwError("BranchAndCut: output of CPXmipopt != 0");
@@ -64,22 +68,22 @@ int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG co
 	int nNodes = inst->nNodes;
 
 	// Stores current vector x from CPLEX
-	double *xstar = malloc(cbData->ncols * sizeof(double));
+	double *xstar = malloc(cbData->ncols * (sizeof(double) * sizeof(int)));
+	if (xstar == NULL)
+		throwError("Branch & Cut: could not allocate memory for xstar and indexes");
+	// Stores the index of the coefficients that we pass to CPLEX 
+	int *indexes = (int*)&xstar[cbData->ncols];
+
 	if ((errCode = CPXcallbackgetcandidatepoint(context, xstar, 0, cbData->ncols-1, NULL)) != 0) 
-	{
-		LOG(LOG_LVL_ERROR, "subtourEliminationCallback: CPXgetcallbacknodex failed with code %d", errCode);
-		return 1;
-	}
+		throwError(LOG_LVL_ERROR, "subtourEliminationCallback: CPXgetcallbacknodex failed with code %d", errCode);
 
 	SubtoursData sub = initSubtoursData(inst->nNodes);
 	
-	// Stores the index of the coefficients that we pass to CPLEX 
-	int *indexes = malloc(cbData->ncols * sizeof(int));
-
 	cvtCPXtoSuccessors(xstar, cbData->ncols, nNodes, &sub);
 
 	pthread_mutex_lock(&cbData->mutex);
-	if (inst->params.mode == MODE_BRANCH_CUT) LOG(LOG_LVL_LOG, "Iteration %d subtours detected %d", cbData->iterNum, sub.subtoursCount);
+	if (inst->params.mode == MODE_BRANCH_CUT) // avoids massive output in hard fixing and local branching
+		LOG(LOG_LVL_LOG, "Iteration %d subtours detected %d", cbData->iterNum, sub.subtoursCount);
 	cbData->iterNum++;
 	pthread_mutex_unlock(&cbData->mutex);
 
@@ -111,7 +115,7 @@ int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG co
 			throwError("BranchAndCut callback: postSolution failed with code %d", errCode);
 	}
 
-	free(xstar); destroySubtoursData(&sub); free(indexes);
+	free(xstar); destroySubtoursData(&sub);
 	return 0;
 }
 

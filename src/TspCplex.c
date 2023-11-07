@@ -261,6 +261,8 @@ bool checkSuccessorSolution(Instance *inst, int *successors)
 		i = successors[i];
 		count++;
 	} while (count <= n);
+
+	free(indexChecked);
 	
 	return retVal;
 }

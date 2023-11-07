@@ -3,5 +3,4 @@ bin/debug/main
 bin/x64/main
 obj/debug/*.o
 obj/x64/*.o
-data/*.tsp
-data/*.tour
+data
