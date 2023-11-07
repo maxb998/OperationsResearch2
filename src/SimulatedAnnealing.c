@@ -18,7 +18,7 @@ typedef struct
     Solution *bestSol;
     pthread_mutex_t mutex;
     double startingTemperature;
-
+    double startTime;
     double timeLimit;
 
 } ThreadSharedData;
@@ -35,7 +35,7 @@ typedef struct
 
 } ThreadSpecificData;
 
-static inline ThreadSharedData initThreadSharedData(Solution *sol, double timeLimit);
+static inline ThreadSharedData initThreadSharedData(Solution *sol, double timeLimit, double startTime);
 static inline void destroyThreadSharedData(ThreadSharedData *thShared);
 static inline ThreadSpecificData initThreadSpecificData(Solution *sol, ThreadSharedData *thShared, unsigned int rndState);
 static inline void destroyThreadSpecificData(ThreadSpecificData *thSpecific);
@@ -59,13 +59,43 @@ void SimulatedAnnealing(Solution *sol, double timeLimit)
     // check of the input solution
     if (!checkSolution(sol))
     throwError(sol->instance, sol, "SimulatedAnnealing: Input solution is not valid");
+
+    // initialization of threads data
+    ThreadSharedData thShared = initThreadSharedData(sol, timeLimit, startTime);
+
+    ThreadSpecificData thSpecific[MAX_THREADS];
+    pthread_t threads[MAX_THREADS];
+    for (int i = 0; i < sol->instance->params.nThreads; i++)
+    {
+        thSpecific[i] = initThreadSpecificData(sol, &thShared, (unsigned int)rand());
+        pthread_create(&threads[i], NULL, runSimulatedAnnealing, &thSpecific[i]);
+    }
+
+    int iterations = 0;
+    for (int i = 0; i < sol->instance->params.nThreads; i++)
+    {
+        pthread_join(threads[i], NULL);
+        iterations += thSpecific[i].iterations;
+    }
+
+    cloneSolution(thShared.bestSol, &sol);
+    checkSolution(&sol);
+
+    for (int i = 0; i < sol->instance->params.nThreads; i++)
+        destroyThreadSpecificData(&thSpecific[i]);
+
+    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    double currentTime = cvtTimespec2Double(timeStruct);
+    LOG(LOG_LVL_NOTICE, "Total number of iterations: %d", iterations);
+    LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)iterations/(currentTime-startTime));
 }
 
-static inline ThreadSharedData initThreadSharedData(Solution *sol, double timeLimit)
+static inline ThreadSharedData initThreadSharedData(Solution *sol, double timeLimit, double startTime)
 {
     ThreadSharedData thShared = { 
-        .timeLimit=timeLimit,
-        .bestSol=sol
+        .bestSol = sol,
+        .timeLimit = startTime + timeLimit,
+        .startTime = startTime
     };
     if(sol->instance->params.annealingTemperature > 0) thShared.startingTemperature = sol->instance->params.annealingTemperature;
     else thShared.startingTemperature = 10000;
@@ -87,7 +117,7 @@ static inline ThreadSpecificData initThreadSpecificData(Solution *sol, ThreadSha
         .threshold = 0.0,
         .thShared = thShared,
         .thSol = NULL,
-        .temperature = thShared->startingTemperature
+        .temperature = thShared->startingTemperature,
     };
     cloneSolution(sol, &thSpecific.thSol);
 
@@ -118,7 +148,7 @@ static void * runSimulatedAnnealing(void * arg)
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double currentTime = cvtTimespec2Double(timeStruct);
 
-    while (currentTime < startTime + thShared->timeLimit)
+    while (currentTime < thShared->timeLimit)
     {
         thSpecific->iterations++;
         thSpecific->iterationsSinceUpdate++;
@@ -147,11 +177,16 @@ static void * runSimulatedAnnealing(void * arg)
             updateTemperature(&thSpecific->temperature);
         }
 
+        clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+        currentTime = cvtTimespec2Double(timeStruct);
+
         // if newSol has better cost than sol we update sol
         pthread_mutex_lock(&thShared->mutex);
         if(thSpecific->thSol.cost < thShared->bestSol->cost) 
             cloneSolution(&thSpecific->thSol, thShared->bestSol);
+            thShared->bestSol->execTime += currentTime - thShared->startTime;
         pthread_mutex_unlock(&thShared->mutex);
+
 
         // if solution has not been updated for metaRestartThreshold iterations, and the time limit hasn't passed yet, we restart the annealing process from the best solution found so far
         if(thSpecific->iterationsSinceUpdate == thShared->bestSol->instance->params.metaRestartThreshold)
@@ -162,6 +197,7 @@ static void * runSimulatedAnnealing(void * arg)
             cloneSolution(thShared->bestSol, &thSpecific->thSol);
 
         }
+        
     }
 }
 

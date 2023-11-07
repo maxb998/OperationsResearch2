@@ -172,6 +172,8 @@ static void runMetaheuristic(Solution *sol, enum Mode mode, double tlim)
     case MODE_ANNEALING:
         printf("Simulated Annealing Starting...\n");
 
+        SimulatedAnnealing(sol, tlim);
+
         printf("Simulated Annealing finished in %lf second\n", sol->execTime - startTime);
         printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));
         break;
