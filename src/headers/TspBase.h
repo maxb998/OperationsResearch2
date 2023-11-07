@@ -81,8 +81,8 @@ enum EMInitType {
 
 struct VnsKickSize
 {
-	int Max;
 	int Min;
+	int Max;
 };
 
 struct GeneticParams

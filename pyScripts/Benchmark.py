@@ -194,7 +194,7 @@ def get_cmd_list(datadict:dict, inst:str, val:str, seed:int) -> list[str]:
 
 def write_csv(table:np.ndarray, csv_filename:str, datadict:dict):
 
-    with open(csv_filename, mode='w', newline='') as csvfile:
+    with open(csv_filename, mode='a', newline='') as csvfile:
 
         csv_writer = csv.writer(csvfile, delimiter=' ')
 
