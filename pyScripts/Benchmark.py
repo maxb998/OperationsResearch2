@@ -24,9 +24,9 @@ datadict = {
 
 def main():
 
-    datadict = arg_parser()
+    np.random.seed(time.time())
 
-    os.system('clear')
+    datadict = arg_parser()
 
     if len(datadict['param2Tune']) > 0:
         print('Hyperparameter to tune is ' + datadict['param2Tune'] + ' to tune with values: ' + Fore.LIGHTYELLOW_EX + str(datadict['tuningVars']) + Fore.RESET)
@@ -95,8 +95,8 @@ def main():
             runtimeLogStr = 'Avg Runtime = ' + Fore.LIGHTCYAN_EX + str('{0:.2f}').format(runtimes_table[instIndex, tuneValIndex]) + Fore.RESET + ' s'
             print('\t' + f'{costLogStr: <35}{runtimeLogStr}')
         
-    write_csv(runtimes_table, datadict['out_fnames'][0], datadict)
-    write_csv(costs_table, datadict['out_fnames'][1], datadict)
+    write_csv(costs_table, datadict['out_fnames'][0], datadict)
+    write_csv(runtimes_table, datadict['out_fnames'][1], datadict)
 
 
 
