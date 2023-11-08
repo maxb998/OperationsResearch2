@@ -5,6 +5,7 @@ import numpy as np
 from colorama import Fore
 from pathlib import Path
 import csv
+import re
 
 np.set_printoptions(precision=2)
 
@@ -107,7 +108,7 @@ def arg_parser() -> dict:
     parser.add_argument('-s', '--seeds', metavar='int', type=int, nargs='+', help='List of seeds to use in each run. If not specified it will be random.')
     parser.add_argument('-n', '--nIters', metavar='int', type=int, help='Number of times that the runs are repeated with a different random seed. Overrides values from --seeds')
     parser.add_argument('--param2Tune', metavar='str', type=str, help='Specify an hyperparameter to tune.')
-    parser.add_argument('--tuningVars', metavar='float', type=str, nargs='+', help='Specify the values to assign to the hyperparameter specified by param2Tune to use.')
+    parser.add_argument('--tuningVars', metavar='str', type=str, nargs='+', help='Specify the values to assign to the hyperparameter specified by param2Tune to use.')
     parser.add_argument('--solverExtraArgs', metavar='str', required=True, type=str, help='Extra commandline arguments to pass to the solver.')
 
     args = parser.parse_args()
@@ -118,8 +119,16 @@ def arg_parser() -> dict:
     if not os.path.isdir(args.inputDir):
         print('inputDir must be a directory')
         exit()
-    datadict['instances'] = filter( lambda x: os.path.splitext(x)[1] == '.tsp', os.listdir(args.inputDir) )
-    datadict['instances'] = sorted( filter( lambda x: os.path.isfile(os.path.join(args.inputDir, x)), iter(datadict['instances']) ))
+    datadict['instances'] = list(filter( lambda x: os.path.splitext(x)[1] == '.tsp', os.listdir(args.inputDir) ))
+
+    # sort by number of nodes specified as the first number in the filename
+    instSizes = np.zeros(shape=len(datadict["instances"]), dtype=np.int32)
+    for i in range(len(datadict["instances"])):
+        instSizes[i] = re.findall(r'\d+', datadict["instances"][i])[0]
+    sortedIndexes = np.argsort(instSizes)
+    datadict["instances"] = [datadict["instances"][i] for i in sortedIndexes]
+
+    datadict['instances'] = list( filter( lambda x: os.path.isfile(os.path.join(args.inputDir, x)), iter(datadict['instances']) ))
     for i in range(len(datadict['instances'])):
         datadict['instances'][i] = os.path.join(args.inputDir, datadict['instances'][i])
 
