@@ -142,7 +142,7 @@ def arg_parser() -> dict:
         exit()
     datadict['execPath'] = args.execPath
 
-    datadict['out_fnames'] = [args.outputFile + '_costs.csv', args.outputFile + 'runtimes.csv']
+    datadict['out_fnames'] = [args.outputFile + '_costs.csv', args.outputFile + '_runtimes.csv']
     for out_fname in datadict['out_fnames']:
         if os.path.isfile(out_fname):
             while True:
