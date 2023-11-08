@@ -6,6 +6,7 @@ from colorama import Fore
 from pathlib import Path
 import csv
 import re
+import time 
 
 np.set_printoptions(precision=2)
 
@@ -15,7 +16,7 @@ datadict = {
     'execPath', 
     'solverExtraArgs', 
     'out_fnames',
-    'seeds',
+    'nIters',
     'param2Tune',
     'tuningVars'
 }
@@ -27,7 +28,6 @@ def main():
 
     os.system('clear')
 
-    print('Selected Seeds are: ' + str(datadict['seeds']))
     if len(datadict['param2Tune']) > 0:
         print('Hyperparameter to tune is ' + datadict['param2Tune'] + ' to tune with values: ' + Fore.LIGHTYELLOW_EX + str(datadict['tuningVars']) + Fore.RESET)
     
@@ -46,13 +46,15 @@ def main():
                 print('\tRunning with ' + datadict['param2Tune'] + '  ' + Fore.LIGHTYELLOW_EX + datadict['tuningVars'][tuneValIndex] + Fore.RESET)
 
             # could also sum the result for direct average but might need this in the future
-            costResults = np.zeros(shape=len(datadict['seeds']), dtype=float)
-            runtimeResults = np.zeros(shape=len(datadict['seeds']), dtype=float)
+            costResults = np.zeros(shape=datadict['nIters'], dtype=float)
+            runtimeResults = np.zeros(shape=datadict['nIters'], dtype=float)
 
-            for seedIndex in range(len(datadict['seeds'])):
+            for i in range(datadict['nIters']):
+
+                seed = np.random.randint(low=0, high=2147483648)
 
                 # run the solver on the first instance
-                cmd = get_cmd_list(datadict, datadict['instances'][instIndex], datadict['tuningVars'][tuneValIndex], datadict['seeds'][seedIndex])
+                cmd = get_cmd_list(datadict, datadict['instances'][instIndex], datadict['tuningVars'][tuneValIndex], seed)
                 #print(cmd)
                 p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
 
@@ -73,17 +75,17 @@ def main():
                     elif 'Total runtime = ' in line:
                         start_pos = line.find('=') + 2
                         end_pos = line.find(' seconds',  start_pos)
-                        runtimeResults[seedIndex] = float(line[ start_pos : end_pos])
+                        runtimeResults[i] = float(line[ start_pos : end_pos])
 
                     elif 'Final cost = ' in line:
                         start_pos = line.find('=') + 2
                         end_pos = line.find('\\',  start_pos)
-                        costResults[seedIndex] = float(line[ start_pos : end_pos])
+                        costResults[i] = float(line[ start_pos : end_pos])
                 
                 
-                costLogStr = 'Cost = ' + str('{0:.2f}').format(costResults[seedIndex])
-                runtimeLogStr = 'Runtime = ' + str('{0:.2f}').format(runtimeResults[seedIndex]) + ' s'
-                seedLogStr = 'Seed = ' + str(datadict['seeds'][seedIndex])
+                costLogStr = 'Cost = ' + str('{0:.2f}').format(costResults[i])
+                runtimeLogStr = 'Runtime = ' + str('{0:.2f}').format(runtimeResults[i]) + ' s'
+                seedLogStr = 'Seed = ' + str(seed)
                 print('\t\t' + f'{costLogStr: <35}{runtimeLogStr: <30}{seedLogStr}')
             
             runtimes_table[instIndex, tuneValIndex] = np.average(runtimeResults)
@@ -105,8 +107,7 @@ def arg_parser() -> dict:
     parser.add_argument('--inputDir', metavar='str', required=True, type=str, help='Directory containing all the tsp file instances on which run the solver.')
     parser.add_argument('--execPath', metavar='str', required=True, type=str, help='Location of the exec.')
     parser.add_argument('--outputFile', metavar='str', required=True, type=str, help='Name of the output file')
-    parser.add_argument('-s', '--seeds', metavar='int', type=int, nargs='+', help='List of seeds to use in each run. If not specified it will be random.')
-    parser.add_argument('-n', '--nIters', metavar='int', type=int, help='Number of times that the runs are repeated with a different random seed. Overrides values from --seeds')
+    parser.add_argument('-n', '--nIters', metavar='int', required=True, type=int, help='Number of times that the runs are repeated with a different random seed')
     parser.add_argument('--param2Tune', metavar='str', type=str, help='Specify an hyperparameter to tune.')
     parser.add_argument('--tuningVars', metavar='str', type=str, nargs='+', help='Specify the values to assign to the hyperparameter specified by param2Tune to use.')
     parser.add_argument('--solverExtraArgs', metavar='str', required=True, type=str, help='Extra commandline arguments to pass to the solver.')
@@ -156,16 +157,7 @@ def arg_parser() -> dict:
                     exit()
                 print ('\033[A                             \033[A')
 
-    # SEED SETTINGS
-    if args.nIters == None:
-        if args.seeds == None:
-            print('An option between --nIters and --seeds must be selected')
-            exit()
-        datadict['seeds'] = args.seeds
-    else:
-        import time 
-        np.random.seed(seed=int(time.time())) 
-        datadict['seeds'] = np.random.randint(low=0, high=2147483648, size=args.nIters)
+    datadict['nIters'] = args.nIters
 
     # get args for tsp solver
     datadict['solverExtraArgs'] = args.solverExtraArgs.split(' ')
