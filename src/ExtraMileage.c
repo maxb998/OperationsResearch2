@@ -4,7 +4,7 @@
 #include <time.h>
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
-//#define DEBUG
+#define DEBUG
 
 typedef struct
 {
@@ -17,6 +17,7 @@ typedef struct
 
 typedef struct
 {
+    __uint128_t cachedBestCost;
     ThreadSharedData *thShared;
     unsigned int rndState;
     int iterCount;
@@ -143,6 +144,7 @@ static void destroyThreadSharedData (ThreadSharedData *thShared)
 static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, unsigned int rndState)
 {
     ThreadSpecificData thSpecific = {
+        .cachedBestCost= -1,
         .thShared=thShared,
         .rndState=rndState,
         .iterCount=0,
@@ -218,17 +220,18 @@ static void *runExtraMileage(void * arg)
 
         applyExtraMileage_Internal(thSpecific, 2);
 
-        if (thSpecific->workingSol.cost < thShared->bestSol.cost)
+        if (thSpecific->workingSol.cost < thSpecific->cachedBestCost)
         {
             pthread_mutex_lock(&thShared->mutex);
             if (thSpecific->workingSol.cost < thShared->bestSol.cost)
                 updateBestSolution(thSpecific);
+            thSpecific->cachedBestCost = thShared->bestSol.cost;
             pthread_mutex_unlock(&thShared->mutex);
         }
 
         thSpecific->iterCount++;
 
-        if ((inst->params.graspType == GRASP_NONE) && (inst->params.nThreads == EM_INIT_FARTHEST_POINTS)) // if true only this solution will be found so we can exit
+        if ((inst->params.graspType == GRASP_NONE) && (inst->params.emInitOption == EM_INIT_FARTHEST_POINTS)) // if true only this solution will be found so we can exit
             break;
 
         clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
@@ -249,13 +252,7 @@ static void initialization(ThreadSpecificData *thSpecific)
             thSpecific->X[i] = inst->X[i];
     #endif
     for (int i = 0; i < inst->nNodes + AVX_VEC_SIZE; i++)
-        indexPath[i] = i;
-    #if (COMPUTATION_TYPE != COMPUTE_OPTION_AVX)
-        // set all costCache to 0 to avoid issues with selection using avx
-        for (int i = 0; i < inst->nNodes + AVX_VEC_SIZE; i++)
-            thSpecific->costCache[i] = -INFINITY;
-    #endif
-    
+        indexPath[i] = i;    
 
     switch (inst->params.emInitOption)
     {
