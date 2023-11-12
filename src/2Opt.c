@@ -122,7 +122,8 @@ void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *
         // check costCache
         for (int i = 0; i < n; i++)
             #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-                if (costCache[i] != computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i + 1]], inst->Y[sol->indexPath[i + 1]], inst))
+                if ((costCache[i] != computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i + 1]], inst->Y[sol->indexPath[i + 1]], inst)) &&
+                    !((inst->params.mode == MODE_TABU) && (costCache[i] == -INFINITY)))
                     throwError("apply2OptBestFix_fastIteratively: input not valid: costCache isn't coherent with solution at position %d", i);
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
                 if (costCache[i] != inst->edgeCostMat[sol->indexPath[i] * n + sol->indexPath[i+1]])
