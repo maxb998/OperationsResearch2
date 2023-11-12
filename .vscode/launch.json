@@ -49,12 +49,12 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/x64/main",
             "args": [
-                "--file", "data/3000-6000/rl5915.tsp",
-                "--mode", "nn",
+                "--file", "data/220-320/a280.tsp",
+                "--mode", "em",
                 "--tlim", "10",
 
                 "--graspType", "almostbest",
-                "--graspChance", "0.01",
+                "--graspChance", "0.05",
                 //"--nnTryall",
                 //"--emFarthest",
 
@@ -71,7 +71,7 @@
                 //"--2opt",
 
                 //"--seed", "2023",
-                //"--threads", "6",
+                "--threads", "8",
                 "--roundcosts",
                 //"--plot", 
                 //"--save",

@@ -567,7 +567,6 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
     // shortcuts/decluttering
     Instance *inst = thSpecific->workingSol.instance;
     int n = inst->nNodes;
-    int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
 
     // Contains best mileage values
     __m256 bestExtraCostVec = _mm256_set1_ps(INFINITY);
@@ -620,22 +619,35 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
     float avxStoreFloat[AVX_VEC_SIZE];
     _mm256_storeu_ps(avxStoreFloat, bestExtraCostVec);
 
-    int sortedArgs[AVX_VEC_SIZE];
-    argsort(avxStoreFloat, sortedArgs, AVX_VEC_SIZE);
+    // choose successor
+    int minIndex = 0;
+    for (int i = 1; i < AVX_VEC_SIZE; i++)
+        if (avxStoreFloat[i] < avxStoreFloat[minIndex])
+            minIndex = i;
 
-    int chosenIndex = sortedArgs[0];
-    if ((inst->params.graspType == GRASP_ALMOSTBEST) && (n - nCovered > AVX_VEC_SIZE + 1)&& (graspThreshold > rand_r(&thSpecific->rndState)))
-        for (int i = 1; i < AVX_VEC_SIZE - 1; i++)
-            if ((avxStoreFloat[sortedArgs[i+1]] == -INFINITY) || (rand_r(&thSpecific->rndState) < graspThreshold))
-                break;
+    int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
+    if ((inst->params.graspType == GRASP_ALMOSTBEST) && (n - nCovered > AVX_VEC_SIZE + 1) && (rand_r(&thSpecific->rndState) < graspThreshold))
+    {
+        avxStoreFloat[minIndex] = INFINITY;
+        for (int counter = 1; counter < AVX_VEC_SIZE; counter++)
+        {
+            if (rand_r(&thSpecific->rndState) > graspThreshold)
+            {
+                for (int i = 0; i < AVX_VEC_SIZE; i++)
+                    if (avxStoreFloat[i] < avxStoreFloat[minIndex])
+                        minIndex = i;
+                avxStoreFloat[minIndex] = INFINITY;
+            }
+        }
+    }
 
     SuccessorData retVal;
     int *avxStoreInt = (int*)avxStoreFloat;
     
     _mm256_storeu_si256((__m256i_u *)avxStoreInt, bestNodesVec);
-    retVal.node = avxStoreInt[chosenIndex];
+    retVal.node = avxStoreInt[minIndex];
     _mm256_storeu_si256((__m256i_u *)avxStoreInt, bestAnchorsVec);
-    retVal.anchor = avxStoreInt[chosenIndex];
+    retVal.anchor = avxStoreInt[minIndex];
     retVal.newCost0 = computeEdgeCost(thSpecific->X[retVal.node], thSpecific->Y[retVal.node], thSpecific->X[retVal.anchor], thSpecific->Y[retVal.anchor], inst);
     retVal.newCost1 = computeEdgeCost(thSpecific->X[retVal.node], thSpecific->Y[retVal.node], thSpecific->X[retVal.anchor+1], thSpecific->Y[retVal.anchor+1], inst);
 
