@@ -12,9 +12,9 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
-                "--file", "data/att48.tsp",
-                "--mode", "genetic",
-                "--tlim", "3",
+                "--file", "data/0-80/att48.tsp",
+                "--mode", "nn",
+                "--tlim", "1",
 
                 //"--graspType", "almostbest",
                 //"--graspChance", "0.01",
@@ -49,12 +49,12 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/x64/main",
             "args": [
-                "--file", "data/33000-86000/pla85900.tsp",
+                "--file", "data/3000-6000/rl5915.tsp",
                 "--mode", "nn",
-                "--tlim", "60",
+                "--tlim", "10",
 
                 "--graspType", "almostbest",
-                "--graspChance", "0.002",
+                "--graspChance", "0.01",
                 //"--nnTryall",
                 //"--emFarthest",
 
@@ -68,10 +68,10 @@
                 //"--cplexInit", "em",
                 //"--hardfixSmallest",
 
-                "--2opt",
+                //"--2opt",
 
                 //"--seed", "2023",
-                //"--threads", "8",
+                //"--threads", "6",
                 "--roundcosts",
                 //"--plot", 
                 //"--save",

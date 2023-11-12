@@ -24,6 +24,8 @@ typedef struct
     unsigned int rndState;
     int iterCount;
 
+    __uint128_t cachedBestCost;
+
     float *X;
     float *Y;
     Solution workingSol;
@@ -142,6 +144,7 @@ static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, un
     ThreadSpecificData thSpecific = {
         .thShared=thShared,
         .rndState=rndState,
+        .cachedBestCost=-1,
         .iterCount=0
     };
 
@@ -190,13 +193,14 @@ static void *loopNearestNeighbor(void *arg)
         applyNearestNeighbor(thSpecific, startNode);
 
         // check cost before locking mutex to avoid excessive amount of mutex calls
-        if (thShared->bestSol.cost > thSpecific->workingSol.cost)
+        if (thSpecific->workingSol.cost < thSpecific->cachedBestCost)
         {
             pthread_mutex_lock(&thShared->saveSolutionMutex);
 
             // recheck while having lock on mutex (for syncronization purposes)
             if (thShared->bestSol.cost > thSpecific->workingSol.cost)
                 updateBestSolution(thSpecific);
+            thSpecific->cachedBestCost = thShared->bestSol.cost;
             
             pthread_mutex_unlock(&thShared->saveSolutionMutex);
         }
@@ -383,28 +387,32 @@ static inline SuccessorData findSuccessorVectorized(ThreadSpecificData *thSpecif
     _mm256_storeu_ps(minVecStore, minVec);
     _mm256_storeu_si256((__m256i*)minIDsVecStore, minIDsVec);
 
-    // argsort for grasp and get minium(since they are only 8 elements it's fast)
-    int sortedArgs[AVX_VEC_SIZE];
-    argsort(minVecStore, sortedArgs, AVX_VEC_SIZE);
-
     // choose successor
-    int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
-    int successorSubIndex = sortedArgs[0];
+    int minIndex = 0;
+    for (int i = 1; i < AVX_VEC_SIZE; i++)
+        if (minVecStore[i] < minVecStore[minIndex])
+            minIndex = i;
 
+    int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
     if ((inst->params.graspType == GRASP_ALMOSTBEST) && (rand_r(&thSpecific->rndState) < graspThreshold) && (inst->nNodes - posToAdd > AVX_VEC_SIZE))
     {
-        int rndIdx = 1;
-        for (; rndIdx < AVX_VEC_SIZE - 1; rndIdx++)
+        minVecStore[minIndex] = INFINITY;
+        for (int counter = 1; counter < AVX_VEC_SIZE; counter++)
+        {
             if (rand_r(&thSpecific->rndState) > graspThreshold)
-                break;
-
-        successorSubIndex = sortedArgs[rndIdx];
+            {
+                for (int i = 0; i < AVX_VEC_SIZE; i++)
+                    if (minVecStore[i] < minVecStore[minIndex])
+                        minIndex = i;
+                minVecStore[minIndex] = INFINITY;
+            }
+        }
     }
 
-    int nextPos = minIDsVecStore[successorSubIndex];
+    int nextPos = minIDsVecStore[minIndex];
     SuccessorData succ = {
         .cost=computeEdgeCost(thSpecific->X[lastAddedPos], thSpecific->Y[lastAddedPos], thSpecific->X[nextPos], thSpecific->Y[nextPos], inst), 
-        .node=minIDsVecStore[successorSubIndex]
+        .node=nextPos
     };
 
     return succ;
