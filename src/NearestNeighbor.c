@@ -6,7 +6,7 @@
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
 
-#define DEBUG
+//#define DEBUG
 
 typedef struct
 {
@@ -210,6 +210,24 @@ static void *loopNearestNeighbor(void *arg)
         if (startNode == -1)
             break;
         
+        if (inst->params.nnFirstNodeOption == NN_FIRST_TRYALL)
+        {
+            // reset needed in case we want a fully deterministic algorithm(starting order inside thSpecific.[X,Y,path] influences the output)
+            #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+                for (int i = 0; i < (n + AVX_VEC_SIZE) * 2; i++)
+                    thSpecific->X[i] = inst->X[i];
+            #endif
+            for (int i = 0; i < n + AVX_VEC_SIZE; i++)
+                thSpecific->path[i] = i;
+
+            // commented code below allows a non-deterministic approach (randomness introduced by not resetting thSpecific.[X,Y,path] to starting position)
+            /*int startNodeIndex = 0;
+            for (; startNodeIndex < n; startNodeIndex++)
+                if (thSpecific->path[startNodeIndex] == startNode)
+                    break;
+            startNode = startNodeIndex;*/
+        }
+
         applyNearestNeighbor(thSpecific, startNode);
 
         // check cost before locking mutex to avoid excessive amount of mutex calls
@@ -234,7 +252,7 @@ static void *loopNearestNeighbor(void *arg)
                         if (!checkSolution(&thShared->bestSol))
                             throwError("New solution not correct");
                     #endif
-                    LOG(LOG_LVL_LOG, "Found better solution: cost = %f", thShared->bestCost);
+                    LOG(LOG_LVL_LOG, "Found better solution starting from node %d\t with cost: %f", thSpecific->localBestPath[0], thShared->bestCost);
                 }
                 pthread_mutex_unlock(&thShared->saveSolutionMutex);
             }
@@ -315,8 +333,10 @@ static void applyNearestNeighbor(ThreadSpecificData *thSpecific, int firstNode)
         }
 
         // simple debugging check. can be removed, but saved a lot of headaches so it's going to stay there
-        if ((successor.node >= n) || (successor.node < 0))
-            throwError("applyNearestNeighbor: Value of successor isn't applicable: %d (startNode=%d)", successor.node, firstNode);
+        #ifdef DEBUG
+            if ((successor.node >= n) || (successor.node < 0))
+                throwError("applyNearestNeighbor: Value of successor isn't applicable: %d (startNode=%d)", successor.node, firstNode);
+        #endif
 
         // update solution
         swapElemsInThSpecific(thSpecific, i+1, successor.node);
