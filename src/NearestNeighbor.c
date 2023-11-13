@@ -6,6 +6,8 @@
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
 
+#define DEBUG
+
 typedef struct
 {
     Solution bestSol;
@@ -227,8 +229,9 @@ static void *loopNearestNeighbor(void *arg)
                 {
                     thShared->bestCost = (float)cvtCost2Double(thSpecific->cost);
                     thShared->bestSol.indexPath = thSpecific->localBestPath;
+                    thShared->bestSol.cost = thSpecific->cost;
                     #ifdef DEBUG
-                        if (|checkSolution(thShared->bestSol))
+                        if (!checkSolution(&thShared->bestSol))
                             throwError("New solution not correct");
                     #endif
                     LOG(LOG_LVL_LOG, "Found better solution: cost = %f", thShared->bestCost);
@@ -398,7 +401,7 @@ static inline SuccessorData findSuccessorVectorized(ThreadSpecificData *thSpecif
         minVecStore[minIndex] = INFINITY;
         for (int counter = 1; counter < AVX_VEC_SIZE; counter++)
         {
-            if (rand_r(&thSpecific->rndState) > graspThreshold)
+            if (rand_r(&thSpecific->rndState) < graspThreshold)
             {
                 for (int i = 0; i < AVX_VEC_SIZE; i++)
                     if (minVecStore[i] < minVecStore[minIndex])
