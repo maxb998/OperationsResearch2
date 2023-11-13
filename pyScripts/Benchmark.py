@@ -7,6 +7,7 @@ from pathlib import Path
 import csv
 import re
 import time 
+import random
 
 np.set_printoptions(precision=2)
 
@@ -24,11 +25,12 @@ datadict = {
 
 def main():
 
-    np.random.seed(time.time())
+    random.seed(time.time())
+    #np.random.seed(time.time())
 
     datadict = arg_parser()
 
-    if len(datadict['param2Tune']) > 0:
+    if datadict['param2Tune'] != '':
         print('Hyperparameter to tune is ' + datadict['param2Tune'] + ' to tune with values: ' + Fore.LIGHTYELLOW_EX + str(datadict['tuningVars']) + Fore.RESET)
     
     print('\n')
@@ -42,7 +44,7 @@ def main():
 
         for tuneValIndex in range(len(datadict['tuningVars'])):
 
-            if len(datadict['param2Tune']) > 0:
+            if datadict['param2Tune'] != '':
                 print('\tRunning with ' + datadict['param2Tune'] + '  ' + Fore.LIGHTYELLOW_EX + datadict['tuningVars'][tuneValIndex] + Fore.RESET)
 
             # could also sum the result for direct average but might need this in the future
@@ -51,7 +53,7 @@ def main():
 
             for i in range(datadict['nIters']):
 
-                seed = np.random.randint(low=0, high=2147483648)
+                seed = random.randint(0, 2147483647)
 
                 # run the solver on the first instance
                 cmd = get_cmd_list(datadict, datadict['instances'][instIndex], datadict['tuningVars'][tuneValIndex], seed)
@@ -170,7 +172,7 @@ def arg_parser() -> dict:
         datadict['param2Tune'] = args.param2Tune
         datadict['tuningVars'] = np.array(args.tuningVars)
     else:
-        datadict['param2Tune'] = ['']
+        datadict['param2Tune'] = ''
         datadict['tuningVars'] = ['']
 
     return datadict
