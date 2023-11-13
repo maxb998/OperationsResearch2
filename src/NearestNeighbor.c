@@ -111,6 +111,7 @@ Solution NearestNeighbor(Instance *inst, double timeLimit)
 
     for (int i = 0; i < inst->params.nThreads; i++)
         destroyThreadSpecificData(thSpecifics[i]);
+    free(thSpecifics);
 
     destroyThreadSharedData(&thShared);
 

@@ -4,30 +4,41 @@
 #include <time.h>
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
-#define DEBUG
+//#define DEBUG
 
 typedef struct
 {
     Solution bestSol;
-
-    pthread_mutex_t mutex;
-
+    float bestCost;
     double timeLimit;
+
+    pthread_mutex_t saveSolutionMutex;
+
 } ThreadSharedData;
 
 typedef struct
 {
-    __uint128_t cachedBestCost;
     ThreadSharedData *thShared;
     unsigned int rndState;
     int iterCount;
 
     int initIndexes[2];
 
-    float *X;
-    float *Y;
+    __uint128_t localBestCost;
+    int *localBestPath;
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        float *localBestX;
+        float *localBestY;
+    #endif
+
+    __uint128_t cost;
+    int *path;
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        float *X;
+        float *Y;
+    #endif
+
     float *costCache;
-    Solution workingSol;
 
 } ThreadSpecificData;
 
@@ -50,25 +61,22 @@ static ThreadSharedData initThreadSharedData (Instance *inst, double timeLimit);
 static void destroyThreadSharedData (ThreadSharedData *thShared);
 
 // Setup internal variables and allocate memory in thSpecific.X/Y if using COMPUTE_OPTION_AVX
-static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, unsigned int rndState);
+static ThreadSpecificData *initThreadSpecificData (ThreadSharedData *thShared, unsigned int rndState);
 
 // Deallocate memory pointed by thSpecific.X/Y if necessary
 static void destroyThreadSpecificData(ThreadSpecificData *thSpecific);
 
-// Swap elements in thSpecific.workingSol.indexPath and hSpecific.X, thSpecific.Y if COMPUTE_OPTION_AVX
+// Swap elements in thSpecific.path and hSpecific.X, thSpecific.Y if COMPUTE_OPTION_AVX
 static inline void swapElemsInThSpecific(ThreadSpecificData *thSpecific, int pos1, int pos2);
 
 // Method called by possibly multiple threads to run extra mileage until time limit. arg is a pointer to a ThreadSpecificData initialized struct
 static void *runExtraMileage(void *arg);
 
 // Applies extra mileage to correctly initialized solution(that is thSpecific.workingSol)
-static void applyExtraMileage_Internal(ThreadSpecificData *thSpecific, int nCovered);
+static void applyExtraMileage(ThreadSpecificData *thSpecific, int nCovered);
 
 // Initializes a solution in either a randomized way or by selecting the farthest points
 static void initialization(ThreadSpecificData *thSpecific);
-
-// Swap structures thSpecific.thShared.bestSol with thSpecific.workingSol and prints a notification message
-static void updateBestSolution(ThreadSpecificData *thSpecific);
 
 // Called by initializations, does exactly what its name says
 static void farthestPointsInit(ThreadSpecificData *thSpecific);
@@ -91,28 +99,35 @@ Solution ExtraMileage(Instance *inst, double timeLimit)
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double startTime = cvtTimespec2Double(timeStruct);
 
+    int nThreads = inst->params.nThreads;
+    if ((inst->params.emInitOption == EM_INIT_FARTHEST_POINTS)  && (inst->params.graspType==GRASP_NONE))
+        nThreads = 1;   // only one run possible, it makes no sense to use more than 1 core
+
     // apply extra mileage
     ThreadSharedData thShared = initThreadSharedData(inst, startTime + timeLimit);
-
-    ThreadSpecificData thSpecifics[MAX_THREADS];
+    ThreadSpecificData **thSpecifics = malloc(nThreads * sizeof(ThreadSpecificData*));
+    if (thSpecifics == NULL)
+        throwError("Failed to allocate memory for **thSpecifics");
     pthread_t threads[MAX_THREADS];
-    for (int i = 0; i < inst->params.nThreads; i++)
+    for (int i = 0; i < nThreads; i++)
     {
         thSpecifics[i] = initThreadSpecificData(&thShared, (unsigned int)rand());
-        pthread_create(&threads[i], NULL, runExtraMileage, &thSpecifics[i]);
+        pthread_create(&threads[i], NULL, runExtraMileage, thSpecifics[i]);
     }
 
     int iterCount = 0;
-    for (int i = 0; i < inst->params.nThreads; i++)
+    for (int i = 0; i < nThreads; i++)
     {
         pthread_join(threads[i], NULL);
-        iterCount += thSpecifics[i].iterCount;
-        destroyThreadSpecificData(&thSpecifics[i]);
+        iterCount += thSpecifics[i]->iterCount;
     }
 
     Solution outputSol = newSolution(inst);
     cloneSolution(&thShared.bestSol, &outputSol);
 
+    for (int i = 0; i < nThreads; i++)
+        destroyThreadSpecificData(thSpecifics[i]);
+    free(thSpecifics);
     destroyThreadSharedData(&thShared);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
@@ -126,44 +141,51 @@ Solution ExtraMileage(Instance *inst, double timeLimit)
 
 static ThreadSharedData initThreadSharedData (Instance *inst, double timeLimit)
 {
-    ThreadSharedData thShared = { .timeLimit = timeLimit };
+    ThreadSharedData thShared = { .timeLimit = timeLimit, .bestCost=INFINITY };
 
-    if (pthread_mutex_init(&thShared.mutex, NULL)) throwError("ExtraMileage -> initThreadSharedData: Failed to initialize mutex");
+    if (pthread_mutex_init(&thShared.saveSolutionMutex, NULL)) throwError("ExtraMileage -> initThreadSharedData: Failed to initialize mutex");
 
-    thShared.bestSol = newSolution(inst);
+    thShared.bestSol.cost = -1;
+    thShared.bestSol.instance = inst;
 
     return thShared;
 }
 
 static void destroyThreadSharedData (ThreadSharedData *thShared)
 {
-    if (pthread_mutex_init(&thShared->mutex, NULL)) throwError("ExtraMileage -> destroyThreadSharedData: Failed to destroy mutex");
-    destroySolution(&thShared->bestSol);
+    if (pthread_mutex_destroy(&thShared->saveSolutionMutex)) throwError("ExtraMileage -> destroyThreadSharedData: Failed to destroy mutex");
 }
 
-static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, unsigned int rndState)
+static ThreadSpecificData *initThreadSpecificData (ThreadSharedData *thShared, unsigned int rndState)
 {
-    ThreadSpecificData thSpecific = {
-        .cachedBestCost= -1,
-        .thShared=thShared,
-        .rndState=rndState,
-        .iterCount=0,
-        .initIndexes={-1,-1}
-    };
-
     Instance *inst = thShared->bestSol.instance;
-    thSpecific.workingSol=newSolution(inst);
-
+    size_t memToAlloc = sizeof(ThreadSpecificData) + (inst->nNodes + AVX_VEC_SIZE) * 3 * sizeof(int); // path, localBestPath, costCache
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        thSpecific.X = malloc((inst->nNodes + AVX_VEC_SIZE) * (2 * sizeof(int) + sizeof(float)));
-        if (thSpecific.X == NULL)
-            throwError("ExtraMileage -> initThreadSpecificData: Failed to allocate memory");
-        thSpecific.Y = &thSpecific.X[inst->nNodes + AVX_VEC_SIZE];
-        thSpecific.costCache = (float*)&thSpecific.Y[inst->nNodes + AVX_VEC_SIZE];
-    #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE))
-        thSpecific.costCache = malloc((inst->nNodes + AVX_VEC_SIZE) * sizeof(float));
-        if (thSpecific.costCache == NULL)
-            throwError("ExtraMileage -> initThreadSpecificData: Failed to allocate memory");
+        memToAlloc += (inst->nNodes + AVX_VEC_SIZE) * 4 * sizeof(float); // X, Y, localBestX, localBestY
+    #endif
+
+    ThreadSpecificData *thSpecific = malloc(memToAlloc);
+    if (thSpecific == NULL)
+        throwError("initThreadSpecificData: Failed to allocate memory");
+
+    thSpecific->thShared = thShared;
+    thSpecific->rndState = rndState;
+    thSpecific->iterCount = 0;
+    thSpecific->initIndexes[0] = -1;
+    thSpecific->initIndexes[1] = -1;
+    thSpecific->localBestCost = -1;
+
+    thSpecific->localBestPath = (int*)&thSpecific[1];
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        thSpecific->localBestX = (float*)&thSpecific->localBestPath[inst->nNodes + AVX_VEC_SIZE];
+        thSpecific->localBestY = &thSpecific->localBestX[inst->nNodes + AVX_VEC_SIZE];
+        thSpecific->path = (int*)&thSpecific->localBestY[inst->nNodes + AVX_VEC_SIZE];
+        thSpecific->X = (float*)&thSpecific->path[inst->nNodes + AVX_VEC_SIZE];
+        thSpecific->Y = &thSpecific->X[inst->nNodes + AVX_VEC_SIZE];
+        thSpecific->costCache = &thSpecific->Y[inst->nNodes + AVX_VEC_SIZE];
+    #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
+        thSpecific->path = &thSpecific->localBestPath[inst->nNodes + AVX_VEC_SIZE];
+        thSpecific->costCache = (float*)&thSpecific->path[inst->nNodes + AVX_VEC_SIZE];
     #endif
 
     return thSpecific;
@@ -171,15 +193,7 @@ static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, un
 
 static void destroyThreadSpecificData(ThreadSpecificData *thSpecific)
 {
-    destroySolution(&thSpecific->workingSol);
-
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        free(thSpecific->X);
-    #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE))
-        free(thSpecific->costCache);
-    #endif
-
-    thSpecific->X = thSpecific->Y = thSpecific->costCache = NULL;
+    free(thSpecific);
 }
 
 static inline void swapElemsInThSpecific(ThreadSpecificData *thSpecific, int pos1, int pos2)
@@ -188,25 +202,37 @@ static inline void swapElemsInThSpecific(ThreadSpecificData *thSpecific, int pos
         swapElems(thSpecific->X[pos1], thSpecific->X[pos2])
         swapElems(thSpecific->Y[pos1], thSpecific->Y[pos2])
     #endif
-    swapElems(thSpecific->workingSol.indexPath[pos1], thSpecific->workingSol.indexPath[pos2])
+    swapElems(thSpecific->path[pos1], thSpecific->path[pos2])
 }
 
 static void *runExtraMileage(void * arg)
 {
     ThreadSpecificData *thSpecific = (ThreadSpecificData*)arg;
     ThreadSharedData *thShared = thSpecific->thShared;
-    Instance *inst = thSpecific->workingSol.instance;
+    Instance *inst = thSpecific->thShared->bestSol.instance;
 
     struct timespec timeStruct;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double currentTime = cvtTimespec2Double(timeStruct);
+
+    // set thSpecific->[path,X,Y] and localBest
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        for (int i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
+            thSpecific->X[i] = inst->X[i];
+        for (int i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
+            thSpecific->localBestX[i] = inst->X[i];
+    #endif
+    for (int i = 0; i < inst->nNodes + AVX_VEC_SIZE; i++)
+        thSpecific->path[i] = i;
+    for (int i = 0; i < inst->nNodes + AVX_VEC_SIZE; i++)
+        thSpecific->localBestPath[i] = i;
 
     while (currentTime < thShared->timeLimit)
     {
         initialization(thSpecific);
 
         #if ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
-            int *indexPath = thSpecific->workingSol.indexPath;
+            int *indexPath = thSpecific->path;
         #endif
 
         // setup costCache
@@ -218,15 +244,34 @@ static void *runExtraMileage(void * arg)
             thSpecific->costCache[0] = thSpecific->costCache[1] = inst->edgeCostMat[indexPath[0] * inst->nNodes + indexPath[1]];
         #endif
 
-        applyExtraMileage_Internal(thSpecific, 2);
+        applyExtraMileage(thSpecific, 2);
 
-        if (thSpecific->workingSol.cost < thSpecific->cachedBestCost)
+       // check cost before locking mutex to avoid excessive amount of mutex calls
+        if (thSpecific->cost < thSpecific->localBestCost)
         {
-            pthread_mutex_lock(&thShared->mutex);
-            if (thSpecific->workingSol.cost < thShared->bestSol.cost)
-                updateBestSolution(thSpecific);
-            thSpecific->cachedBestCost = thShared->bestSol.cost;
-            pthread_mutex_unlock(&thShared->mutex);
+            thSpecific->localBestCost = thSpecific->cost;
+            swapElems(thSpecific->path, thSpecific->localBestPath)
+            #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+                swapElems(thSpecific->X, thSpecific->localBestX)
+                swapElems(thSpecific->Y, thSpecific->localBestY)
+            #endif
+
+            if ((float)cvtCost2Double(thSpecific->cost) < thShared->bestCost)
+            {
+                pthread_mutex_lock(&thShared->saveSolutionMutex);
+                if ((float)cvtCost2Double(thSpecific->cost) < thShared->bestCost)
+                {
+                    thShared->bestCost = (float)cvtCost2Double(thSpecific->cost);
+                    thShared->bestSol.indexPath = thSpecific->localBestPath;
+                    thShared->bestSol.cost = thSpecific->cost;
+                    #ifdef DEBUG
+                        if (!checkSolution(&thShared->bestSol))
+                            throwError("New solution not correct");
+                    #endif
+                    LOG(LOG_LVL_LOG, "Found better solution starting from edge (%5d,%5d) with cost: %f", thSpecific->initIndexes[0], thSpecific->initIndexes[1], thShared->bestCost);
+                }
+                pthread_mutex_unlock(&thShared->saveSolutionMutex);
+            }
         }
 
         thSpecific->iterCount++;
@@ -243,16 +288,7 @@ static void *runExtraMileage(void * arg)
 
 static void initialization(ThreadSpecificData *thSpecific)
 {
-    Instance *inst = thSpecific->workingSol.instance;
-    int *indexPath = thSpecific->workingSol.indexPath;
-
-    // Set data for solution (copy coords from distance and create index path as 0,1,2,...,n-1)
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        for (int i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
-            thSpecific->X[i] = inst->X[i];
-    #endif
-    for (int i = 0; i < inst->nNodes + AVX_VEC_SIZE; i++)
-        indexPath[i] = i;    
+    Instance *inst = thSpecific->thShared->bestSol.instance;
 
     switch (inst->params.emInitOption)
     {
@@ -263,32 +299,43 @@ static void initialization(ThreadSpecificData *thSpecific)
         while (thSpecific->initIndexes[0] == thSpecific->initIndexes[1])
             thSpecific->initIndexes[1] = genRandom(&thSpecific->rndState, 0, inst->nNodes);
         }
+        swapElemsInThSpecific(thSpecific, 0, thSpecific->initIndexes[0]);
+        swapElemsInThSpecific(thSpecific, 1, thSpecific->initIndexes[1]);
         break;
 
     case EM_INIT_FARTHEST_POINTS:
+        int initIndexes[2];
         if (thSpecific->initIndexes[0] == -1)
             farthestPointsInit(thSpecific);
+        for (int i = 0; i < inst->nNodes; i++)
+        {
+            if (thSpecific->path[i] == thSpecific->initIndexes[0])
+                initIndexes[0] = i;
+            if (thSpecific->path[i] == thSpecific->initIndexes[1])
+                initIndexes[1] = i;
+        }
+        swapElemsInThSpecific(thSpecific, 0, initIndexes[0]);
+        swapElemsInThSpecific(thSpecific, 1, initIndexes[1]);
         break;
     }
 
-    // add the two nodes to the solution (order does not matter)
-    swapElemsInThSpecific(thSpecific, 0, thSpecific->initIndexes[0]);
-    swapElemsInThSpecific(thSpecific, 1, thSpecific->initIndexes[1]);
-
     // update cost
     float firstEdgeCost;
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-        firstEdgeCost = computeEdgeCost(inst->X[indexPath[0]], inst->Y[indexPath[0]], inst->X[indexPath[1]], inst->Y[indexPath[1]], inst);
-        thSpecific->workingSol.cost = cvtFloat2Cost(firstEdgeCost) * 2;
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        firstEdgeCost = computeEdgeCost(thSpecific->X[0], thSpecific->Y[0], thSpecific->X[1], thSpecific->Y[1], inst);
+        thSpecific->cost = cvtFloat2Cost(firstEdgeCost) * 2;
+    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+        firstEdgeCost = computeEdgeCost(inst->X[thSpecific->path[0]], inst->Y[thSpecific->path[0]], inst->X[thSpecific->path[1]], inst->Y[thSpecific->path[1]], inst);
+        thSpecific->cost = cvtFloat2Cost(firstEdgeCost) * 2;
     #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-        firstEdgeCost = inst->edgeCostMat[(size_t)indexPath[0] * (size_t)inst->nNodes + (size_t)indexPath[1]];
-        thSpecific->workingSol.cost = cvtFloat2Cost(firstEdgeCost) * 2;
+        firstEdgeCost = inst->edgeCostMat[(size_t)thSpecific->path[0] * (size_t)inst->nNodes + (size_t)thSpecific->path[1]];
+        thSpecific->cost = cvtFloat2Cost(firstEdgeCost) * 2;
     #endif
 }
 
 static inline void farthestPointsInit(ThreadSpecificData *thSpecific)
 {
-    Instance *inst = thSpecific->workingSol.instance;
+    Instance *inst = thSpecific->thShared->bestSol.instance;
     int n = inst->nNodes;
 
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
@@ -368,28 +415,10 @@ static inline void farthestPointsInit(ThreadSpecificData *thSpecific)
     LOG(LOG_LVL_DEBUG, "Extra Mileage EM_INIT_FARTHEST_POINTS: maximum cost found between nodes %d and %d", thSpecific->initIndexes[0], thSpecific->initIndexes[1]);
 }
 
-static void updateBestSolution(ThreadSpecificData *thSpecific)
+
+static void applyExtraMileage(ThreadSpecificData *thSpecific, int nCovered)
 {
-    Solution *bestSol = &thSpecific->thShared->bestSol;
-    Solution *newBest = &thSpecific->workingSol;
-
-    // swap cost before anything else to avoid making threads wait mutex more than they should
-    bestSol->cost = newBest->cost;
-
-    // check solution when debugging
-    #ifdef DEBUG
-        if (!checkSolution(newBest))
-		    throwError("updateBestSolutionEM: newBest Solution is not valid");
-    #endif
-    
-    LOG(LOG_LVL_LOG, "Found better solution: cost = %lf", cvtCost2Double(newBest->cost));
-
-    swapElems(bestSol->indexPath, newBest->indexPath)
-}
-
-static void applyExtraMileage_Internal(ThreadSpecificData *thSpecific, int nCovered)
-{
-    Instance *inst = thSpecific->workingSol.instance;
+    Instance *inst = thSpecific->thShared->bestSol.instance;
     int n = inst->nNodes;
 
     // save element to last position & close the tour at index nCovered
@@ -399,8 +428,8 @@ static void applyExtraMileage_Internal(ThreadSpecificData *thSpecific, int nCove
         thSpecific->X[nCovered] = thSpecific->X[0];
         thSpecific->Y[nCovered] = thSpecific->Y[0];
     #endif
-    thSpecific->workingSol.indexPath[n] = thSpecific->workingSol.indexPath[nCovered];
-    thSpecific->workingSol.indexPath[nCovered] = thSpecific->workingSol.indexPath[0];
+    thSpecific->path[n] = thSpecific->path[nCovered];
+    thSpecific->path[nCovered] = thSpecific->path[0];
 
     int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
 
@@ -422,14 +451,12 @@ static void applyExtraMileage_Internal(ThreadSpecificData *thSpecific, int nCove
                 succ.newCost1 = computeEdgeCost(thSpecific->X[succ.node], thSpecific->Y[succ.node], thSpecific->X[succ.anchor+1], thSpecific->Y[succ.anchor+1], inst);
             
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-                int *indexPath = thSpecific->workingSol.indexPath;
-                succ.newCost0 = computeEdgeCost(inst->X[indexPath[succ.node]], inst->Y[indexPath[succ.node]], inst->X[indexPath[succ.anchor]], inst->Y[indexPath[succ.anchor]], inst);
-                succ.newCost1 = computeEdgeCost(inst->X[indexPath[succ.node]], inst->Y[indexPath[succ.node]], inst->X[indexPath[succ.anchor+1]], inst->Y[indexPath[succ.anchor+1]], inst);
+                succ.newCost0 = computeEdgeCost(inst->X[thSpecific->path[succ.node]], inst->Y[thSpecific->path[succ.node]], inst->X[thSpecific->path[succ.anchor]], inst->Y[thSpecific->path[succ.anchor]], inst);
+                succ.newCost1 = computeEdgeCost(inst->X[thSpecific->path[succ.node]], inst->Y[thSpecific->path[succ.node]], inst->X[thSpecific->path[succ.anchor+1]], inst->Y[thSpecific->path[succ.anchor+1]], inst);
 
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-                int *indexPath = thSpecific->workingSol.indexPath;
-                succ.newCost0 = inst->edgeCostMat[(size_t)indexPath[succ.node] * (size_t)n + (size_t)indexPath[succ.anchor]];
-                succ.newCost1 = inst->edgeCostMat[(size_t)indexPath[succ.node] * (size_t)n + (size_t)indexPath[succ.anchor+1]];
+                succ.newCost0 = inst->edgeCostMat[(size_t)thSpecific->path[succ.node] * (size_t)n + (size_t)thSpecific->path[succ.anchor]];
+                succ.newCost1 = inst->edgeCostMat[(size_t)thSpecific->path[succ.node] * (size_t)n + (size_t)thSpecific->path[succ.anchor+1]];
 
             #endif
         }
@@ -443,7 +470,7 @@ static void applyExtraMileage_Internal(ThreadSpecificData *thSpecific, int nCove
 #ifdef DEBUG
 static void checkSolutionIntegrity(ThreadSpecificData *thSpecific, int nCovered)
 {
-    Instance *inst = thSpecific->workingSol.instance;
+    Instance *inst = thSpecific->thShared->bestSol.instance;
     int n = inst->nNodes;
 
     bool *found = malloc(n * sizeof(bool));
@@ -453,19 +480,19 @@ static void checkSolutionIntegrity(ThreadSpecificData *thSpecific, int nCovered)
 
     for (int i = 0; i < nCovered; i++)
     {
-        if (found[thSpecific->workingSol.indexPath[i]])
-            throwError("ExtraMileage-checkSolutionIntegrity: Solution is incoherent in the covered part. Node %d appear twice up to position %d with %d covered nodes", thSpecific->workingSol.indexPath[i], i, nCovered);
-        found[thSpecific->workingSol.indexPath[i]] = true;
+        if (found[thSpecific->path[i]])
+            throwError("ExtraMileage-checkSolutionIntegrity: Solution is incoherent in the covered part. Node %d appear twice up to position %d with %d covered nodes", thSpecific->path[i], i, nCovered);
+        found[thSpecific->path[i]] = true;
     }
 
-    if (thSpecific->workingSol.indexPath[0] != thSpecific->workingSol.indexPath[nCovered])
+    if (thSpecific->path[0] != thSpecific->path[nCovered])
         throwError("ExtraMileage-checkSolutionIntegrity: Solution path is incoherent, last position does not match the first one");
 
     for (int i = nCovered+1; i <= n; i++)
     {
-        if (found[thSpecific->workingSol.indexPath[i]])
-            throwError("ExtraMileage, checkSolutionIntegrity: Solution is incoherent. Node %d appear twice up to position %d with %d covered nodes", thSpecific->workingSol.indexPath[i], i, nCovered);
-        found[thSpecific->workingSol.indexPath[i]] = true;
+        if (found[thSpecific->path[i]])
+            throwError("ExtraMileage, checkSolutionIntegrity: Solution is incoherent. Node %d appear twice up to position %d with %d covered nodes", thSpecific->path[i], i, nCovered);
+        found[thSpecific->path[i]] = true;
     }
 
     // check if all nodes are present
@@ -478,9 +505,9 @@ static void checkSolutionIntegrity(ThreadSpecificData *thSpecific, int nCovered)
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
         for (int i = 0; i <= n; i++)
         {
-            if (thSpecific->X[i] != inst->X[thSpecific->workingSol.indexPath[i]])
+            if (thSpecific->X[i] != inst->X[thSpecific->path[i]])
                 throwError("ExtraMileage-checkSolutionIntegrity: thSpecific.X[%d] does not match correctly", i);
-            if (thSpecific->Y[i] != inst->Y[thSpecific->workingSol.indexPath[i]])
+            if (thSpecific->Y[i] != inst->Y[thSpecific->path[i]])
                 throwError("ExtraMileage-checkSolutionIntegrity: thSpecific.Y[%d] does not match correctly", i);
         }
     #endif
@@ -492,30 +519,30 @@ static void checkSolutionIntegrity(ThreadSpecificData *thSpecific, int nCovered)
         #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
             float currEdgeCost = computeEdgeCost(thSpecific->X[i], thSpecific->Y[i], thSpecific->X[i+1], thSpecific->Y[i+1], inst);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-            int *indexPath = thSpecific->workingSol.indexPath;
+            int *indexPath = thSpecific->path;
             float currEdgeCost = computeEdgeCost(inst->X[indexPath[i]], inst->Y[indexPath[i]], inst->X[indexPath[i+1]], inst->Y[indexPath[i+1]], inst);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-            int *indexPath = thSpecific->workingSol.indexPath;
+            int *indexPath = thSpecific->path;
             float currEdgeCost = inst->edgeCostMat[(size_t)indexPath[i] * (size_t)n + (size_t)indexPath[i+1]];
         #endif
         if (currEdgeCost != thSpecific->costCache[i])
             throwError("ExtraMileage-checkSolutionIntegrity: costCache is incoherent at position %d", i);
         recomputedCost += cvtFloat2Cost(currEdgeCost);
     }
-    if (thSpecific->workingSol.cost != recomputedCost)
+    if (thSpecific->cost != recomputedCost)
         throwError("ExtraMileage-checkSolutionIntegrity: Cost value is incorrect");
 }
 #endif
 
 static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCovered, SuccessorData succ)
 {
-    int *indexPath = thSpecific->workingSol.indexPath;
+    int *indexPath = thSpecific->path;
 
     nCovered++;
 
-    thSpecific->workingSol.cost -= cvtFloat2Cost(thSpecific->costCache[succ.anchor]);
-    thSpecific->workingSol.cost += cvtFloat2Cost(succ.newCost0);
-    thSpecific->workingSol.cost += cvtFloat2Cost(succ.newCost1);
+    thSpecific->cost -= cvtFloat2Cost(thSpecific->costCache[succ.anchor]);
+    thSpecific->cost += cvtFloat2Cost(succ.newCost0);
+    thSpecific->cost += cvtFloat2Cost(succ.newCost1);
 
     // save best value
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
@@ -562,7 +589,7 @@ static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCov
 static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
 {
     // shortcuts/decluttering
-    Instance *inst = thSpecific->workingSol.instance;
+    Instance *inst = thSpecific->thShared->bestSol.instance;
     int n = inst->nNodes;
 
     // Contains best mileage values
@@ -655,9 +682,9 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
 static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
 {
     // shortcuts/decluttering
-    Instance *inst = thSpecific->workingSol.instance;
+    Instance *inst = thSpecific->thShared->bestSol.instance;
     int n = inst->nNodes;
-    int *indexPath = thSpecific->workingSol.indexPath;
+    int *indexPath = thSpecific->path;
     int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
 
     SuccessorData bestSuccs[BASE_GRASP_BEST_SAVE_BUFFER_SIZE];
