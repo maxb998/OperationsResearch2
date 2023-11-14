@@ -36,16 +36,16 @@ declare -a subDirs=(
     # "33000-86000"
 
 declare -a tlim=(
-    4
-    8
+    1
+    2
+    3.5
+    6
+    10
     15
+    20
     30
     45
-    60
-    90
-    140
-    200
-    300
+    75
 )
 
     # 2
@@ -58,6 +58,23 @@ declare -a tlim=(
     # 30
     # 45
     # 60
+
+for i in ${!subDirs[@]}; do
+
+    solverArgs="$solverFixedArgs -t ${tlim[$i]}"
+    outTemplateFname="$outDir/$outFname"_"${subDirs[$i]}_${tlim[$i]}sec"
+    outCostsFname="$outTemplateFname-costs.csv"
+    outRuntimesFname="$outTemplateFname-runtimes.csv"
+    outIterCountFname="$outTemplateFname-iterCount.csv"
+    fullInputPath="$inputDir/${subDirs[$i]}"
+    
+    echo $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs \"$solverArgs\" --inputDir $fullInputPath --param2Tune $param2Tune --tuningVars $tuningVars --saveCosts $outCostsFname --saveIterCount $outIterCountFname #--saveRuntimes $outRuntimesFname
+    python $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs "$solverArgs" --inputDir $fullInputPath --param2Tune $param2Tune --tuningVars $tuningVars --saveCosts $outCostsFname --saveIterCount $outIterCountFname
+done
+
+solverFixedArgs="-m nn --graspType random --loglvl log --round"
+outDir="run"
+outFname="nn_random"
 
 for i in ${!subDirs[@]}; do
 
