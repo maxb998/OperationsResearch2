@@ -33,7 +33,7 @@ def main():
     if params.param2Tune != '':
         print('Hyperparameter to tune is ' + params.param2Tune + ' to tune with values: ' + Fore.LIGHTYELLOW_EX + str(params.tuningVars) + Fore.RESET)
     
-    print()
+    print("======================================================================================================================================================")
 
     costs_table = np.zeros([len(params.instances), len(params.tuningVars)], dtype=float)
     runtimes_table = np.zeros(costs_table.shape, dtype=float)
@@ -41,12 +41,9 @@ def main():
 
     for instIndex in range(len(params.instances)):
 
-        print('Running on instance: ' + Fore.WHITE + Path(params.instances[instIndex]).stem + Fore.RESET)
-
         for tuneValIndex in range(len(params.tuningVars)):
 
-            if params.param2Tune != '':
-                print('\tRunning with ' + params.param2Tune + '  ' + Fore.LIGHTYELLOW_EX + params.tuningVars[tuneValIndex] + Fore.RESET)
+            print('Running on instance: ' + Fore.WHITE + Path(params.instances[instIndex]).stem + Fore.RESET + ' ...')
 
             # could also sum the result for direct average but might need this in the future
             costResults = np.zeros(shape=params.nIters, dtype=float)
@@ -81,36 +78,38 @@ def main():
                         end_pos = line.find('\\',  start_pos)
                         costResults[i] = float(line[ start_pos : end_pos])
                         
-                    elif 'Total runtime = ' in line:
-                        start_pos = line.find('=') + 2
-                        end_pos = line.find(' seconds',  start_pos)
+                    elif 'finished in ' in line:
+                        start_pos = line.find('finished in ') + 12
+                        end_pos = line.find(' second',  start_pos)
                         runtimeResults[i] = float(line[ start_pos : end_pos])
 
                     elif 'Iterations-per-second' in line:
                         start_pos = line.find(':') + 2
                         end_pos = line.find('\\',  start_pos)
                         iterCountResult[i] = float(line[ start_pos : end_pos])
-
-                
-                #costLogStr = 'Cost = ' + str('{0:.2f}').format(costResults[i])
-                #runtimeLogStr = 'Runtime = ' + str('{0:.2f}').format(runtimeResults[i]) + ' s'
-                #seedLogStr = 'Seed = ' + str(seed)
-                #print('\t\t' + f'{costLogStr: <35}{runtimeLogStr: <30}{seedLogStr}')
             
             costs_table[instIndex, tuneValIndex] = np.average(costResults)
             runtimes_table[instIndex, tuneValIndex] = np.average(runtimeResults)
             iterCount_table[instIndex, tuneValIndex] = np.average(iterCountResult)
 
+            print ("\033[A                             \033[A") #clear last line of output
+            instanceLogStr = 'Result on instance: ' + Fore.WHITE + Path(params.instances[instIndex]).stem + Fore.RESET
+            param2TuneLogStr = ''
+            if params.param2Tune != '':
+                param2TuneLogStr = params.param2Tune + ' = ' + Fore.LIGHTYELLOW_EX + params.tuningVars[tuneValIndex] + Fore.RESET
             costLogStr = 'Avg Cost = ' + Fore.LIGHTGREEN_EX + str('{0:.2f}').format(costs_table[instIndex, tuneValIndex]) + Fore.RESET
             runtimeLogStr = 'Avg Runtime = ' + Fore.LIGHTCYAN_EX + str('{0:.2f}').format(runtimes_table[instIndex, tuneValIndex]) + Fore.RESET + ' s'
-            iterCountLogStr = 'Avg Iters/sec = ' + Fore.LIGHTBLUE_EX + str('{0:.0f}').format(iterCount_table[instIndex, tuneValIndex]) + Fore.RESET + ' iter/s'
-            print('\t' + f'{costLogStr: <35}{runtimeLogStr: <35}{iterCountLogStr}')
+            iterCountLogStr = 'Avg Iters/sec = ' + Fore.LIGHTBLUE_EX + str('{0:11.0f}').format(iterCount_table[instIndex, tuneValIndex]) + Fore.RESET + ' iter/s'
+            print(f'{instanceLogStr: <51}{param2TuneLogStr: <35}{costLogStr: <35}{runtimeLogStr: <35}{iterCountLogStr}')
+            
+        print("======================================================================================================================================================")
     
     if params.costFilename != '':
         write_csv(costs_table, params.costFilename, params)
     if params.runtimesFilename != '':
         write_csv(runtimes_table, params.runtimesFilename, params)
-
+    if params.iterCountFilename != '':
+        write_csv(iterCount_table, params.iterCountFilename, params)
 
 
 def arg_parser() -> Params:
@@ -179,16 +178,13 @@ def arg_parser() -> Params:
 
     if (os.path.isfile(params.costFilename) and params.costFilename != '') or (os.path.isfile(params.runtimesFilename) and params.runtimesFilename != '') or (os.path.isfile(params.iterCountFilename) and params.iterCountFilename != ''):
         while True:
-            print('One or more output csv file already exists. Overwrite all? (y/n)')
+            print('One or more output csv file already exists. Overwrite all? (y/n) ', end='')
             c = input('')[0]
-            print ('\033[A                             \033[A')
             if c == 'y':
-                print('all file will be overwritten')
                 break
             elif c == 'n':
                 print('Quitting...')
                 exit()
-            print ('\033[A                             \033[A')
 
     params.nIters = args.nIters
 
