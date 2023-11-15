@@ -7,7 +7,7 @@ param2Tune="graspChance"
 tuningVars="0.1 0.05 0.01"
 inputDir="data"
 execPath="bin/x64/main"
-outDir="run"
+outDir="run/nn_hyperparam_tuning_data"
 
 declare -a subDirs=(
     "0-80"
@@ -68,7 +68,7 @@ for i in ${!subDirs[@]}; do
     python $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs "$solverArgs" --inputDir $fullInputPath --saveCosts $outCostsFname --param2Tune $param2Tune --tuningVars $tuningVars
 done
 
-solverFixedArgs="-m nn --tryall --loglvl log --round"
+solverFixedArgs="-m nn --nnTryall --loglvl log --round"
 outFname="nn_tryall_deterministic"
 
 for i in ${!subDirs[@]}; do
