@@ -83,7 +83,7 @@ int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG co
 
 	pthread_mutex_lock(&cbData->mutex);
 	if (inst->params.mode == MODE_BRANCH_CUT) // avoids massive output in hard fixing and local branching
-		LOG(LOG_LVL_LOG, "Iteration %d subtours detected %d", cbData->iterNum, sub.subtoursCount);
+		LOG(LOG_LVL_DEBUG, "Iteration %d subtours detected %d", cbData->iterNum, sub.subtoursCount);
 	cbData->iterNum++;
 	pthread_mutex_unlock(&cbData->mutex);
 
@@ -104,9 +104,7 @@ int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG co
 	{
 		swapElems(cbData->bestSuccessors, sub.successors)
 
-		enum LogLevel lvl = LOG_LVL_NOTICE;
-		if (inst->params.mode != MODE_BRANCH_CUT) lvl = LOG_LVL_LOG;
-		LOG(lvl, "Branch & Cut: Incumbent updated -> cost = %lf", cvtCost2Double(cost));
+		LOG(LOG_LVL_LOG, "Branch & Cut: Incumbent updated -> cost = %lf", cvtCost2Double(cost));
 
 		cbData->bestCost = cost;
 
