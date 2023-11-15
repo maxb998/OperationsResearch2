@@ -27,24 +27,17 @@ enum keywordID {
     NODE_COORD_SECTION_KEYWORD_ID
 };
 
-// 
+
 const char * wgtTypeStr[] = {
+    #ifndef USE_REDUCED_DISTANCE_SET
 	"MAN_2D", // manhattan distance 2d
 	"MAX_2D", // maximum distance 2d
+    #endif
     "EUC_2D", // euclidean distance 2d
 	"CEIL_2D", // euclidean 2d rounded up
 	"ATT", // special distance for problems att48 and att532
-}; /*
-	"EUC_3D", // euclidean distance 3d
-	"MAN_3D", // manhattan distance 3d
-	"MAX_3D", // maximum distance 3d
-    "GEO", // geographical distance
-	"XRAY1", // special distance for crystallography problems v1
-	"XRAY2", // special distance for crystallography problems v2
-	"EXPLICIT", // weights are specified in the file
-	"SPECIAL" // special type of distance documented elsewhere
-};// */
-#define EDGE_WEIGHT_TYPES_COUNT 5
+};
+#define EDGE_WEIGHT_TYPES_COUNT (sizeof(wgtTypeStr) / sizeof(wgtTypeStr[0]))
 
 // file parsing functions
 
@@ -296,7 +289,7 @@ static int getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *inst)
 static void readTspLine(char *line, int length, int index, Instance *inst, int keywordsLinesCount)
 {
     double numbers[3] = { 0 };
-    char *endPtr = line;
+    //char *endPtr = line;
 
     int i = 0, numID = 0;
     while (i < length)
@@ -312,14 +305,15 @@ static void readTspLine(char *line, int length, int index, Instance *inst, int k
             throwError("Line %lu is not formatted correctly. More than 3 numbers for each line are not supported", keywordsLinesCount + index + 1);
 
         // convert number and save into array
-        char *oldEndPtr = endPtr;
+        
+        char *endPtr = &line[i];
         numbers[numID] = strtod(&line[i], &endPtr);
-        if (endPtr == oldEndPtr) // error on strtod
+        if (endPtr == &line[i]) // error on strtod
             throwError("Conversion at line %lu has gone wrong", keywordsLinesCount + index + 1);
         numID++;
 
         // move i to end of number
-        i += endPtr - oldEndPtr;
+        i += endPtr - &line[i];
     }
 
     if ((int)numbers[0] != index + 1)

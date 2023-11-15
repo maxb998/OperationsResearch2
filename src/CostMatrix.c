@@ -75,17 +75,10 @@ static void * computeDistMatThread(void* arg)
 
     int n = inst->nNodes;
 
-    // initialize mask outside loop to avoid doing it over and over(useless beacuse the compiler should do this automatically but whatever)
-    int mask[AVX_VEC_SIZE];
-
     // since it has the same value for each row we can define it here, outside the loops
     int lastVecElemsCount = (n % AVX_VEC_SIZE);
     if (lastVecElemsCount == 0)
         lastVecElemsCount = 8;
-    for (int j = 0; j < lastVecElemsCount; j++)
-        mask[j] = -1; // this row last elements
-    for (int j = lastVecElemsCount; j < AVX_VEC_SIZE; j++)
-        mask[j] = 0; // next row first elements (DO NOT WRITE THIS IN THE STORE -> so we use maskstore)
 
     while ( (pthread_mutex_lock(&th->mutex) == 0) && (th->nextRow < th->inst->nNodes) )    // lock mutex before checking nextRow
     {
@@ -95,32 +88,19 @@ static void * computeDistMatThread(void* arg)
         pthread_mutex_unlock (&th->mutex);
 
         // now the thread can compute the distance matrix inside it's workspace (row)
-        __m256 x1 = _mm256_set1_ps(th->inst->X[j]);
-        __m256 y1 = _mm256_set1_ps(th->inst->Y[j]);
+        float x1 = th->inst->X[j];
+        float y1 = th->inst->Y[j];
 
         int i;
-        for (i = 0; i < n - AVX_VEC_SIZE; i += AVX_VEC_SIZE)
+        for (i = 0; i < n; i++)
         {
-            __m256 x2 = _mm256_loadu_ps(&th->inst->X[i]);
-            __m256 y2 = _mm256_loadu_ps(&th->inst->Y[i]);
+            float x2 = th->inst->X[i];
+            float y2 = th->inst->Y[i];
 
-            __m256 dist = computeEdgeCost_VEC(x1, y1, x2, y2, inst);
+            float dist = computeEdgeCost(x1, y1, x2, y2, inst);
 
-            // store result in memory
-            size_t matrixPos = (size_t)j * (size_t)n + (size_t)i;
-            _mm256_storeu_ps(&inst->edgeCostMat[matrixPos], dist);
+            inst->edgeCostMat[(size_t)j * (size_t)n + (size_t)i] = dist;
         }
-        
-        // last elements must be done differently since a vector may override the contents of the next line
-
-        // do the same as in the loop
-        __m256 x2 = _mm256_loadu_ps(&th->inst->X[i]);
-        __m256 y2 = _mm256_loadu_ps(&th->inst->Y[i]);
-        __m256 dist = computeEdgeCost_VEC(x1, y1, x2, y2, inst);
-
-        // maskstore the result avoiding to overwrite data
-        size_t matrixPos = (size_t)j * (size_t)n + (size_t)i;
-        _mm256_maskstore_ps(&inst->edgeCostMat[matrixPos], _mm256_loadu_si256((__m256i*)mask), dist);
     }
 
     // unlock mutex that was locked in the while condition

@@ -90,7 +90,9 @@ void HardFixing(Solution *sol, double timeLimit)
             }
         }
 
-        LOG(LOG_LVL_DEBUG, "HardFix: Bounds were fixed");
+        #ifdef DEBUG
+        LOG(LOG_LVL_ALL, "HardFix: Bounds were fixed");
+        #endif
 
         // update time limit
         double remainingTime = startTime + timeLimit - currentTime;
@@ -101,14 +103,18 @@ void HardFixing(Solution *sol, double timeLimit)
         if ((errCode = WarmStart(&hfAlloc.cpx, hfAlloc.cbData.bestSuccessors)) != 0)
             throwError("HardFix: WarmStart failed with code %d", errCode);
 
-        LOG(LOG_LVL_DEBUG, "HardFix: WarmStart was set");
+        #ifdef DEBUG
+        LOG(LOG_LVL_ALL, "HardFix: WarmStart was set");
+        #endif
 
         // run cplex
-        LOG(LOG_LVL_NOTICE, "HardFix: Iteration %4d, running Branch&Cut method with %lu fixed edges", iterCount, hfAlloc.fixAmount);
+        LOG(LOG_LVL_DEBUG, "HardFix: Iteration %4d, running Branch&Cut method with %lu fixed edges", iterCount, hfAlloc.fixAmount);
         if ((errCode = CPXmipopt(hfAlloc.cpx.env, hfAlloc.cpx.lp)) != 0)
             throwError("HardFix: CPXmipopt failed with code %d", errCode);
 
-        LOG(LOG_LVL_DEBUG, "HardFix: CPXmipopt finished");
+        #ifdef DEBUG
+        LOG(LOG_LVL_ALL, "HardFix: CPXmipopt finished");
+        #endif
 
         if (hfAlloc.fixAmount == 0)
         {
@@ -189,8 +195,6 @@ static void updateFixAmount(HardfixAllocatedMem *hfAlloc)
     // keeps track of the previous iteration cost
     static __uint128_t oldCost = -1LL;
 
-    int n = hfAlloc->cpx.inst->nNodes;
-
     if (oldCost <= hfAlloc->cbData.bestCost)
     {
         staticCostCount = 0;
@@ -203,10 +207,10 @@ static void updateFixAmount(HardfixAllocatedMem *hfAlloc)
     {
         hfAlloc->fixAmount -= FIX_OFFSET;
 
-        if (hfAlloc->fixAmount > n) // overflow of unsigned operation (fixAmount is way too big) -> set fixAmount to 0
+        if (hfAlloc->fixAmount < 0) // overflow of unsigned operation (fixAmount is way too big) -> set fixAmount to 0
             hfAlloc->fixAmount = 0;
 
-        LOG(LOG_LVL_LOG, "Decreasing the amount of fixed edges to %lu", hfAlloc->fixAmount);
+        LOG(LOG_LVL_LOG, "Decreasing the amount of fixed edges to %u", hfAlloc->fixAmount);
         staticCostCount = 0; //(n - fixAmount - MIN_UNFIX) / FIX_OFFSET;
     }
     
@@ -269,22 +273,29 @@ static int smallestFix(HardfixAllocatedMem *hfAlloc)
     for (int i = n; i < n + AVX_VEC_SIZE; i++)
         successors[i] = 0;
 
-    // compute cost of each edge with avx instructions(not necessary since it's not a performance critical function)
-    __m256i indexes = _mm256_set_epi32(7, 6, 5, 4, 3, 2, 1, 0);
-    __m256i increment = _mm256_set1_epi32(AVX_VEC_SIZE);
-    for (int i = 0; i < n; i += AVX_VEC_SIZE)
+    for (int i = 0; i < n; i++)
     {
-        __m256 x1 = _mm256_i32gather_ps(inst->X, indexes, 4), y1 = _mm256_i32gather_ps(inst->Y, indexes, 4);
-
-        __m256i indexesSucc = _mm256_loadu_si256((__m256i_u*)&successors[i]);
-        __m256 x2 = _mm256_i32gather_ps(inst->X, indexesSucc, 4), y2 = _mm256_i32gather_ps(inst->Y, indexesSucc, 4);
-
-        __m256 cost = computeEdgeCost_VEC(x1, y1, x2, y2, inst);
-
-        increment = _mm256_add_epi32(indexes, increment);
-
-        _mm256_storeu_ps(&tourEdgesCost[i], cost);
+        #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+            tourEdgesCost[i] = computeEdgeCost(inst->X[i], inst->Y[i], inst->X[successors[i]], y2 = inst->Y[successors[i]], inst);
+        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+            tourEdgesCost[i] = inst->edgeCostMat[ i * n + successors[i]];
+        #endif
     }
+    
+    # if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        // compute cost of each edge with avx instructions(not necessary since it's not a performance critical function)
+        for (int i = 0; i < n; i += AVX_VEC_SIZE)
+        {
+            __m256 x1 = _mm256_loadu_ps(&inst->X[i]), y1 = _mm256_loadu_ps(&inst->Y[i]);
+
+            __m256i indexesSucc = _mm256_loadu_si256((__m256i_u*)&successors[i]);
+            __m256 x2 = _mm256_i32gather_ps(inst->X, indexesSucc, 4), y2 = _mm256_i32gather_ps(inst->Y, indexesSucc, 4);
+
+            __m256 cost = computeEdgeCost_VEC(x1, y1, x2, y2, inst);
+
+            _mm256_storeu_ps(&tourEdgesCost[i], cost);
+        }
+    # endif
 
     // perform argsort on tourEdgesCost using minCostIndexes as output
     argsort(tourEdgesCost, hfAlloc->indexes, n);
