@@ -48,8 +48,8 @@ for i in ${!subDirs[@]}; do
     outIterCountFname="$outTemplateFname-iterCount.csv"
     fullInputPath="$inputDir/${subDirs[$i]}"
     
-    echo $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs \"$solverArgs\" --inputDir $fullInputPath --saveCosts $outCostsFname --param2Tune $param2Tune --tuningVars $tuningVars
-    python $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs "$solverArgs" --inputDir $fullInputPath --saveCosts $outCostsFname --param2Tune $param2Tune --tuningVars $tuningVars
+    echo $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs \"$solverArgs\" --inputDir $fullInputPath --saveCosts $outCostsFname --param2Tune $param2Tune --tuningVars $tuningVars --saveIterCount $outIterCountFname
+    python $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs "$solverArgs" --inputDir $fullInputPath --saveCosts $outCostsFname --param2Tune $param2Tune --tuningVars $tuningVars --saveIterCount $outIterCountFname
 done
 
 solverFixedArgs="-m nn --graspType random --loglvl log --round"
@@ -64,8 +64,8 @@ for i in ${!subDirs[@]}; do
     outIterCountFname="$outTemplateFname-iterCount.csv"
     fullInputPath="$inputDir/${subDirs[$i]}"
     
-    echo $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs \"$solverArgs\" --inputDir $fullInputPath --saveCosts $outCostsFname --param2Tune $param2Tune --tuningVars $tuningVars
-    python $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs "$solverArgs" --inputDir $fullInputPath --saveCosts $outCostsFname --param2Tune $param2Tune --tuningVars $tuningVars
+    echo $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs \"$solverArgs\" --inputDir $fullInputPath --saveCosts $outCostsFname --param2Tune $param2Tune --tuningVars $tuningVars --saveIterCount $outIterCountFname
+    python $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs "$solverArgs" --inputDir $fullInputPath --saveCosts $outCostsFname --param2Tune $param2Tune --tuningVars $tuningVars --saveIterCount $outIterCountFname
 done
 
 solverFixedArgs="-m nn --nnTryall --loglvl log --round"
@@ -80,6 +80,6 @@ for i in ${!subDirs[@]}; do
     outIterCountFname="$outTemplateFname-iterCount.csv"
     fullInputPath="$inputDir/${subDirs[$i]}"
     
-    echo $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs \"$solverArgs\" --inputDir $fullInputPath --saveCosts $outCostsFname
-    python $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs "$solverArgs" --inputDir $fullInputPath --saveCosts $outCostsFname
+    echo $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs \"$solverArgs\" --inputDir $fullInputPath --saveCosts $outCostsFname --saveIterCount $outIterCountFname
+    python $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs "$solverArgs" --inputDir $fullInputPath --saveCosts $outCostsFname --saveIterCount $outIterCountFname
 done

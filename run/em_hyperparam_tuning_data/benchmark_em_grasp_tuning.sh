@@ -7,7 +7,7 @@ param2Tune="graspChance"
 tuningVars="0.1 0.05 0.01"
 inputDir="data"
 execPath="bin/x64/main"
-outDir="run"
+outDir="run/em_hyperparam_tuning_data"
 
 
 declare -a subDirs=(
@@ -46,8 +46,8 @@ for i in ${!subDirs[@]}; do
     outIterCountFname="$outTemplateFname-iterCount.csv"
     fullInputPath="$inputDir/${subDirs[$i]}"
     
-    echo $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs \"$solverArgs\" --inputDir $fullInputPath --saveCosts $outCostsFname --param2Tune $param2Tune --tuningVars $tuningVars
-    python $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs "$solverArgs" --inputDir $fullInputPath --saveCosts $outCostsFname --param2Tune $param2Tune --tuningVars $tuningVars
+    echo $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs \"$solverArgs\" --inputDir $fullInputPath --saveCosts $outCostsFname --param2Tune $param2Tune --tuningVars $tuningVars --saveIterCount $outIterCountFname
+    python $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs "$solverArgs" --inputDir $fullInputPath --saveCosts $outCostsFname --param2Tune $param2Tune --tuningVars $tuningVars --saveIterCount $outIterCountFname
 done
 
 solverFixedArgs="-m em --graspType random --loglvl log --round"
@@ -62,12 +62,12 @@ for i in ${!subDirs[@]}; do
     outIterCountFname="$outTemplateFname-iterCount.csv"
     fullInputPath="$inputDir/${subDirs[$i]}"
     
-    echo $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs \"$solverArgs\" --inputDir $fullInputPath --saveCosts $outCostsFname --param2Tune $param2Tune --tuningVars $tuningVars
-    python $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs "$solverArgs" --inputDir $fullInputPath --saveCosts $outCostsFname --param2Tune $param2Tune --tuningVars $tuningVars
+    echo $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs \"$solverArgs\" --inputDir $fullInputPath --saveCosts $outCostsFname --param2Tune $param2Tune --tuningVars $tuningVars --saveIterCount $outIterCountFname
+    python $BenchmarkPy --execPath $execPath -n $nRuns --solverExtraArgs "$solverArgs" --inputDir $fullInputPath --saveCosts $outCostsFname --param2Tune $param2Tune --tuningVars $tuningVars --saveIterCount $outIterCountFname
 done
 
 solverFixedArgs="-m em --emFarthest --loglvl log --round"
-outFname="em_fathest_deterministic"
+outFname="em_farthest_deterministic"
 
 for i in ${!subDirs[@]}; do
 
