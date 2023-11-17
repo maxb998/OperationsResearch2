@@ -113,7 +113,9 @@ typedef struct
 	struct GeneticParams geneticParams;
 	int annealingTemperature;
 
-	enum Mode matheurInitMode;	
+	bool warmStartCplex;
+	bool useConcordeCuts;
+	enum Mode matheurInitMode;
 	enum HardFixPolicy hardFixPolicy;
     
 	bool use2Opt;

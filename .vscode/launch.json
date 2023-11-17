@@ -50,7 +50,7 @@
             "program": "${workspaceFolder}/bin/x64/main",
             "args": [
                 "--file", "data/220-320/a280.tsp",
-                "--mode", "em",
+                "--mode", "branch-cut",
                 "--tlim", "10",
 
                 "--graspType", "almostbest",

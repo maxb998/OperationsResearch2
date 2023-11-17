@@ -2,13 +2,18 @@
 #include "TspCplex.h"
 
 #include <cplex.h>
+#include <concorde.h>
 #include <time.h>
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
+#define DEBUG
 
-// Function to post the solution to cplex. Vals and indexes are two allocated portions of memory of ncols elements each.
-static int PostSolution(CPXCALLBACKCONTEXTptr context, Instance *inst, int ncols, int *successors, __uint128_t cost, double *vals, int *indexes);
+// Function to post the solution to cplex. Vals and indicies are two allocated portions of memory of ncols elements each.
+static inline void PostSolution(CallbackData *cbData, double *vals, int *indicies);
 
+static inline void candidatePartCallback(CallbackData *cbData);
+
+static inline void relaxationPartCallback(CallbackData *cbData);
 // Callback for adding the lazy subtour elimination cuts
 
 
@@ -23,7 +28,7 @@ void BranchAndCut(Solution *sol, double timeLimit)
 
 	#ifdef DEBUG
 		if (!checkSolution(sol))
-			throwError("benders: Input solution is not valid");
+			throwError("Branch&Cut: Input solution is not valid");
 	#endif
 
 	CplexData cpx = initCplexData(inst);
@@ -32,21 +37,24 @@ void BranchAndCut(Solution *sol, double timeLimit)
 	CallbackData cbData = initCallbackData(&cpx, sol);
 
 	if ((errCode = WarmStart(&cpx, cbData.bestSuccessors)) != 0)
-		throwError("BranchAndCut: error on WarmStart with code %d", errCode);
+		throwError("Branch&Cut: error on WarmStart with code %d", errCode);
 
 	if (CPXsetintparam(cpx.env, CPX_PARAM_MIPCBREDLP, CPX_OFF))
-		throwError("BranchAndCut: error on CPXsetinitparam(CPX_PARAM_MIPCBREDLP)");
+		throwError("Branch&Cut: error on CPXsetinitparam(CPX_PARAM_MIPCBREDLP)");
 
-	if (CPXcallbacksetfunc(cpx.env, cpx.lp, CPX_CALLBACKCONTEXT_CANDIDATE, genericCallbackCandidate, &cbData))
-		throwError("BranchAndCut: error on CPXsetlazyconstraintcallbackfunc");
+	CPXLONG contextMask = CPX_CALLBACKCONTEXT_CANDIDATE;
+	if (inst->params.useConcordeCuts) contextMask = CPX_CALLBACKCONTEXT_CANDIDATE | CPX_CALLBACKCONTEXT_RELAXATION;
+
+	if (CPXcallbacksetfunc(cpx.env, cpx.lp, contextMask, genericCallbackCandidate, &cbData))
+		throwError("Branch&Cut: error on CPXsetlazyconstraintcallbackfunc");
 	
 	if (CPXsetintparam(cpx.env, CPX_PARAM_THREADS, inst->params.nThreads))
-		throwError("BranchAndCut: error on CPXsetintparam(CPX_PARAM_THREADS)");
+		throwError("Branch&Cut: error on CPXsetintparam(CPX_PARAM_THREADS)");
 
 	CPXsetdblparam(cpx.env, CPX_PARAM_TILIM, timeLimit);
 
 	if (CPXmipopt(cpx.env, cpx.lp))
-		throwError("BranchAndCut: output of CPXmipopt != 0");
+		throwError("Branch&Cut: output of CPXmipopt != 0");
 	
 	cvtSuccessorsToSolution(cbData.bestSuccessors, sol);
 	//sol->cost = cbData.bestCost;
@@ -60,29 +68,88 @@ void BranchAndCut(Solution *sol, double timeLimit)
 int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG contextid, void *userhandle ) 
 {
 	CallbackData *cbData = (CallbackData *) userhandle;
+	cbData->context = context;
 
-	Instance *inst = cbData->inst;
-	int errCode = 0;
+	if (contextid == CPX_CALLBACKCONTEXT_RELAXATION)
+		relaxationPartCallback(cbData);
+	else if (contextid == CPX_CALLBACKCONTEXT_CANDIDATE)
+		candidatePartCallback(cbData);
 
-	// Stores the number of nodes in the problem
-	int nNodes = inst->nNodes;
+	return 0;
+}
 
+CallbackData initCallbackData(CplexData *cpx, Solution *sol)
+{
+	CallbackData cbData = {
+		.inst = cpx->inst,
+		.ncols = CPXgetnumcols(cpx->env, cpx->lp),
+		.iterNum = 0,
+		.bestCost = -1LL,
+		.elist = NULL
+	};
+
+	if (cbData.ncols <= 0)
+		throwError("initCallbackData: CPXgetnumcols returned 0. Cpx.env is probably empty");
+
+	cbData.bestSuccessors = malloc((cpx->inst->nNodes + AVX_VEC_SIZE) * sizeof(int));
+	if (cbData.bestSuccessors == NULL)
+		throwError("initCallbackData: Failed to allocate memory");
+
+	if (cbData.inst->params.useConcordeCuts)
+	{
+		cbData.elist = malloc(cbData.ncols * 2 * sizeof(int));
+		if (!cbData.elist)
+			throwError("initCallbackData: Failed to allocate memory");
+		
+		for (int i = 0, k = 0; i < cbData.inst->nNodes; i++)
+		{
+			for (int j = i+1; j < cbData.inst->nNodes; j++)
+			{
+				cbData.elist[k] = i;
+				k++;
+				cbData.elist[k] = j;
+				k++;
+			}
+		}
+	}
+
+	pthread_mutex_init(&cbData.mutex, NULL);
+
+	cvtSolutionToSuccessors(sol, cbData.bestSuccessors);
+	cbData.bestCost = sol->cost;
+
+	return cbData;
+}
+
+void destroyCallbackData(CallbackData *cbData)
+{
+	free(cbData->bestSuccessors);
+	free(cbData->elist);
+	cbData->bestSuccessors = cbData->elist = NULL;
+	pthread_mutex_destroy(&cbData->mutex);
+}
+
+static inline void candidatePartCallback(CallbackData *cbData)
+{
 	// Stores current vector x from CPLEX
-	double *xstar = malloc(cbData->ncols * (sizeof(double) * sizeof(int)));
+	double *xstar = malloc(cbData->ncols * (sizeof(double) + sizeof(int)));
 	if (xstar == NULL)
-		throwError("Branch & Cut: could not allocate memory for xstar and indexes");
+		throwError("Branch&Cut: could not allocate memory for xstar and indicies");
 	// Stores the index of the coefficients that we pass to CPLEX 
-	int *indexes = (int*)&xstar[cbData->ncols];
+	int *indicies = (int*)&xstar[cbData->ncols];
 
-	if ((errCode = CPXcallbackgetcandidatepoint(context, xstar, 0, cbData->ncols-1, NULL)) != 0) 
-		throwError("subtourEliminationCallback: CPXgetcallbacknodex failed with code %d", errCode);
+	int errCode;
+	if ((errCode = CPXcallbackgetcandidatepoint(cbData->context, xstar, 0, cbData->ncols-1, NULL)) != 0) 
+		throwError("Branch&Cut: CPXcallbackgetcandidatepoint failed with code %d", errCode);
+	
+	Instance *inst = cbData->inst;
 
 	SubtoursData sub = initSubtoursData(inst->nNodes);
 	
-	cvtCPXtoSuccessors(xstar, cbData->ncols, nNodes, &sub);
+	cvtCPXtoSuccessors(xstar, cbData->ncols, inst->nNodes, &sub);
 
 	pthread_mutex_lock(&cbData->mutex);
-	if (inst->params.mode == MODE_BRANCH_CUT) // avoids massive output in hard fixing and local branching
+	if (inst->params.mode == MODE_BRANCH_CUT) // avoids too much output in hard fixing and local branching
 		LOG(LOG_LVL_DEBUG, "Iteration %d subtours detected %d", cbData->iterNum, sub.subtoursCount);
 	cbData->iterNum++;
 	pthread_mutex_unlock(&cbData->mutex);
@@ -91,7 +158,8 @@ int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG co
 	if(sub.subtoursCount > 1)
 	{
 		double * coeffs = xstar;
-		if ((errCode = setSEC(coeffs, indexes, NULL, context, &sub, 0, inst, cbData->ncols, 0)) != 0)
+		int errCode;
+		if ((errCode = setSEC(coeffs, indicies, NULL, cbData->context, &sub, 0, inst, cbData->ncols, 0)) != 0)
 			throwError("BranchAndCut callback: setSEC failed with code %d", errCode);
 
 		cost = PatchingHeuristic(&sub, inst);
@@ -109,65 +177,73 @@ int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG co
 		cbData->bestCost = cost;
 
 		// post solution to cplex
-		if ((sub.subtoursCount > 1) && ((errCode = PostSolution(context, inst, cbData->ncols, cbData->bestSuccessors, cbData->bestCost, xstar, indexes)) != 0))
-			throwError("BranchAndCut callback: postSolution failed with code %d", errCode);
+		#ifdef DEBUG
+			if (sub.subtoursCount < 1)
+				throwError("BranchAndCut callback: The number of subtours in the solution intended for posting is %d while it must be == 1");
+		#endif
+		PostSolution(cbData, xstar, indicies);
 	}
-
-	free(xstar); destroySubtoursData(&sub);
-	return 0;
+	destroySubtoursData(&sub);
+	free(xstar);
 }
 
-CallbackData initCallbackData(CplexData *cpx, Solution *sol)
+static inline void PostSolution(CallbackData *cbData, double *vals, int *indicies)
 {
-	CallbackData cbData = {
-		.inst = cpx->inst,
-		.ncols = CPXgetnumcols(cpx->env, cpx->lp),
-		.iterNum = 0,
-		.bestCost = -1LL,
-	};
+	#ifdef DEBUG
+	if (!checkSuccessorSolution(cbData->inst, cbData->bestSuccessors) != 0)
+		throwError("Successor solution to be posted is incorrect");
+	#endif
 
-	if (cbData.ncols <= 0)
-		throwError("initCallbackData: CPXgetnumcols returned 0. Cpx.env is probably empty");
-
-	cbData.bestSuccessors = malloc((cpx->inst->nNodes + AVX_VEC_SIZE) * sizeof(int));
-	if (cbData.bestSuccessors == NULL)
-		throwError("initCallbackData: Failed to allocate memory");
-
-	pthread_mutex_init(&cbData.mutex, NULL);
-
-	cvtSolutionToSuccessors(sol, cbData.bestSuccessors);
-	cbData.bestCost = sol->cost;
-
-	return cbData;
-}
-
-void destroyCallbackData(CallbackData *cbData)
-{
-	free(cbData->bestSuccessors);
-	cbData->bestSuccessors = NULL;
-	pthread_mutex_destroy(&cbData->mutex);
-}
-
-static int PostSolution(CPXCALLBACKCONTEXTptr context, Instance *inst, int ncols, int *successors, __uint128_t cost, double *vals, int *indexes)
-{
-	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (!checkSuccessorSolution(inst, successors) != 0))
-		return 1;
-
-	for (int i = 0; i < ncols; i++)
+	for (int i = 0; i < cbData->ncols; i++)
 		vals[i] = 0.0;
-	for (int i = 0; i < ncols; i++)
-		indexes[i] = i;
-	for (int i = 0; i < inst->nNodes; i++)
+	for (int i = 0; i < cbData->ncols; i++)
+		indicies[i] = i;
+	for (int i = 0; i < cbData->inst->nNodes; i++)
 	{
-		int pos = xpos(i, successors[i], inst->nNodes);
+		int pos = xpos(i, cbData->bestSuccessors[i], cbData->inst->nNodes);
 		vals[pos] = 1.0;
 	}
 
 	int strat = CPXCALLBACKSOLUTION_NOCHECK;
-	if (inst->params.logLevel >= LOG_LVL_DEBUG)
+	#ifdef DEBUG
 		strat = CPXCALLBACKSOLUTION_CHECKFEAS;
+	#endif
 
-	int retVal = CPXcallbackpostheursoln(context, ncols, indexes, vals, cvtCost2Double(cost), strat);
+	int errCode = CPXcallbackpostheursoln(cbData->context, cbData->ncols, indicies, vals, cvtCost2Double(cbData->bestCost), strat);
+	if (errCode != 0)
+		throwError("Branch & Cut Callback solution posting failed with error code %d", errCode);
+}
 
-	return retVal;
+
+static inline void relaxationPartCallback(CallbackData *cbData)
+{
+	// Stores current vector x from CPLEX
+	double *xstar = malloc(cbData->ncols * (sizeof(double) + sizeof(int)));
+	if (xstar == NULL)
+		throwError("Branch&Cut: could not allocate memory for xstar and indicies");
+	// Stores the index of the coefficients that we pass to CPLEX 
+	int *indicies = (int*)&xstar[cbData->ncols];
+
+	int errCode;
+	if ((errCode = CPXcallbackgetrelaxationpoint(cbData->context, xstar, 0, cbData->ncols-1, NULL)) != 0) 
+		throwError("Branch&Cut: CPXcallbackgetrelaxationpoint failed with code %d", errCode);
+	
+	int ncomp = 0, *compscount = NULL, *comps = NULL, ecount = cbData->ncols;
+
+	if ((errCode = CCcut_connect_components(cbData->inst->nNodes, ecount, cbData->elist, xstar, &ncomp, &compscount, &comps)) != 0)
+		throwError("Branch&Cut: CCcut_connect_components failed with code %d", errCode);
+	
+	if (ncomp == 1)
+	{
+
+	}
+	else if (ncomp > 1)
+	{
+
+	}
+
+
+	free(xstar);
+	free(compscount);
+	free(comps);
 }

@@ -2,7 +2,7 @@
 CC = gcc
 
 # Cplex Location
-CPLEX_HEADERS_COMPILER_FLAG := -I/opt/ibm/ILOG/CPLEX_Studio2211/cplex/include/ilcplex
+CPLEX_HEADERS_COMPILER_FLAG := -I/opt/ibm/ILOG/CPLEX_Studio2211/cplex/include/ilcplex -I/opt/concorde
 
 SRC_DIR := src/
 HEADERS_DIR := src/headers/
@@ -11,16 +11,14 @@ HEADERS_DIR := src/headers/
 OBJ_DIR = obj/debug/
 BIN_DIR = bin/debug/
 CFLAGS = -Wall -g -c -mavx2 -Isrc/headers
-LDFLAGS1 = -L/opt/ibm/ILOG/CPLEX_Studio2211/cplex/lib/x86-64_linux/static_pic/
-LDFLAGS2 = -lcplex -lm
+LDFLAGS1 = -L/opt/ibm/ILOG/CPLEX_Studio2211/cplex/lib/x86-64_linux/static_pic/ -L/opt/concorde
+LDFLAGS2 = -lcplex -lm -l:concorde.a
 
 # condition to check value passed
 ifeq ($(MODE),exec)
 OBJ_DIR = obj/x64/
 BIN_DIR = bin/x64/
 CFLAGS = -O3 -c -mavx2 -march=native -mtune=native -Isrc/headers
-LDFLAGS1 = -L/opt/ibm/ILOG/CPLEX_Studio2211/cplex/lib/x86-64_linux/static_pic/
-LDFLAGS2 = -lcplex -lm
 endif
 
 # separate files into the ones that use cplex and will need the extra compiler flag to find cplex headers and the ones which don't use it

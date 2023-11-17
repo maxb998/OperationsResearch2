@@ -22,11 +22,14 @@ typedef struct
 
 typedef struct
 {
+	CPXCALLBACKCONTEXTptr context;
 	Instance *inst;
 
 	int ncols; // Number of columns of the matrix inside cplex linear problem
 	int iterNum;
 	pthread_mutex_t mutex;
+
+	int *elist;
 
 	__uint128_t bestCost;
 	int *bestSuccessors;
