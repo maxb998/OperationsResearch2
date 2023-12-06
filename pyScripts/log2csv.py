@@ -70,7 +70,7 @@ def getInfoFromFilename(filename:str, params:InputParams) -> FilenameExtractedDa
 
     return FilenameExtractedData(
         instanceName=fnameSplitted[compsInPrefix + 0],
-        timeLimit=fnameSplitted[compsInPrefix + 1],
+        timeLimit=fnameSplitted[compsInPrefix + 1][:len(fnameSplitted[compsInPrefix + 1]) - 1],
         tuningVar=fnameSplitted[compsInPrefix + 2]
     )
     
@@ -168,8 +168,8 @@ def main():
     print('Detected tuning vars:')
     print(tuningVarsList)
 
-    for f in filelist:
-        print('  ' + os.path.basename(f))
+    # for f in filelist:
+    #     print('  ' + os.path.basename(f))
 
     csvfile = open(params.outFname, 'a')
 
@@ -214,6 +214,7 @@ def main():
                 if fnameInfo.tuningVar == tuningVarsList[i]:
                     csvline[i+1] = avgStr
 
+        print(csvline)
         csvwriter.writerow(csvline)
     
     csvfile.close()
