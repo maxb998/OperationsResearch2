@@ -18,8 +18,8 @@ typedef struct
     Solution *bestSol;
     pthread_mutex_t mutex;
     double startingTemperature;
-    double startTime;
-    double timeLimit;
+    double simAnnStartTime;
+    double simAnnTimeLimit;
 
 } ThreadSharedData;
 
@@ -58,6 +58,9 @@ void SimulatedAnnealing(Solution *sol, double timeLimit)
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double startTime = cvtTimespec2Double(timeStruct);
 
+    // counter for total iterations of Simulated Annealing
+    int iterations = 0;
+
     // check of the input solution
     if (!checkSolution(sol))
         throwError("SimulatedAnnealing: Input solution is not valid");
@@ -73,7 +76,6 @@ void SimulatedAnnealing(Solution *sol, double timeLimit)
         pthread_create(&threads[i], NULL, runSimulatedAnnealing, &thSpecific[i]);
     }
 
-    int iterations = 0;
     for (int i = 0; i < sol->instance->params.nThreads; i++)
     {
         pthread_join(threads[i], NULL);
@@ -98,8 +100,8 @@ static inline ThreadSharedData initThreadSharedData(Solution *sol, double timeLi
 {
     ThreadSharedData thShared = { 
         .bestSol = sol,
-        .timeLimit = startTime + timeLimit,
-        .startTime = startTime
+        .simAnnTimeLimit = timeLimit - sol->execTime,
+        .simAnnStartTime = startTime
     };
     if(sol->instance->params.annealingTemperature > 0) thShared.startingTemperature = sol->instance->params.annealingTemperature;
     else thShared.startingTemperature = 10000;
@@ -145,11 +147,14 @@ static void * runSimulatedAnnealing(void * arg)
         .offset = 0
     };  
 
+    double simAnnTimeLimit = thShared->simAnnTimeLimit;
+    double simAnnStartTime = thShared->simAnnStartTime;
+
     struct timespec timeStruct;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double currentTime = cvtTimespec2Double(timeStruct);
 
-    while (currentTime < thShared->timeLimit)
+    while (currentTime - simAnnStartTime < simAnnTimeLimit)
     {
         thSpecific->iterations++;
         thSpecific->iterationsSinceUpdate++;
@@ -159,13 +164,13 @@ static void * runSimulatedAnnealing(void * arg)
         {
             swapElems(thSpecific->thSol.indexPath[swapInfo.index1], thSpecific->thSol.indexPath[swapInfo.index2]);
             thSpecific->thSol.cost = computeSolutionCost(&thSpecific->thSol);
-            LOG(LOG_LVL_LOG, "Better solution found at iteration: %d\t new cost: %lf", thSpecific->iterations, cvtCost2Double(thSpecific->thSol.cost));
+            LOG(LOG_LVL_EVERYTHING, "Sim Annealing: Better solution found at iteration: %d\t New cost: %lf", thSpecific->iterations, cvtCost2Double(thSpecific->thSol.cost));
             thSpecific->iterationsSinceUpdate = 0;
         }
         else // we implement the move with some probability
         {
             normalizeDelta(&swapInfo.offset, &thSpecific->thSol);
-            thSpecific->iterations = exp(-swapInfo.offset/thSpecific->temperature);
+            thSpecific->threshold = exp(-swapInfo.offset/thSpecific->temperature);
 
             if (keepMove(thSpecific->threshold)) // then we keep the swap
             {
@@ -186,7 +191,7 @@ static void * runSimulatedAnnealing(void * arg)
         if(thSpecific->thSol.cost < thShared->bestSol->cost)
         {
             cloneSolution(&thSpecific->thSol, thShared->bestSol);
-            thShared->bestSol->execTime += currentTime - thShared->startTime;
+            thShared->bestSol->execTime += currentTime - simAnnStartTime;
         }
         pthread_mutex_unlock(&thShared->mutex);
 
@@ -194,7 +199,7 @@ static void * runSimulatedAnnealing(void * arg)
         // if solution has not been updated for metaRestartThreshold iterations, and the time limit hasn't passed yet, we restart the annealing process from the best solution found so far
         if(thSpecific->iterationsSinceUpdate == thShared->bestSol->instance->params.metaRestartThreshold)
         {
-            LOG(LOG_LVL_DEBUG, "Restarting Simulated Annealing from best solution found so far");
+            LOG(LOG_LVL_EVERYTHING, "Restarting Simulated Annealing from best solution found so far");
             thSpecific->iterationsSinceUpdate = 0;
             thSpecific->temperature = thShared->startingTemperature;
             cloneSolution(thShared->bestSol, &thSpecific->thSol);
