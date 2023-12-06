@@ -28,7 +28,7 @@ class CmdLineParser(object):
 	def __init__(self):
 		self.parser = OptionParser(usage='usage: python2 perfprof.py [options] cvsfile.csv outputfile.pdf')
 		# default options
-		self.parser.add_option("-D", "--delimiter", dest="delimiter", default=None, help="delimiter for input files")
+		self.parser.add_option("-D", "--delimiter", dest="delimiter", default=';', help="delimiter for input files")
 		self.parser.add_option("-M", "--maxratio", dest="maxratio", default=-1, type=float, help="maxratio for perf. profile")
 		self.parser.add_option("-S", "--shift", dest="shift", default=0, type=float, help="shift for data")
 		self.parser.add_option("-L", "--logplot", dest="logplot", action="store_true", default=False, help="log scale for x")
@@ -37,7 +37,7 @@ class CmdLineParser(object):
 		self.parser.add_option("-X", "--x-label", dest="xlabel", default='Ratio', help="x axis label")
 		self.parser.add_option("-Y", "--y-label", dest="ylabel", default='Number of Nodes', help="y axis label")
 		self.parser.add_option("-B", "--bw", dest="bw", action="store_true", default=False, help="plot B/W")
-		self.parser.add_option("-A", "--approx", dest="approx", action="store_true", default=False, help="More useful when doing hyperparameter tuning wrt number of nodes (different sorting)")
+		self.parser.add_option("--sortNNodes", dest="sortNNodes", action="store_true", default=False, help="Sortes the graph y axis using the number of nodes of each instance")
 		self.parser.add_option("--smooth", dest="smooth", action="store_true", default=False, help="Smooth the output")
 
 	def addOption(self, *args, **kwargs):
@@ -69,7 +69,10 @@ def readTable(fp, delimiter):
 		rnames.append(row[0])
 		rdata = np.empty(ncols)
 		for j in range(ncols):
-			rdata[j] = float(row[j + 1])
+			if row[j+1] == 'null':
+				rdata[j] = np.Inf
+			else:
+				rdata[j] = float(row[j + 1])
 		rows.append(rdata)
 	data = np.array(rows)
 	return (rnames, cnames, data)
@@ -100,7 +103,7 @@ def main():
     
 	y = np.arange(nrows, dtype=np.float64) / nrows
 
-	if opt.approx:
+	if opt.sortNNodes:
 		for i in range(len(rnames)):
 			y[i] = re.findall(r'\d+', rnames[i])[0]
 
@@ -124,13 +127,13 @@ def main():
 			options['color'] = 'k'
 		else:
 			options['color'] = colors[j]
-		if opt.approx:
+		if opt.sortNNodes:
 			plt.semilogy(ratio[:, j], y, **options)
 		elif opt.logplot:
 			plt.semilogx(ratio[:, j], y, **options)
 		else:
 			plt.plot(ratio[:, j], y, **options)
-	if not opt.approx:
+	if not opt.sortNNodes:
 		plt.axis([1, opt.maxratio, 0, 1])
 	plt.legend(loc='lower right')
 	if opt.plottitle is not None:
