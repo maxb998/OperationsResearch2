@@ -57,6 +57,7 @@ void SimulatedAnnealing(Solution *sol, double timeLimit)
     struct timespec timeStruct;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double startTime = cvtTimespec2Double(timeStruct);
+    double precomputedSolTime = sol->execTime;
 
     // counter for total iterations of Simulated Annealing
     int iterations = 0;
@@ -92,6 +93,9 @@ void SimulatedAnnealing(Solution *sol, double timeLimit)
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double currentTime = cvtTimespec2Double(timeStruct);
+
+    sol->execTime = precomputedSolTime + (currentTime-startTime);
+
     LOG(LOG_LVL_NOTICE, "Total number of iterations: %d", iterations);
     LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)iterations/(currentTime-startTime));
 }
@@ -160,14 +164,15 @@ static void * runSimulatedAnnealing(void * arg)
         thSpecific->iterationsSinceUpdate++;
         swapInfo = randomSwap(&thSpecific->thSol, &thSpecific->rndState);
 
-        if (swapInfo.offset < 0) // then we keep the swap
+        //if (swapInfo.offset == 0) continue;
+        if (swapInfo.offset < 1) // then we keep the swap
         {
             swapElems(thSpecific->thSol.indexPath[swapInfo.index1], thSpecific->thSol.indexPath[swapInfo.index2]);
             thSpecific->thSol.cost = computeSolutionCost(&thSpecific->thSol);
-            LOG(LOG_LVL_EVERYTHING, "Sim Annealing: Better solution found at iteration: %d\t New cost: %lf", thSpecific->iterations, cvtCost2Double(thSpecific->thSol.cost));
+            LOG(LOG_LVL_LOG, "Sim Annealing: Better solution-iteration: %d\t New cost: %lf\t Current best sol cost: %lf", thSpecific->iterations, cvtCost2Double(thSpecific->thSol.cost), cvtCost2Double(thShared->bestSol->cost));
             thSpecific->iterationsSinceUpdate = 0;
         }
-        else // we implement the move with some probability
+        if(swapInfo.offset > 1) // we implement the move with some probability
         {
             normalizeDelta(&swapInfo.offset, &thSpecific->thSol);
             thSpecific->threshold = exp(-swapInfo.offset/thSpecific->temperature);
@@ -176,7 +181,7 @@ static void * runSimulatedAnnealing(void * arg)
             {
                 swapElems(thSpecific->thSol.indexPath[swapInfo.index1], thSpecific->thSol.indexPath[swapInfo.index2]);
                 thSpecific->thSol.cost = computeSolutionCost(&thSpecific->thSol);
-                LOG(LOG_LVL_EVERYTHING, "Accepting bad move at iteration: %d\t, new cost: %lf", thSpecific->iterations, cvtCost2Double(thSpecific->thSol.cost));
+                LOG(LOG_LVL_LOG, "Accepting bad move. Offset: %lf\t, new cost: %lf", swapInfo.offset, thSpecific->iterations, cvtCost2Double(thSpecific->thSol.cost));
                 thSpecific->iterationsSinceUpdate = 0;
             }
             
@@ -190,8 +195,9 @@ static void * runSimulatedAnnealing(void * arg)
         pthread_mutex_lock(&thShared->mutex);
         if(thSpecific->thSol.cost < thShared->bestSol->cost)
         {
+            double timeInSimAnn = currentTime - simAnnStartTime;
+            LOG(LOG_LVL_LOG, "New best solution found. Iteration: %d\t Time in Sim Ann: %lf", thSpecific->iterations, timeInSimAnn);
             cloneSolution(&thSpecific->thSol, thShared->bestSol);
-            thShared->bestSol->execTime += currentTime - simAnnStartTime;
         }
         pthread_mutex_unlock(&thShared->mutex);
 
@@ -243,6 +249,8 @@ static inline SwapInformation randomSwap(Solution *sol, unsigned int * rndState)
     newArcsCost = costEdge1 + costEdge2 + costEdge3 + costEdge4;
 
     SwapInformation swapInfo = {.offset = newArcsCost - oldArcsCost, .index1 = index1, .index2 = index2};
+
+    if(swapInfo.offset < 0) LOG(LOG_LVL_LOG, "Good swap found. Offset: %lf", swapInfo.offset);
 
     return swapInfo;
 }
