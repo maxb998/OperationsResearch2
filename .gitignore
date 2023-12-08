@@ -3,3 +3,5 @@ bin/debug/main
 bin/x64/main
 obj/debug/*.o
 obj/x64/*.o
+runs/*
+!runs/*.tar.xz
