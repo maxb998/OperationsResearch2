@@ -84,13 +84,6 @@ def getFilesWithSameInstanceAndTimeLimit(filelist:list) -> [str, ...]:
         if prefix in os.path.basename(filelist[i - len(retVal)]):
             retVal.append(filelist.pop(i - len(retVal)))
 
-    # sort by time limit
-    # tlims = np.empty(shape=len(retVal), dtype=np.float64)
-    # for i in range(len(retVal)):
-    #     tlims[i] = re.findall(r'[-+]?(?:\d*\.*\d+)', retVal[i])[1]
-    # sortedArgs = tlims.argsort()
-    # retVal = [retVal[i] for i in sortedArgs]
-
     return retVal
 
 def getFilesWithDifferentSeedRuns(flist:list) -> [str, ...]:
@@ -111,7 +104,7 @@ def readLogFile(filename:str, params:InputParams) -> float:
     for line in logFile:
         for lineName in linesList[params.mode]:
             if lineName in line:
-                retVal = float(re.findall(r'[-+]?(?:\d*\.*\d+)', line)[0])
+                retVal = float(re.findall(r'[-+]?(?:\d*\.*\d+)', line[line.find(lineName):])[0])
 
     logFile.close()
     
