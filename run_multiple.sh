@@ -12,7 +12,8 @@ outFname="nn_almostbest"
 param2Tune="graspChance"
 declare -a tuningVars=(
     0.12
-    0.075
+    0.085
+    0.065
 )
 
 declare -a subDirs=(

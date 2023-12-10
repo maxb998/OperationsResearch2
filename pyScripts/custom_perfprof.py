@@ -12,16 +12,10 @@ from optparse import OptionParser
 
 # parameters
 defLW = 1.2  # default line width
-defMS = 5 # default marker size
-dashes = ['-',  # solid line
-	'--',  # dashed line
-	'-.',  # dash-dot line
-	':',  # dotted line
-	'-',
-	'--']
-
-markers = ['+', 'x', '.', '^', 'o', 'd']
-colors = ['r', 'b', 'y', 'g', 'm', 'c']
+defMS = 2 # default marker size
+dashes = ['-', '--', '-.', ':',	'-', '--', '-', '--', '-.', ':', '-', '--', '-', '--', '-.', ':', '-', '--', ':', '-.']
+markers = ['+', 'x', '.', '^', 'o', 'd', 'p', '1', '.', 'x', '^', '+', 'x', '.', '^', 'o', 'd', 'p', '1', '.']
+colors = ['r', 'b', 'y', 'g', 'm', 'c', 'orange', 'limegreen', 'midnightblue', 'violet', 'khaki', 'peru', 'pink', 'goldenrod', 'darkcyan', 'darkgreen', 'orangered', 'gray', 'darkorange', 'crimson']
 
 
 class CmdLineParser(object):
@@ -108,8 +102,18 @@ def main():
 			y[i] = re.findall(r'\d+', rnames[i])[0]
 
 		if opt.smooth:
+			windowSizes = [25, 19, 13, 7, 3]
+			polyOrders = [3, 3, 3, 2, 2]
 			for i in range(ncols):
-				ratio[:,i] = signal.savgol_filter(ratio[:,i], 19, 3)
+				cpRatio = np.copy(ratio[:,i])
+				notInfiniteMap = cpRatio < np.Infinity
+				for j in range(len(windowSizes)):
+					if cpRatio[notInfiniteMap].shape[0] > windowSizes[j]:
+						cpRatio[notInfiniteMap] = signal.savgol_filter(cpRatio[notInfiniteMap], windowSizes[j], polyOrders[j])
+						break
+				
+				ratio[:,i] = cpRatio
+
 
 	else:
 		# sort ratios
