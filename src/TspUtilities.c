@@ -55,7 +55,7 @@ Instance newInstance ()
 
             .edgeWeightType  = -1,
             .name = { 0 },
-            .graspChance = 0.1
+            .graspChance = -1
         }
     };
 
