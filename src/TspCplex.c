@@ -110,7 +110,7 @@ void cvtCPXtoSuccessors(double *xstar, int ncols, int nNodes, SubtoursData *subD
 	for (int i = 0; i < nNodes; i++)
 		subData->subtoursMap[i] = -1;
 
-	LOG(LOG_LVL_EVERYTHING, "###################################################");
+	//LOG(LOG_LVL_EVERYTHING, "###################################################");
 
 	for (int i = 0; i < nNodes; i++)
 	{
@@ -121,7 +121,7 @@ void cvtCPXtoSuccessors(double *xstar, int ncols, int nNodes, SubtoursData *subD
 			{
 				subData->successors[succ] = j;
 				subData->subtoursMap[succ] = subData->subtoursCount;
-				LOG(LOG_LVL_EVERYTHING, "x(%3d,%3d) = 1   subtour n° %d\n", succ, j, subData->subtoursMap[succ] + 1);
+				//LOG(LOG_LVL_EVERYTHING, "x(%3d,%3d) = 1   subtour n° %d\n", succ, j, subData->subtoursMap[succ] + 1);
 				succ = j;
 				j = 0;
 			}
@@ -130,7 +130,7 @@ void cvtCPXtoSuccessors(double *xstar, int ncols, int nNodes, SubtoursData *subD
 		{
 			subData->successors[succ] = i;
 			subData->subtoursMap[succ] = subData->subtoursCount;
-			LOG(LOG_LVL_EVERYTHING, "x(%3d,%3d) = 1   subtour n° %d\n", succ, i, subData->subtoursMap[succ] + 1);
+			//LOG(LOG_LVL_EVERYTHING, "x(%3d,%3d) = 1   subtour n° %d\n", succ, i, subData->subtoursMap[succ] + 1);
 			(subData->subtoursCount)++;
 		}
 	}
@@ -166,7 +166,7 @@ void cvtSolutionToSuccessors(Solution *sol, int* successors)
 		throwError("cvtSolutionToSuccessors: Converted solution is wrong");	
 }
 
-int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, SubtoursData *subData, int iterNum, Instance *inst, int nCols, bool isBenders)
+int setSEC(double *coeffs, int *indexes, CplexData *cpx, CallbackData *cbData, SubtoursData *subData, int iterNum, Instance *inst, int nCols)
 {
 	int retVal = 0;
 	int n = inst->nNodes;
@@ -175,9 +175,12 @@ int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr c
 	for (int i = 0; i < nCols; i++)
 		coeffs[i] = 1.;
 
-	static char sense = 'L';
-	char *cname = malloc(20);
-	static int izero = 0;
+	char *sense = malloc(2 + 20 + sizeof(int) + sizeof(double));
+	sense[0] = 'L';
+	sense[1] = 0;
+	char *cname = &sense[2];
+	int *izero = (int*)&cname[20];
+	*izero = 0;
 
 	for (int subtourID = 0; (subtourID < subData->subtoursCount) && (retVal == 0); subtourID++)
 	{
@@ -186,7 +189,8 @@ int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr c
 		for (;subData->subtoursMap[subtourStart] < subtourID; subtourStart++);
 
 		int nnz = 0;
-		double rhs = -1;
+		double *rhs = (double*)&izero[1];
+		*rhs = -1;
 
 		// follow successor and add all edges that connect each element of the subtour into the constraint
 		int next = subtourStart;
@@ -197,19 +201,19 @@ int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr c
 				indexes[nnz] = xpos(next, i, n);
 				nnz++;
 			}
-			rhs++;
+			*rhs += 1;
 			next = subData->successors[next];
 		} while (next != subtourStart);
 
-		sprintf(cname, "SEC(%03d,%03d)", iterNum, subtourID);
+		sprintf(cname, "SEC(%d,%d)", iterNum, subtourID);
 
-		if(isBenders)
-			retVal = CPXaddrows(cpx->env, cpx->lp, 0, 1, nnz, &rhs, &sense, &izero, indexes, coeffs, NULL, &cname);
+		if(cpx != NULL)
+			retVal = CPXaddrows(cpx->env, cpx->lp, 0, 1, nnz, rhs, sense, izero, indexes, coeffs, NULL, &cname);
 		else
-			retVal = CPXcallbackrejectcandidate(context, 1, nnz, &rhs, &sense, &izero, indexes, coeffs);
+			retVal = CPXcallbackrejectcandidate(cbData->context, 1, nnz, rhs, sense, izero, indexes, coeffs);
 	}
 
-	free(cname);
+	free(sense);
 
 	return retVal;
 }

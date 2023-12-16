@@ -55,6 +55,14 @@ void BranchAndCut(Solution *sol, double timeLimit)
 
 	if (CPXmipopt(cpx.env, cpx.lp))
 		throwError("Branch&Cut: output of CPXmipopt != 0");
+
+	// asses if the best solution has been found based on whether there is time remainig from the time limit or not(probably not good method)
+	clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+    double currentTime = cvtTimespec2Double(timeStruct);
+	if (currentTime - startTime < inst->params.tlim)
+	{
+		LOG(LOG_LVL_NOTICE, "Branch & Cut found the optimal solution");
+	}
 	
 	cvtSuccessorsToSolution(cbData.bestSuccessors, sol);
 	//sol->cost = cbData.bestCost;
@@ -150,7 +158,7 @@ static inline void candidatePartCallback(CallbackData *cbData)
 
 	pthread_mutex_lock(&cbData->mutex);
 	if (inst->params.mode == MODE_BRANCH_CUT) // avoids too much output in hard fixing and local branching
-		LOG(LOG_LVL_DEBUG, "Iteration %d subtours detected %d", cbData->iterNum, sub.subtoursCount);
+		LOG(LOG_LVL_DEBUG, "Branch & Cut: iteration %d subtours detected %d", cbData->iterNum, sub.subtoursCount);
 	cbData->iterNum++;
 	pthread_mutex_unlock(&cbData->mutex);
 
@@ -158,8 +166,10 @@ static inline void candidatePartCallback(CallbackData *cbData)
 	if(sub.subtoursCount > 1)
 	{
 		double * coeffs = xstar;
-		int errCode;
-		if ((errCode = setSEC(coeffs, indicies, NULL, cbData->context, &sub, 0, inst, cbData->ncols, 0)) != 0)
+		int errCode = setSEC(coeffs, indicies, NULL, cbData, &sub, 0, inst, cbData->ncols);
+		if ((errCode == CPXERR_NO_ENVIRONMENT) || (errCode == CPXERR_PRESLV_CRUSHFORM)) // ignore this type of errors
+			LOG(LOG_LVL_WARNING, "Branch & Cut: setSEC failed with code %d(NOT-FATAL). Continuing...", errCode);
+		else if (errCode != 0)
 			throwError("BranchAndCut callback: setSEC failed with code %d", errCode);
 
 		cost = PatchingHeuristic(&sub, inst);
@@ -170,19 +180,25 @@ static inline void candidatePartCallback(CallbackData *cbData)
 	// set new incumbent if found
 	if (cost < cbData->bestCost)
 	{
-		swapElems(cbData->bestSuccessors, sub.successors)
+		pthread_mutex_lock(&cbData->mutex);
+		if (cost < cbData->bestCost)
+		{
+			swapElems(cbData->bestSuccessors, sub.successors)
 
-		LOG(LOG_LVL_LOG, "Branch & Cut: Incumbent updated -> cost = %lf", cvtCost2Double(cost));
+			LOG(LOG_LVL_LOG, "Branch & Cut: Found new best solution with cost: %lf", cvtCost2Double(cost));
 
-		cbData->bestCost = cost;
+			cbData->bestCost = cost;
 
-		// post solution to cplex
-		#ifdef DEBUG
-			if (sub.subtoursCount < 1)
-				throwError("BranchAndCut callback: The number of subtours in the solution intended for posting is %d while it must be == 1");
-		#endif
-		PostSolution(cbData, xstar, indicies);
+			// post solution to cplex
+			#ifdef DEBUG
+				if (sub.subtoursCount < 1)
+					throwError("BranchAndCut callback: The number of subtours in the solution intended for posting is %d while it must be == 1");
+			#endif
+			PostSolution(cbData, xstar, indicies);
+		}
+		pthread_mutex_unlock(&cbData->mutex);
 	}
+
 	destroySubtoursData(&sub);
 	free(xstar);
 }
@@ -210,7 +226,9 @@ static inline void PostSolution(CallbackData *cbData, double *vals, int *indicie
 	#endif
 
 	int errCode = CPXcallbackpostheursoln(cbData->context, cbData->ncols, indicies, vals, cvtCost2Double(cbData->bestCost), strat);
-	if (errCode != 0)
+	if ((errCode == CPXERR_NO_ENVIRONMENT) || (errCode == CPXERR_PRESLV_CRUSHFORM)) // ignore this type of errors
+		LOG(LOG_LVL_WARNING, "Branch & Cut solution posting failed with code %d(NOT-FATAL). Continuing...", errCode);
+	else if (errCode != 0)
 		throwError("Branch & Cut Callback solution posting failed with error code %d", errCode);
 }
 
@@ -222,7 +240,7 @@ static inline void relaxationPartCallback(CallbackData *cbData)
 	if (xstar == NULL)
 		throwError("Branch&Cut: could not allocate memory for xstar and indicies");
 	// Stores the index of the coefficients that we pass to CPLEX 
-	int *indicies = (int*)&xstar[cbData->ncols];
+	//int *indicies = (int*)&xstar[cbData->ncols];
 
 	int errCode;
 	if ((errCode = CPXcallbackgetrelaxationpoint(cbData->context, xstar, 0, cbData->ncols-1, NULL)) != 0) 

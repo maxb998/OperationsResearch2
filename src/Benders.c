@@ -23,15 +23,14 @@ void benders(Solution *sol, double tlim)
     CplexData cpx = initCplexData(inst);
 
 	int ncols = CPXgetnumcols(cpx.env, cpx.lp);
-	double *xstar = malloc(ncols * sizeof(double));
+	double *xstar = malloc(ncols * (sizeof(double) + sizeof(int)));
+	int *indexes = (int*)&xstar[ncols];
 
 	SubtoursData sub = initSubtoursData(n);
 
 	int *bestSuccessorsSol = malloc(n * sizeof(int));
 	__uint128_t bestCost = sol->cost;
 	cvtSolutionToSuccessors(sol, bestSuccessorsSol);
-
-	int *indexes = malloc(ncols * sizeof(int));
 
 	int iterNum = 0;
 
@@ -44,11 +43,14 @@ void benders(Solution *sol, double tlim)
     	currentTime = cvtTimespec2Double(timeStruct);
 		CPXsetdblparam(cpx.env, CPX_PARAM_TILIM, tlim + startTime - currentTime);
 
+		int errCode = 0;
 
-		if (CPXmipopt(cpx.env, cpx.lp))
+		errCode = CPXmipopt(cpx.env, cpx.lp);
+		if (errCode != 0)
 			throwError("Benders: output of CPXmipopt != 0");
 
-		if (CPXgetx(cpx.env, cpx.lp, xstar, 0, ncols - 1))
+		errCode = CPXgetx(cpx.env, cpx.lp, xstar, 0, ncols - 1);
+		if (errCode != 0)
 			throwError("Benders: output of CPXgetx != 0");
 
 		sub.subtoursCount = 0;
@@ -57,15 +59,14 @@ void benders(Solution *sol, double tlim)
 
 		if (sub.subtoursCount == 1) // means that there is only one subtour
 		{
-			LOG(LOG_LVL_LOG, "Optimal Solution found.");
+			LOG(LOG_LVL_NOTICE, "Optimal Solution found at iteration %d with cost %lf", iterNum, cvtCost2Double(computeSuccessorsSolCost(sub.successors, inst)));
 			swapElems(bestSuccessorsSol, sub.successors)
 			break;
 		}
 
 		// add subtour elimination constraints
-		double * coeffs = xstar; // reuse xStar instead of allocating new memory
-
-		if (setSEC(coeffs, indexes, &cpx, NULL, &sub, iterNum, inst, ncols, 1) == 1)
+		errCode = setSEC(xstar, indexes, &cpx, NULL, &sub, iterNum, inst, ncols);
+		if (errCode != 0)
 			throwError("Benders: SetSEC failed");
 		
 		// generate a solution using Repair Heuristic and check if it is better than the previous solutions
@@ -74,19 +75,19 @@ void benders(Solution *sol, double tlim)
 		if (!checkSuccessorSolution(inst, sub.successors))
 			throwError("Benders: Successors after repair heuristic does not represent a loop");
 
+		LOG(LOG_LVL_DEBUG, "Subtours at iteration %d is %d. Cost of Repaired Solution: %lf", iterNum, sub.subtoursCount, cvtCost2Double(cost));
+
 		if (cost < bestCost)
 		{
 			swapElems(bestSuccessorsSol, sub.successors)
 			bestCost = cost;
+			LOG(LOG_LVL_LOG, "Found new best solution with cost %lf", cvtCost2Double(bestCost));
 		}
-
-		LOG(LOG_LVL_LOG, "Subtours at iteration %d is %d. Cost of Repaired Solution: %lf  Incumbent: %lf", iterNum, sub.subtoursCount, cvtCost2Double(cost), cvtCost2Double(bestCost));
 
 		iterNum++;
 	}
 
 	free(xstar);
-	free(indexes);
 	destroyCplexData(&cpx);
 	destroySubtoursData(&sub);
 

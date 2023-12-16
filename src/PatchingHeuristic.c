@@ -1,7 +1,15 @@
 #include "TspCplex.h"
 #include "Tsp.h"
 
-static inline void findBestSubtourMerge(SubtoursData *sub, int subtoursCount, Instance *inst, int mergeIndexes[2], int *invertOrientation);
+typedef struct
+{
+	int index0;
+	int index1;
+	bool invertOrientation;
+} MergingData;
+
+
+static inline MergingData findBestSubtourMerge(SubtoursData *sub, int subtoursCount, Instance *inst);
 
 __uint128_t PatchingHeuristic(SubtoursData *sub, Instance *inst)
 {
@@ -10,21 +18,14 @@ __uint128_t PatchingHeuristic(SubtoursData *sub, Instance *inst)
 	int subtoursCount = sub->subtoursCount;
 	while (subtoursCount > 1)
 	{
-		int invert = 0;
-		int mergeIndexes[2] = {0};
+		MergingData md = findBestSubtourMerge(sub, subtoursCount, inst);
 
-		findBestSubtourMerge(sub, subtoursCount, inst, mergeIndexes, &invert);
-
-		if (invert == 0)
-		{
-			register int temp = sub->successors[mergeIndexes[0]];
-			sub->successors[mergeIndexes[0]] = sub->successors[mergeIndexes[1]];
-			sub->successors[mergeIndexes[1]] = temp;
-		}
+		if (!md.invertOrientation)
+			swapElems(sub->successors[md.index0], sub->successors[md.index1])
 		else
 		{
-			int last = sub->successors[mergeIndexes[1]];
-			int previous = sub->successors[mergeIndexes[1]];
+			int last = sub->successors[md.index1];
+			int previous = sub->successors[md.index1];
 			int current = sub->successors[previous];
 			int next = sub->successors[current];
 			do
@@ -35,16 +36,16 @@ __uint128_t PatchingHeuristic(SubtoursData *sub, Instance *inst)
 				next = sub->successors[next];
 			} while (current != last);
 			
-			sub->successors[last] = sub->successors[mergeIndexes[0]];
-			sub->successors[mergeIndexes[0]] = mergeIndexes[1];
+			sub->successors[last] = sub->successors[md.index0];
+			sub->successors[md.index0] = md.index1;
 		}
 
 		// now adjust subtoursMap
-		int sub2Map = sub->subtoursMap[mergeIndexes[1]];
+		int sub2Map = sub->subtoursMap[md.index1];
 		for (int i = 0; i < n; i++)
 		{
 			if (sub->subtoursMap[i] == sub2Map)
-				sub->subtoursMap[i] = sub->subtoursMap[mergeIndexes[0]];
+				sub->subtoursMap[i] = sub->subtoursMap[md.index0];
 			else if (sub->subtoursMap[i] > sub2Map)
 				sub->subtoursMap[i]--;
 		}
@@ -57,11 +58,13 @@ __uint128_t PatchingHeuristic(SubtoursData *sub, Instance *inst)
 	return cost;
 }
 
-static inline void findBestSubtourMerge(SubtoursData *sub, int subtoursCount, Instance *inst, int mergeIndexes[2], int *invertOrientation)
+static inline MergingData findBestSubtourMerge(SubtoursData *sub, int subtoursCount, Instance *inst)
 {
 	float *X = inst->X, *Y =inst->Y;
 
 	float min = INFINITY;
+
+	MergingData retVal = { .index0=0, .index1=0, .invertOrientation=false };
 
 	for (int subtourID = 0; subtourID < subtoursCount-1; subtourID++)
 	{
@@ -75,20 +78,20 @@ static inline void findBestSubtourMerge(SubtoursData *sub, int subtoursCount, In
 			while (sub->subtoursMap[first2] != subtourToCompare)
 				first2++;
 			
-			int finish1 = 0;
+			bool finish1 = false;
 			int i = first1;
 			while ((!finish1) || (i != sub->successors[first1]))
 			{
-				if (sub->successors[i] == first1) finish1 = -1;
+				if (sub->successors[i] == first1) finish1 = true;
 				
 				// successor of i'th node
 				int succI = sub->successors[i];
 
-				int finish2 = 0;
+				bool finish2 = false;
 				int j = first2;
 				while ((!finish2) || (j != sub->successors[first2]))
 				{
-					if (sub->successors[j] == first2) finish2 = -1;
+					if (sub->successors[j] == first2) finish2 = true;
 
 					// successor of j'th node
 					int succJ = sub->successors[j];
@@ -98,8 +101,8 @@ static inline void findBestSubtourMerge(SubtoursData *sub, int subtoursCount, In
 					if (cost < min)
 					{
 						min = cost;
-						mergeIndexes[0] = i; mergeIndexes[1] = j;
-						*invertOrientation = 0;
+						retVal.index0 = i; retVal.index1 = j;
+						retVal.invertOrientation = false;
 					}
 					
 					cost = computeEdgeCost(X[i], Y[i], X[j], Y[j], inst) + computeEdgeCost(X[succI], Y[succI], X[succJ], Y[succJ], inst);
@@ -107,8 +110,8 @@ static inline void findBestSubtourMerge(SubtoursData *sub, int subtoursCount, In
 					if (cost < min)
 					{
 						min = cost;
-						mergeIndexes[0] = i; mergeIndexes[1] = j;
-						*invertOrientation = 1;
+						retVal.index0 = i; retVal.index1 = j;
+						retVal.invertOrientation = true;
 					}
 
 					j = succJ;
@@ -117,5 +120,7 @@ static inline void findBestSubtourMerge(SubtoursData *sub, int subtoursCount, In
 			}
 		}
 	}
+
+	return retVal;
 }
 

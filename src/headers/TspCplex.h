@@ -99,16 +99,15 @@ void cvtSolutionToSuccessors(Solution *sol, int* successors);
 * @brief Set subtour elimination constraints given a solution that have more than one subtour.
 * @param coeffs Allocated memory of nCols doubles used to add SEC
 * @param indexes Allocated memory of nCols integers used to add SEC
-* @param cpx Cplex Environment and Linear Problem Pointers. Can be NULL if in a callback
-* @param context Contex of Callback if inside a Callback. Can be NULL if not in callback
+* @param cpx Cplex Environment and Linear Problem Pointers. Must be NULL if in a callback
+* @param cbData Callback Data. Must be NULL if not in callback
 * @param subData Pointer to Data realtive to subtours
 * @param iterNum Integer used for logging information and cplex constraints naming
 * @param inst Pointer to Instance of the problem
 * @param nCols Number of Columns/Variables defined by the problem
-* @param isBenders Flag to decide which function to use to add constraints to the problem
 * @result 0 if everything run smoothly, Cplex Error code is returned otherwise
 */
-int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, SubtoursData *subData, int iterNum, Instance *inst, int nCols, bool isBenders);
+int setSEC(double *coeffs, int *indexes, CplexData *cpx, CallbackData *cbData, SubtoursData *subData, int iterNum, Instance *inst, int nCols);
 
 /*!
 * @brief "Fix" a successors-based solution that presents subtours by merging them in the best possible way.

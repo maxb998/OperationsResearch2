@@ -92,7 +92,7 @@ Solution NearestNeighbor(Instance *inst, double timeLimit)
         if (inst->params.graspType == GRASP_ALMOSTBEST)
         {
             // y = a x^b.  a and b obtained by using linear regression on a dataset composed of 3264 runs
-            inst->params.graspChance = 0.68515 * pow(inst->nNodes, -0.6464);
+            inst->params.graspChance = exp(0.68515) * pow(inst->nNodes, -0.6464);
         }
         else
         { // TODO
