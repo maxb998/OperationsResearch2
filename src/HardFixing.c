@@ -91,7 +91,7 @@ void HardFixing(Solution *sol, double timeLimit)
         }
 
         #ifdef DEBUG
-        LOG(LOG_LVL_ALL, "HardFix: Bounds were fixed");
+        LOG(LOG_LVL_EVERYTHING, "HardFix: Bounds were fixed");
         #endif
 
         // update time limit
@@ -104,7 +104,7 @@ void HardFixing(Solution *sol, double timeLimit)
             throwError("HardFix: WarmStart failed with code %d", errCode);
 
         #ifdef DEBUG
-        LOG(LOG_LVL_ALL, "HardFix: WarmStart was set");
+        LOG(LOG_LVL_EVERYTHING, "HardFix: WarmStart was set");
         #endif
 
         // run cplex
@@ -113,7 +113,7 @@ void HardFixing(Solution *sol, double timeLimit)
             throwError("HardFix: CPXmipopt failed with code %d", errCode);
 
         #ifdef DEBUG
-        LOG(LOG_LVL_ALL, "HardFix: CPXmipopt finished");
+        LOG(LOG_LVL_EVERYTHING, "HardFix: CPXmipopt finished");
         #endif
 
         if (hfAlloc.fixAmount == 0)
@@ -276,7 +276,7 @@ static int smallestFix(HardfixAllocatedMem *hfAlloc)
     for (int i = 0; i < n; i++)
     {
         #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-            tourEdgesCost[i] = computeEdgeCost(inst->X[i], inst->Y[i], inst->X[successors[i]], y2 = inst->Y[successors[i]], inst);
+            tourEdgesCost[i] = computeEdgeCost(inst->X[i], inst->Y[i], inst->X[successors[i]], inst->Y[successors[i]], inst);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
             tourEdgesCost[i] = inst->edgeCostMat[ i * n + successors[i]];
         #endif

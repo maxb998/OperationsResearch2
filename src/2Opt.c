@@ -12,8 +12,10 @@
 typedef struct
 {
     Solution *sol;
-    float *X;
-    float *Y;
+    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+        float *X;
+        float *Y;
+    #endif
     float *costCache;
     int iter;
 } _2optData;
@@ -48,17 +50,17 @@ void apply2OptBestFix(Solution *sol)
     Instance *inst = sol->instance;
     int n = inst->nNodes;
 
-    float *X = NULL, *Y = NULL, *costCache = NULL;
+    float *costCache = NULL;
 
     sol->indexPath[n] = sol->indexPath[0];
 
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
 
         costCache = malloc((n + AVX_VEC_SIZE) * 3 * sizeof(float));
         if (costCache == NULL)
             throwError("apply2OptBestFix: Failed to allocate memory");
-        X = &costCache[n + AVX_VEC_SIZE];
-        Y = &X[n + AVX_VEC_SIZE];
+        float *X = &costCache[n + AVX_VEC_SIZE];
+        float *Y = &X[n + AVX_VEC_SIZE];
 
         for (int i = 0; i < n; i++) // fill X and Y
         {
@@ -74,7 +76,7 @@ void apply2OptBestFix(Solution *sol)
             Y[i] = INFINITY;
         }
 
-    #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
+    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
 
         costCache = malloc((n + AVX_VEC_SIZE) * sizeof(float));
         if (costCache == NULL)
@@ -85,7 +87,7 @@ void apply2OptBestFix(Solution *sol)
     // build cost cache
     for (int i = 0; i < n; i++)
         #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-            costCache[i] = computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i + 1]], inst->Y[sol->indexPath[i + 1]], inst);
+            costCache[i] = computeEdgeCost(X[i], Y[i], X[i + 1], Y[i + 1], inst);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
             costCache[i] = inst->edgeCostMat[sol->indexPath[i] * n + sol->indexPath[i+1]];
         #endif
@@ -93,12 +95,20 @@ void apply2OptBestFix(Solution *sol)
     for (int i = n + 1; i < n + AVX_VEC_SIZE; i++) // fill remaining slots with non-interfering values
         costCache[i] = INFINITY;
 
-    apply2OptBestFix_fastIteratively(sol, X, Y, costCache);
+    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+        apply2OptBestFix_fastIteratively(sol, X, Y, costCache);
+    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+        apply2OptBestFix_fastIteratively(sol, costCache);
+    #endif
 
     free(costCache);
 }
 
+#if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
 void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *costCache)
+#elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+void apply2OptBestFix_fastIteratively(Solution *sol, float *costCache)
+#endif
 {
     struct timespec timeStruct;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
@@ -122,16 +132,20 @@ void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *
         // check costCache
         for (int i = 0; i < n; i++)
             #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-                if ((costCache[i] != computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i + 1]], inst->Y[sol->indexPath[i + 1]], inst)) &&
-                    !((inst->params.mode == MODE_TABU) && (costCache[i] == -INFINITY)))
+                if ((costCache[i] != computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i + 1]], inst->Y[sol->indexPath[i + 1]], inst)) && !((inst->params.mode == MODE_TABU) && (costCache[i] == -INFINITY)))
                     throwError("apply2OptBestFix_fastIteratively: input not valid: costCache isn't coherent with solution at position %d", i);
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-                if (costCache[i] != inst->edgeCostMat[sol->indexPath[i] * n + sol->indexPath[i+1]])
+                if ((costCache[i] != inst->edgeCostMat[sol->indexPath[i] * n + sol->indexPath[i+1]]) && !((inst->params.mode == MODE_TABU) && (costCache[i] == -INFINITY)))
                     throwError("apply2OptBestFix_fastIteratively: input not valid: costCache isn't coherent with solution at position %d", i);
             #endif
     #endif
 
-    _2optData data = { .sol=sol, .X=X, .Y=Y, .costCache=costCache, .iter=0 };
+    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+        _2optData data = { .sol=sol, .X=X, .Y=Y, .costCache=costCache, .iter=0 };
+    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+        _2optData data = { .sol=sol, .costCache=costCache, .iter=0 };
+    #endif
+    
 
     bool notFinishedFlag = true;
     while (notFinishedFlag) // runs 2opt until no more moves are made in one iteration of 2opt
@@ -172,13 +186,9 @@ static inline void updateSolution(_2optData *data, _2optMoveData bestFix)
     //float oldEdge0Cost, oldEdge1Cost;
     float altEdge0Cost, altEdge1Cost;
 
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
         altEdge0Cost = computeEdgeCost(data->X[bestFix.edge0], data->Y[bestFix.edge0], data->X[bestFix.edge1], data->Y[bestFix.edge1], inst);
         altEdge1Cost = computeEdgeCost(data->X[bestFix.edge0+1], data->Y[bestFix.edge0+1], data->X[bestFix.edge1+1], data->Y[bestFix.edge1+1], inst);
-    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-        int *indexPath = sol->indexPath;
-        altEdge0Cost = computeEdgeCost(inst->X[indexPath[bestFix.edge0]], inst->Y[indexPath[bestFix.edge0]], inst->X[indexPath[bestFix.edge1]], inst->Y[indexPath[bestFix.edge1]], inst);
-        altEdge1Cost = computeEdgeCost(inst->X[indexPath[bestFix.edge0+1]], inst->Y[indexPath[bestFix.edge0+1]], inst->X[indexPath[bestFix.edge1+1]], inst->Y[indexPath[bestFix.edge1+1]], inst);
     #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
         int *indexPath = sol->indexPath;
         int n = inst->nNodes;
@@ -210,7 +220,7 @@ static inline void updateSolution(_2optData *data, _2optMoveData bestFix)
     while (smallID < bigID)
     {
         swapElems(sol->indexPath[smallID], sol->indexPath[bigID])
-        #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
             swapElems(data->X[smallID], data->X[bigID])
             swapElems(data->Y[smallID], data->Y[bigID])
         #endif
@@ -320,8 +330,8 @@ static inline _2optMoveData _2OptBestFix(_2optData *data)
             // check the combined weight other combination of edges
             float altEdgeWgt;
             #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-                altEdgeWgt = computeEdgeCost(inst->X[sol->indexPath[currFix.edge0]], inst->Y[sol->indexPath[currFix.edge0]], inst->X[sol->indexPath[currFix.edge1]], inst->Y[sol->indexPath[currFix.edge1]], inst) + 
-                             computeEdgeCost(inst->X[sol->indexPath[currFix.edge0 + 1]], inst->Y[sol->indexPath[currFix.edge0 + 1]], inst->X[sol->indexPath[currFix.edge1 + 1]], inst->Y[sol->indexPath[currFix.edge1 + 1]], inst);
+                altEdgeWgt = computeEdgeCost(data->X[currFix.edge0], data->Y[currFix.edge0], data->X[currFix.edge1], data->Y[currFix.edge1], inst) + 
+                             computeEdgeCost(data->X[currFix.edge0 + 1], data->Y[currFix.edge0 + 1], data->X[currFix.edge1 + 1], data->Y[currFix.edge1 + 1], inst);
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
                 altEdgeWgt = inst->edgeCostMat[(size_t)sol->indexPath[currFix.edge0] * (size_t)n + (size_t)sol->indexPath[currFix.edge1]] + 
                              inst->edgeCostMat[(size_t)sol->indexPath[currFix.edge1 + 1] * (size_t)n + (size_t)sol->indexPath[currFix.edge0 + 1]];

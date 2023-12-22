@@ -1,5 +1,6 @@
 #include "Tsp.h"
 
+#if (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
 
 #include <pthread.h>
 #include <time.h>
@@ -108,4 +109,5 @@ static void * computeDistMatThread(void* arg)
 
     pthread_exit(NULL);
 }
-    
+
+#endif

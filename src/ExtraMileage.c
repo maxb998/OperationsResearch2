@@ -99,6 +99,24 @@ Solution ExtraMileage(Instance *inst, double timeLimit)
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double startTime = cvtTimespec2Double(timeStruct);
 
+    if (inst->params.graspChance == -1)
+    {
+        if (inst->params.graspType == GRASP_ALMOSTBEST)
+        {
+            // y = a x^b.  a and b obtained by using linear regression on a dataset composed of 3264 runs
+            inst->params.graspChance = exp(2.0468) * pow(inst->nNodes, -0.73172);
+        }
+        else
+        {
+            // y = x^b.   b obtained by using linear regression on a dataset composed of 3264 runs
+            inst->params.graspChance = pow(inst->nNodes, -0.97415);
+        }
+        // cap at 0.5
+        if (inst->params.graspChance > 0.5)
+            inst->params.graspChance = 0.5;
+        LOG(LOG_LVL_NOTICE, "Selected Grasp chance: %lf", inst->params.graspChance);
+    }
+
     int nThreads = inst->params.nThreads;
     if ((inst->params.emInitOption == EM_INIT_FARTHEST_POINTS)  && (inst->params.graspType==GRASP_NONE))
         nThreads = 1;   // only one run possible, it makes no sense to use more than 1 core

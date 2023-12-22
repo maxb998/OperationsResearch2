@@ -28,8 +28,10 @@ typedef struct
     int *nodesToKick;
 
     Solution workingSol;
+    #if ((COMPUTATION_TYPE == COMPUTATE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
     float *X;
     float *Y;
+    #endif
     float *costCache;
 
 } ThreadSpecificData;
@@ -132,25 +134,26 @@ static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, un
     if (inst->params.vnsKickSize.Max > n)
         throwError("Vns maximum kick cannot be greater than the size of the instance, at most equal");
 
-    // allocate more memory if permutations are necessary
+    size_t memToAlloc_kick;
     if (PERMUTATION_THRESHOLD(inst->params.vnsKickSize.Max) < n)
-        thSpecific.nodesToKick = malloc(inst->params.vnsKickSize.Max * sizeof(int));
+        memToAlloc_kick = inst->params.vnsKickSize.Max * sizeof(int);
     else
-        thSpecific.nodesToKick = malloc((n - 1) * sizeof(int));
+        memToAlloc_kick = (n - 1) * sizeof(int);
+
+    size_t memToAlloc_other = n + AVX_VEC_SIZE;
+    #if ((COMPUTATION_TYPE == COMPUTATE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+        memToAlloc_other += (n + AVX_VEC_SIZE) * 2;
+    #endif
+    memToAlloc_other *= sizeof(float);
+
+    thSpecific.nodesToKick = malloc(memToAlloc_kick + memToAlloc_other);
     if (!thSpecific.nodesToKick)
         throwError("VariableNeighborhoodSearch -> initThreadSpecificData: Failed to allocate memory");
+    thSpecific.costCache = (float*)&thSpecific.nodesToKick[memToAlloc_kick / sizeof(int)];
     
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        thSpecific.X = malloc((n + AVX_VEC_SIZE) * 3 * sizeof(int));
-        if (!thSpecific.X)
-            throwError("VariableNeighborhoodSearch -> initThreadSpecificData: Failed to allocate memory");
+    #if ((COMPUTATION_TYPE == COMPUTATE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+        thSpecific.X = &thSpecific.costCache[n + AVX_VEC_SIZE];
         thSpecific.Y = &thSpecific.X[n + AVX_VEC_SIZE];
-        thSpecific.costCache = &thSpecific.Y[n + AVX_VEC_SIZE];
-    #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
-        thSpecific.X = thSpecific.Y = NULL;
-        thSpecific.costCache = malloc((n + AVX_VEC_SIZE) * sizeof(float));
-        if (!thSpecific.costCache)
-            throwError("VariableNeighborhoodSearch -> initThreadSpecificData: Failed to allocate memory");
     #endif
 
     return thSpecific;
@@ -161,14 +164,12 @@ static void destroyThreadSpecificData(ThreadSpecificData *thSpecific)
     destroySolution(&thSpecific->workingSol);
 
     free(thSpecific->nodesToKick);
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        free(thSpecific->X);
-    #else
-        free(thSpecific->costCache);
-    #endif
 
     thSpecific->nodesToKick = NULL;
-    thSpecific->X = thSpecific->Y = thSpecific->costCache = NULL;
+    thSpecific->costCache = NULL;
+    #if ((COMPUTATION_TYPE == COMPUTATE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+        thSpecific->X = thSpecific->Y = NULL;
+    #endif
 }
 
 static void *runVns(void *arg)
@@ -204,7 +205,11 @@ static void *runVns(void *arg)
 
         LOG(LOG_LVL_EVERYTHING, "runVns: [%d] solution has been kicked. Cost=%lf", cvtCost2Double(thSpecific->workingSol.cost));
 
-        apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->X, thSpecific->Y, thSpecific->costCache);
+        #if ((COMPUTATION_TYPE == COMPUTATE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+            apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->X, thSpecific->Y, thSpecific->costCache);
+        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+            apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->costCache);
+        #endif
 
         LOG(LOG_LVL_EVERYTHING, "runVns: [%d] solution has been optimized. Cost=%lf", thSpecific->iterCount, cvtCost2Double(thSpecific->workingSol.cost));
 
@@ -243,7 +248,7 @@ static void setupThSpecificOnBestSol(ThreadSpecificData *thSpecific)
     cloneSolution(thShared->bestSol, &thSpecific->workingSol);
     pthread_mutex_unlock(&thShared->mutex);
 
-    #if (COMPUTATION_TYPE == COMPUTATE_OPTION_AVX)
+    #if ((COMPUTATION_TYPE == COMPUTATE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
         for (int i = 0; i < n; i++)
         {
             thSpecific->X[i] = inst->X[thSpecific->workingSol.indexPath[i]];
@@ -259,11 +264,11 @@ static void setupThSpecificOnBestSol(ThreadSpecificData *thSpecific)
         }
     #endif
 
-    int *path = thShared->bestSol->indexPath;
     #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
         for (int i = 0; i < n; i++) // build cost cache
-            thSpecific->costCache[i] = computeEdgeCost(inst->X[path[i]], inst->Y[path[i]], inst->X[path[i+1]], inst->Y[path[i+1]], inst);
+            thSpecific->costCache[i] = computeEdgeCost(thSpecific->X[i], thSpecific->Y[i], thSpecific->X[i+1], thSpecific->Y[i+1], inst);
     #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+        int *path = thShared->bestSol->indexPath;
         for (int i = 0; i < n; i++) // build cost cache
             thSpecific->costCache[i] = inst->edgeCostMat[path[i] * n + path[i+1]];
     #endif
@@ -321,7 +326,7 @@ static void kick(ThreadSpecificData *thSpecific)
 
     // must save somewhere the first value since it will be overwritten and won't be recovered otherwise
     int first = path[nodesToKick[0]];
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+    #if ((COMPUTATION_TYPE == COMPUTATE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
         float firstX = thSpecific->X[nodesToKick[0]];
         float firstY = thSpecific->Y[nodesToKick[0]];
     #endif
@@ -332,12 +337,9 @@ static void kick(ThreadSpecificData *thSpecific)
         float edgeCost0, edgeCost1;
 
         // subtract old cost
-        #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        #if ((COMPUTATION_TYPE == COMPUTATE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
             edgeCost0 = computeEdgeCost(thSpecific->X[nodesToKick[i]-1], thSpecific->Y[nodesToKick[i]-1], thSpecific->X[nodesToKick[i]],   thSpecific->Y[nodesToKick[i]],   inst);
             edgeCost1 = computeEdgeCost(thSpecific->X[nodesToKick[i]],   thSpecific->Y[nodesToKick[i]],   thSpecific->X[nodesToKick[i]+1], thSpecific->Y[nodesToKick[i]+1], inst);
-        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-            edgeCost0 = computeEdgeCost(inst->X[path[nodesToKick[i]-1]], inst->Y[path[nodesToKick[i]-1]], inst->X[path[nodesToKick[i]]],   inst->Y[path[nodesToKick[i]]],   inst);
-            edgeCost1 = computeEdgeCost(inst->X[path[nodesToKick[i]]],   inst->Y[path[nodesToKick[i]]],   inst->X[path[nodesToKick[i]+1]], inst->Y[path[nodesToKick[i]+1]], inst);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
             edgeCost0 = inst->edgeCostMat[(size_t)path[nodesToKick[i]] * (size_t)n + (size_t)path[nodesToKick[i]-1]];
             edgeCost1 = inst->edgeCostMat[(size_t)path[nodesToKick[i]] * (size_t)n + (size_t)path[nodesToKick[i]+1]];
@@ -349,7 +351,7 @@ static void kick(ThreadSpecificData *thSpecific)
         if (i < currentKickMagnitude-1)
         {
             path[nodesToKick[i]] = path[nodesToKick[i+1]];
-            #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+            #if ((COMPUTATION_TYPE == COMPUTATE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
                 thSpecific->X[nodesToKick[i]] = thSpecific->X[nodesToKick[i+1]];
                 thSpecific->Y[nodesToKick[i]] = thSpecific->Y[nodesToKick[i+1]];
             #endif
@@ -357,19 +359,16 @@ static void kick(ThreadSpecificData *thSpecific)
         else
         {
             path[nodesToKick[i]] = first;
-            #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+            #if ((COMPUTATION_TYPE == COMPUTATE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
                 thSpecific->X[nodesToKick[i]] = firstX;
                 thSpecific->Y[nodesToKick[i]] = firstY;
             #endif
         }
 
         // add new cost
-        #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        #if ((COMPUTATION_TYPE == COMPUTATE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
             edgeCost0 = computeEdgeCost(thSpecific->X[nodesToKick[i]-1], thSpecific->Y[nodesToKick[i]-1], thSpecific->X[nodesToKick[i]],   thSpecific->Y[nodesToKick[i]],   inst);
             edgeCost1 = computeEdgeCost(thSpecific->X[nodesToKick[i]],   thSpecific->Y[nodesToKick[i]],   thSpecific->X[nodesToKick[i]+1], thSpecific->Y[nodesToKick[i]+1], inst);
-        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-            edgeCost0 = computeEdgeCost(inst->X[path[nodesToKick[i]-1]], inst->Y[path[nodesToKick[i]-1]], inst->X[path[nodesToKick[i]]],   inst->Y[path[nodesToKick[i]]],   inst);
-            edgeCost1 = computeEdgeCost(inst->X[path[nodesToKick[i]]],   inst->Y[path[nodesToKick[i]]],   inst->X[path[nodesToKick[i]+1]], inst->Y[path[nodesToKick[i]+1]], inst);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
             edgeCost0 = inst->edgeCostMat[(size_t)path[nodesToKick[i]] * (size_t)n + (size_t)path[nodesToKick[i]-1]];
             edgeCost1 = inst->edgeCostMat[(size_t)path[nodesToKick[i]] * (size_t)n + (size_t)path[nodesToKick[i]+1]];

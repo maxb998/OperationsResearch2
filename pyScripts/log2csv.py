@@ -1,25 +1,22 @@
 import os, argparse, re, csv, glob
 import numpy as np
 
-linesList = {
-    'cost' : ['Final cost = '],
-    'runtime' : ['Total runtime = '],
-    'itercount' : ['Total number of iterations: ']
-}
 
 class InputParams:
     inputDir = ''
     prefix = ''
     outFname = ''
-    mode = ''
     separator = ''
+    lineList = []
+    stopLineList = []
 
-    def __init__(self, inputDir:str, prefix:str, outFname:str, mode:str, separator:str):
+    def __init__(self, inputDir:str, prefix:str, outFname:str, separator:str, lineList:list, stopLineList:list):
         self.inputDir = inputDir
         self.prefix = prefix
         self.outFname = outFname
-        self.mode = mode
         self.separator = separator
+        self.lineList = lineList
+        self.stopLineList = stopLineList
 
 class FilenameExtractedData:
     tuningVar = ''
@@ -37,26 +34,27 @@ def argParser() -> InputParams:
     parser.add_argument('-I', '--inputDir', metavar='str', required=True, type=str, help='Directory containing all the log files to read')
     parser.add_argument('-P', '--prefix', metavar='str', required=True, type=str, help='Prefix present in all the files inside the directory')
     parser.add_argument('-O', '--outputFname', metavar='str', required=True, type=str, help='Output filename for the IterCount csv')
-    parser.add_argument('-M', '--mode', choices=['cost', 'runtime', 'itercount'], required=True, type=str, help='Type of informations to read/extract from the log into the csv file')
     parser.add_argument('-S', '--separator', choices=[';','space',','], default=';', required=False, type=str, help='Type of separator for csv file')
+    parser.add_argument('-L', '--lineNames', required=True, nargs='+', default=['Final cost = '], type=str, help='String contained in the line/lines that contain the number to extract')
+    parser.add_argument('--stopLines', required=False, nargs='+', default=[], type=str, help='String contained in the line/lines that will stop the reading of the file')
 
     args = parser.parse_args()
 
     if not os.path.isdir(args.inputDir):
-        print("Directory specified as --inputDir is not a directory")
+        print('Directory specified as --inputDir is not a directory')
         exit()
     
     if not args.outputFname.endswith('.csv'):
         args.outputFname += '.csv'
 
     if os.path.isfile(args.outputFname):
-        print("Output file already exists")
+        print('Output file already exists')
         exit()
     
     if args.separator == 'space':
         args.separator = ' '
 
-    return InputParams(args.inputDir, args.prefix, args.outputFname, args.mode, args.separator)
+    return InputParams(args.inputDir, args.prefix, args.outputFname, args.separator, args.lineNames, args.stopLines)
 
 def getInfoFromFilename(filename:str, params:InputParams) -> FilenameExtractedData:
     basename = os.path.basename(filename)
@@ -100,16 +98,22 @@ def getFilesWithDifferentSeedRuns(flist:list) -> [str, ...]:
 def readLogFile(filename:str, params:InputParams) -> float:
     logFile = open(filename)
 
+    stopRead = False
     retVal = -1.0
     for line in logFile:
-        for lineName in linesList[params.mode]:
+        for lineName in params.lineList:
             if lineName in line:
-                retVal = float(re.findall(r'[-+]?(?:\d*\.*\d+)', line[line.find(lineName):])[0])
+                retVal = float(re.findall(r'[-+]?(?:\d*\.*\d+)', line[line.find(lineName) + len(lineName):])[0])
+        for stopLine in params.stopLineList:
+            if stopLine in line:
+                stopRead = True
+        if stopRead:
+            break
 
     logFile.close()
     
     if retVal == -1.0:
-        print('Could not find ' + params.mode + ' in \"' + filename + '\"')
+        print('Could not find keystring in \"' + filename + '\"')
         exit()
     
     return retVal

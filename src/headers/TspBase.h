@@ -138,8 +138,9 @@ typedef struct
     float *X;
     float *Y;
 
-	// edge cost mat data
+	#if (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
 	float *edgeCostMat;
+	#endif
 
     Parameters params;
 } Instance;

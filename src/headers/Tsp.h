@@ -6,6 +6,8 @@
 
 #include "limits.h"
 
+//#define DEBUG
+
 //###################################################################################################################################
 // ARG_PARSER 
 //###################################################################################################################################
@@ -150,6 +152,7 @@ void argsort(float *arr, int *indexes, int n);
 */
 void sort(float *arr, int n);
 
+#if (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
 //###################################################################################################################################
 // COST_MATRIX
 //###################################################################################################################################
@@ -167,6 +170,8 @@ double computeCostMatrix(Instance *inst);
 * @attention Only use with very small Instances since the output is quadratic to the number of nodes
 */
 void printCostMatrix(Instance *inst);
+
+#endif
 
 //###################################################################################################################################
 // NEAREST_NEIGHBOR
@@ -208,11 +213,20 @@ void set2OptPerformanceBenchmarkLog(bool val);
 */
 void apply2OptBestFix(Solution *sol);
 
+
+#if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
 /*!
 * @brief  Same as apply2OptBestFix, but expects costCache array and, if using AVX, X and Y arrays all coherent with sol.indexPath. If not using AVX pass X = Y = NULL
 * @param sol Solution to optimize.
 */
 void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *costCache);
+#elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+/*!
+* @brief  Same as apply2OptBestFix, but expects costCache array and, if using AVX, X and Y arrays all coherent with sol.indexPath. If not using AVX pass X = Y = NULL
+* @param sol Solution to optimize.
+*/
+void apply2OptBestFix_fastIteratively(Solution *sol, float *costCache);
+#endif
 
 //###################################################################################################################################
 // TABU_SEARCH

@@ -24,7 +24,9 @@ Instance newInstance ()
     Instance d = {
         .nNodes = 0,
         .X = NULL, .Y = NULL,
+        #if (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
         .edgeCostMat = NULL,
+        #endif
         .params = {
             .inputFile = { 0 },
             .mode=MODE_NONE,
@@ -93,11 +95,14 @@ void destroyInstance (Instance *inst)
 {
     // memory has been allocated to X, no need to free Y
     free(inst->X);
-    free(inst->edgeCostMat);
-
+    
     inst->X = NULL;
     inst->Y = NULL;
-    inst->edgeCostMat = NULL;
+
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+        free(inst->edgeCostMat);
+        inst->edgeCostMat = NULL;
+    #endif
 }
 
 void destroySolution (Solution *sol)
