@@ -207,6 +207,7 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
         inst->params.graspChance = parseDouble(arg, "graspChance");
         if ((inst->params.graspChance < 0.) || (inst->params.graspChance > 1.))
             throwError("Grasp Chance must be inside the interval [0,1]");
+        break;
 
     case ARGP_NN_TRYALL:
         inst->params.nnFirstNodeOption = NN_FIRST_TRYALL;
