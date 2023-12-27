@@ -1,8 +1,8 @@
 .vscode/settings.json
 bin/debug/main
-bin/x64/main
+bin/exec/main
 obj/debug/*.o
-obj/x64/*.o
+obj/exec/*.o
 runs/*
 run
 !runs/*.tar.xz

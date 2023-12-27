@@ -10,15 +10,15 @@ HEADERS_DIR := src/headers/
 # build debug as default
 OBJ_DIR = obj/debug/
 BIN_DIR = bin/debug/
-CFLAGS = -Wall -g -c -mavx2 -Isrc/headers
+CFLAGS = -Wall -g -mavx2 -Isrc/headers
 LDFLAGS1 = -L/opt/ibm/ILOG/CPLEX_Studio2211/cplex/lib/x86-64_linux/static_pic/ -L/opt/concorde
 LDFLAGS2 = -lcplex -lm -l:concorde.a
 
 # condition to check value passed
 ifeq ($(MODE),exec)
-OBJ_DIR = obj/x64/
-BIN_DIR = bin/x64/
-CFLAGS = -O3 -c -mavx2 -march=native -mtune=native -Isrc/headers
+OBJ_DIR = obj/exec/
+BIN_DIR = bin/exec/
+CFLAGS = -O3 -mavx2 -march=native -mtune=native -Isrc/headers
 endif
 
 # separate files into the ones that use cplex and will need the extra compiler flag to find cplex headers and the ones which don't use it
@@ -50,12 +50,12 @@ $(OBJ_FILES_CPLEX): $(HEADER_FILES_CPLEX)
 build: $(BIN_DIR)main
 
 $(BIN_DIR)main: $(OBJ_FILES)
-	$(CC) $(LDFLAGS1) $(OBJ_FILES) -o $(BIN_DIR)main $(LDFLAGS2)
+	$(CC) $(CFLAGS) $(LDFLAGS1) $(OBJ_FILES) -o $(BIN_DIR)main $(LDFLAGS2)
 
 $(OBJ_DIR)%.o: $(SRC_DIR)%.c $(HEADER_FILES_NO_CPLEX)
-	$(CC) $(CFLAGS) $(CPLEX_HEADERS_COMPILER_FLAG) $(SRC_DIR)$(*F).c -o $@
+	$(CC) -c $(CFLAGS) $(CPLEX_HEADERS_COMPILER_FLAG) $(SRC_DIR)$(*F).c -o $@
 
 # delete all gcc output files
 clean:
-	rm -f bin/debug/main bin/x64/main
-	rm -f obj/debug/*.o obj/x64/*.o
+	rm -f bin/debug/main bin/exec/main
+	rm -f obj/debug/*.o obj/exec/*.o

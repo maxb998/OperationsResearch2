@@ -47,7 +47,7 @@
             "name": "Exec",
             "preLaunchTask": "Build Exec",
             "request": "launch",
-            "program": "${workspaceFolder}/bin/x64/main",
+            "program": "${workspaceFolder}/bin/exec/main",
             "args": [
                 "--file", "data/220-320/a280.tsp",
                 "--mode", "branch-cut",
