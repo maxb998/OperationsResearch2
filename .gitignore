@@ -5,4 +5,6 @@ obj/debug/*.o
 obj/exec/*.o
 runs/*
 run
+report/*
+!report/report.tex
 !runs/*.tar.xz

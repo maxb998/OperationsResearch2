@@ -1,0 +1,131 @@
+\documentclass[a4paper]{article}
+\usepackage{url}
+
+\begin{document}
+
+
+\begin{titlepage} % Suppresses displaying the page number on the title page and the subsequent page counts as page 1
+	\newcommand{\HRule}{\rule{\linewidth}{0.5mm}} % Defines a new command for horizontal lines, change thickness here
+	
+	\center % Centre everything on the page
+	
+	%------------------------------------------------
+	%	Headings
+	%------------------------------------------------
+	
+	\textsc{\LARGE University of Padua}\\[1.5cm] % Main heading such as the name of your university/college
+	
+	\textsc{\Large }\\[0.5cm] % Major heading such as course name
+	
+	\textsc{\large }\\[0.5cm] % Minor heading such as course title
+	
+	%------------------------------------------------
+	%	Title
+	%------------------------------------------------
+	
+	\HRule\\[0.4cm]
+	
+	{\huge\bfseries Traveling Salesman Solver \\ Operations Research 2}\\[0.4cm] % Title of your document
+	
+	\HRule\\[1.5cm]
+	
+	%------------------------------------------------
+	%	Author(s)
+	%------------------------------------------------
+	
+	\begin{minipage}{0.4\textwidth}
+		\begin{flushleft}
+			\large
+			\textit{Authors}\\
+			Massimo Boldrin \\
+            Leonardo Da Re
+		\end{flushleft}
+	\end{minipage}
+	~
+	\begin{minipage}{0.4\textwidth}
+		\begin{flushright}
+			\large
+			\textit{Student Number}\\
+			123456789 \\
+            987654321
+		\end{flushright}
+	\end{minipage}
+	
+	
+	\vfill\vfill\vfill % Position the date 3/4 down the remaining page
+	
+	{\large\today} % Date, change the \today to a set date if you want to be precise
+	
+	%------------------------------------------------
+	%	Logo
+	%------------------------------------------------
+	
+	%\vfill\vfill
+	%\includegraphics[width=0.2\textwidth]{placeholder.jpg}\\[1cm] % Include a department/university logo - this will require the graphicx package
+	 
+	%----------------------------------------------------------------------------------------
+	
+	\vfill % Push the date up 1/4 of the remaining page
+	
+\end{titlepage}
+
+
+\title{Traveling Salesman Problem Solver \\ Operations Research 2} % Report title
+
+\author{Massimo Boldrin, Leonardo Da Re}
+
+\date{\today}
+
+
+%\begin{document}
+
+%\maketitle
+
+\section{Introduction}
+
+The Traveling Salesman Problem (TSP) stands as an iconic challenge in the field of combinatorial optimization, captivating researchers for its practical significance and theoretical complexity. Originating in the early 20th century, the TSP involves determining the most efficient route for a salesman to visit a set of cities exactly once before returning to the starting point. Despite its seemingly straightforward premise, the exponential growth in potential routes as cities increase presents a formidable computational challenge.
+
+\subsection[short]{Complexity of TSP}
+
+The Traveling Salesman Problem (TSP) is renowned not only for its practical applications but also for its classification as an NP-hard problem, signifying its computational complexity and the absence of an efficient algorithm that guarantees an optimal solution within a reasonable timeframe.
+
+This classification as an NP-hard problem implies that as the number of cities to be visited increases, the computation required to find the optimal route escalates exponentially. The TSP's intricate nature lies in its combinatorial explosion: with nn cities, the number of possible routes to consider is $(n-1)!/2$, making exhaustive exploration unfeasible for large instances. This exponential growth propels the problem into the realm of computational intractability, where conventional computing methods struggle to provide optimal solutions in a reasonable time frame.
+
+Efforts to solve the TSP have focused on devising algorithms that offer approximate solutions or heuristics that navigate the expansive solution space more efficiently. While exact algorithms exist, such as branch-and-bound techniques, their scalability diminishes as the problem size increases. Heuristic approaches, on the other hand, aim to find near-optimal solutions within acceptable time frames by sacrificing guaranteed optimality for computational tractability.
+
+
+\section{Coding Approaches to Cost Function}
+
+When talking about TSP we refer to the cost as the distance between nodes. These type of distances are defined by TSPLIB(REFERENCE) and can be computed or precomputed and given as input inside the .tsp files. In our case all the instances will be complete graphs and we will only be considering the instances where the cost is not given but has to be computed. Having said this, there is more than one way to handle such costs. We explored three ways:
+
+\begin{enumerate}
+	\item \textbf{Basic Approach}: Compute the distance using the distance function each time the value is needed.
+	\item \textbf{Matrix Approach}: Compute only at the beginning a matrix of size $nNodes^2$ containing the costs of all possible pairing of nodes.
+	\item \textbf{AVX Approach}: Same as the basic approach but with the added bonus of using special vectorized instructions capable of computing multiple costs at once.
+\end{enumerate}
+
+\subsection[short]{Technical Comparison}
+
+Each one of the approaches described above has some advantages over the others as well as some disadvantages. Starting with the Basic Approach we can say that it is by itself the easiest one to implement since it only requires to call the cost function each time there is the need to know the cost of the edge between two nodes and this is the directed and most straightforward method. \\
+When looking at the second approach, the one that uses the matrix of costs, things don't actually get more complicated: after the construction of the matrix, one just need to access it at the specific coordinate in which there is the information needed. To get the right coordinate one must select as row and column the numbers of the two interested nodes. \\
+Finally the AVX method is actually the most complicated one. This is because AVX2 instructions are a special kind of instructions used by mothern cpus introduced in 2011\cite{avxWikipedia}. These instructions are SIMD instructions that allow to perform vectorized operations, or perform operations on vectors of memory up to 256 bit in the case of simple AVX\cite{avxWikipedia}.
+
+\subsection[short]{Performance Comparison}
+
+When considering the difference performance wise there are a few consideration to take into account, one of these is the fact that most of the instances considered by this paper have a complicated cost function that is very expensive in the algorithms described later in this paper. So theoretically speaking the fastest approach should be the one that uses the cost matrix since reading a value should be faster than recomputing it from scratch over and over. As we will see, this is not always the case. 
+
+
+
+
+
+\begin{thebibliography}{9}
+	\bibitem{tsplib}
+	\url{http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/}
+
+	\bibitem{avxWikipedia}
+	\url{https://en.wikipedia.org/wiki/Advanced_Vector_Extensions}
+
+\end{thebibliography}
+
+\end{document}
+
