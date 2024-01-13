@@ -1,4 +1,4 @@
-import os, argparse, re, csv, glob
+import os, argparse, re, glob
 import numpy as np
 
 
@@ -170,13 +170,11 @@ def main():
 
     csvfile = open(params.outFname, 'a')
 
-    csvwriter = csv.writer(csvfile, delimiter=params.separator)
-
     csvline = [str(len(tuningVarsList))]
     for var in tuningVarsList:
         csvline.append(var)
     csvline.append('TimeLimit')
-    csvwriter.writerow(csvline)
+    csvfile.write(params.separator.join(csvline) + '\n')
 
     while len(filelist) > 0:
 
@@ -211,8 +209,9 @@ def main():
                 if fnameInfo.tuningVar == tuningVarsList[i]:
                     csvline[i+1] = avgStr
 
-        print(csvline)
-        csvwriter.writerow(csvline)
+        csvLineStr = params.separator.join(csvline) + '\n'
+        print(csvLineStr, end='')
+        csvfile.write(csvLineStr)
     
     csvfile.close()
    
