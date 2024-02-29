@@ -18,7 +18,7 @@
 #define COMPUTE_OPTION_BASE 1 
 #define COMPUTE_OPTION_USE_COST_MATRIX 2
 
-#define COMPUTATION_TYPE COMPUTE_OPTION_AVX
+#define COMPUTATION_TYPE COMPUTE_OPTION_AVX0
 
 // Amount of "best" elements to save when using grasp almostbest option and NOT using COMPUTE_OPTION_AVX
 #define BASE_GRASP_BEST_SAVE_BUFFER_SIZE 4
@@ -119,6 +119,7 @@ typedef struct
 	enum HardFixPolicy hardFixPolicy;
     
 	bool use2Opt;
+	bool use3Opt;
 
     int randomSeed;
 	int nThreads; // if no value has been specified as argument its default value is the number of processors in the machine

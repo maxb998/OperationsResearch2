@@ -15,6 +15,7 @@ static void runExactSolver(Solution *sol, enum Mode mode, double tlim);
 static void runMatheuristic (Solution *sol, enum Mode mode, double tlim);
 
 static void run2Opt(Solution *sol);
+static void run3Opt(Solution *sol);
 
 
 int main (int argc, char *argv[])
@@ -82,6 +83,9 @@ int main (int argc, char *argv[])
 
     if (inst.params.use2Opt)
         run2Opt(&sol);
+    
+    if (inst.params.use3Opt)
+        run3Opt(&sol);
 
     if (inst.params.showPlot)
         plotSolution(&sol, "1920,1080", "green", "black", 1, false);
@@ -257,6 +261,21 @@ static void run2Opt(Solution *sol)
     set2OptPerformanceBenchmarkLog(false);
 
     printf("2Opt finished in %lf seconds\n", sol->execTime - startTime);
+    printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));
+    printf(SEPARATOR_STR"\n");
+}
+
+static void run3Opt(Solution *sol)
+{
+    printf(SEPARATOR_STR);
+    printf("3Opt starting...\n");
+
+    double startTime = sol->execTime;
+    set3OptPerformanceBenchmarkLog(true);
+    apply3OptBestFix(sol);
+    set3OptPerformanceBenchmarkLog(false);
+
+    printf("3Opt finished in %lf seconds\n", sol->execTime - startTime);
     printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));
     printf(SEPARATOR_STR"\n");
 }

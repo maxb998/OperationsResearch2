@@ -228,6 +228,37 @@ void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *
 void apply2OptBestFix_fastIteratively(Solution *sol, float *costCache);
 #endif
 
+
+//###################################################################################################################################
+// 3OPT
+//###################################################################################################################################
+/*!
+* @brief Set the option to view performance related statistics on 2opt runs
+# @param val True to enable, false to disable
+*/
+void set3OptPerformanceBenchmarkLog(bool val);
+
+/*!
+* @brief  Applies 2Opt solution optimizer to sol.
+* @param sol Solution to optimize.
+*/
+void apply3OptBestFix(Solution *sol);
+
+
+#if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+/*!
+* @brief  Same as apply2OptBestFix, but expects costCache array and, if using AVX, X and Y arrays all coherent with sol.indexPath. If not using AVX pass X = Y = NULL
+* @param sol Solution to optimize.
+*/
+void apply3OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *costCache, int *sectionCopy);
+#elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+/*!
+* @brief  Same as apply2OptBestFix, but expects costCache array and, if using AVX, X and Y arrays all coherent with sol.indexPath. If not using AVX pass X = Y = NULL
+* @param sol Solution to optimize.
+*/
+void apply3OptBestFix_fastIteratively(Solution *sol, float *costCache, int *sectionCopy);
+#endif
+
 //###################################################################################################################################
 // TABU_SEARCH
 //###################################################################################################################################

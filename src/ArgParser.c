@@ -96,7 +96,7 @@ enum argpKeys{
     ARGP_MODE='m',
     ARGP_TLIM='t',
 
-    ARGP_GRASP_MODE=257,
+    ARGP_GRASP_MODE=300,
     ARGP_GRASP_CHANCE,
     ARGP_NN_TRYALL,
     ARGP_EM_FARTHEST,
@@ -112,8 +112,9 @@ enum argpKeys{
     ARGP_HARDFIX_SMALLEST,
 
     ARGP_2OPT='2',
+    ARGP_3OPT='3',
 
-    ARGP_SEED,
+    ARGP_SEED=299,
     ARGP_NTHREADS='j',
     ARGP_ROUND='r',
     ARGP_PLOT='p',
@@ -156,6 +157,7 @@ void argParse(Instance * inst, int argc, char *argv[])
         { .name="hardfixSmallest", .key=ARGP_HARDFIX_SMALLEST, .arg=NULL, .flags=0, .doc="Specify to make Hard Fixing fix only edges with smallest cost instead of fixing random edges\n", .group=4 },
 
         { .name="2opt", .key=ARGP_2OPT, .arg=NULL, .flags=0, .doc="Specify to use 2-opt at the end of the selected heuristic\n", .group=5 },
+        { .name="3opt", .key=ARGP_3OPT, .arg=NULL, .flags=0, .doc="Specify to use 3-opt at the end of the selected heuristic\n", .group=5 },
 
         { .name="seed", .key=ARGP_SEED, .arg="UINT", .flags=0, .doc="Random Seed [0,MAX_INT32] to use as random seed for the current run. If -1 seed will be random\n", .group=6 },
         { .name="threads", .key=ARGP_NTHREADS, .arg="UINT", .flags=0, .doc="Maximum number of threads to use. If not specified gets maximum automatically\n", .group=6 },
@@ -256,6 +258,10 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
 
     case ARGP_2OPT:
         inst->params.use2Opt = true;
+        break;
+    
+    case ARGP_3OPT:
+        inst->params.use3Opt = true;
         break;
 
     case ARGP_SEED:
