@@ -46,38 +46,46 @@ int main (int argc, char *argv[])
     #endif
 
     // initializing pointers to null to avoid possible errors on destruction of sol at the end of main
-    Solution sol = { .indexPath = NULL };
+    Solution sol = { .instance=&inst, .indexPath = NULL };
 
     double tlim = inst.params.tlim;
     enum Mode m = inst.params.mode;
 
-    if ((m == MODE_NN) || (m == MODE_EM) || (m == MODE_GENETIC))
+    if (m & (MODE_NN | MODE_EM))
     {
         sol = runHeuristic(&inst, m, tlim);
     }
-    else if ((m >= MODE_TABU) && (m <= MODE_ANNEALING))
+    else if (m & (MODE_TABU | MODE_VNS | MODE_ANNEALING))
     {
-        sol = runHeuristic(&inst, inst.params.metaheurInitMode, tlim * METAHEUR_INIT_RATIO );
+        sol = runHeuristic(&inst, inst.params.metaheurInitMode, tlim * METAHEUR_INIT_RATIO);
         run2Opt(&sol);
         runMetaheuristic(&sol, m, tlim - sol.execTime);
     }
+    else if (m & MODE_GENETIC)
+    {
+        runMetaheuristic(&sol, MODE_GENETIC, tlim);
+    }
     else
     {
-        if (inst.params.matheurInitMode <= MODE_EM)
+        if (inst.params.matheurInitMode & (MODE_NN | MODE_EM))
         {
             sol = runHeuristic(&inst, inst.params.matheurInitMode, tlim * MATHEUR_INIT_RATIO);
             run2Opt(&sol);
         }
-        else 
+        else if (inst.params.matheurInitMode & (MODE_TABU | MODE_VNS | MODE_ANNEALING))
         {
             sol = runHeuristic(&inst, inst.params.metaheurInitMode, tlim * METAHEUR_INIT_RATIO);
             runMetaheuristic(&sol, inst.params.matheurInitMode, tlim * MATHEUR_INIT_RATIO);
             run2Opt(&sol);
         }
+        else // if (m & MODE_GENETIC)
+        {
+            runMetaheuristic(&sol, MODE_GENETIC, tlim * MATHEUR_INIT_RATIO);
+        }
 
-        if (m <= MODE_BRANCH_CUT)
+        if (m & (MODE_BENDERS | MODE_BRANCH_CUT))
             runExactSolver(&sol, m, tlim - sol.execTime);
-        else
+        else // if (m & (MODE_HARDFIX | MODE_LOCAL_BRANCHING))
             runMatheuristic(&sol, m, tlim - sol.execTime);
     }
 
@@ -132,15 +140,6 @@ static Solution runHeuristic(Instance *inst, enum Mode mode, double tlim)
         printf("Solution Cost = %lf\n", cvtCost2Double(sol.cost));
         break;
 
-    case MODE_GENETIC:
-        printf("Genetic Search Starting...\n");
-
-        sol = GeneticAlgorithm(inst, tlim);
-
-        printf("Genetic Search finished in %lf second\n", sol.execTime);
-        printf("Solution Cost = %lf\n", cvtCost2Double(sol.cost));
-        break;
-
     default: throwError("runHeuristic: specified mode must be in [MODE_NN, MODE_EM]"); break;
     }
 
@@ -181,6 +180,15 @@ static void runMetaheuristic(Solution *sol, enum Mode mode, double tlim)
         printf("Simulated Annealing finished in %lf second\n", sol->execTime - startTime);
         printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));
         break;
+    case MODE_GENETIC:
+        printf("Genetic Search Starting...\n");
+
+        *sol = GeneticAlgorithm(sol->instance, tlim);
+
+        printf("Genetic Search finished in %lf second\n", sol->execTime);
+        printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));
+        break;
+
 
     default: throwError("runMetaheuristic: specified mode must be in [MODE_TABU, MODE_VNS, MODE_ANNEALING]"); break;
     }

@@ -124,6 +124,7 @@ enum argpKeys{
 
 error_t argpParser(int key, char *arg, struct argp_state *state);
 
+static void parseModeOption(char *arg, enum Mode *savePtr, const char **optionsSet, const int from, const int to, const char *optionName);
 static void parseEnumOption(char *arg, int *savePtr, const char **optionsSet, const int from, const int to, const char *optionName);
 
 static int parseUint(char *arg, char expectedEndChr, const char *paramName);
@@ -192,7 +193,7 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
         break;
 
     case ARGP_MODE:
-        parseEnumOption(arg, &inst->params.mode, modeStrings, 0, MODES_COUNT, "mode");
+        parseModeOption(arg, &inst->params.mode, modeStrings, 0, MODES_COUNT, "mode");
         break;
 
     case ARGP_TLIM:
@@ -249,7 +250,7 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
         break;
 
     case ARGP_CPLEX_INIT_MODE:
-        parseEnumOption(arg, (int*)&inst->params.matheurInitMode, modeStrings, 0, HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT, "cplexInit");
+        parseModeOption(arg, &inst->params.matheurInitMode, modeStrings, 0, HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT, "cplexInit");
         break;
 
     case ARGP_HARDFIX_SMALLEST:
@@ -299,6 +300,20 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
     }
 
     return 0;
+}
+
+static void parseModeOption(char *arg, enum Mode *savePtr, const char **optionsSet, const int from, const int to, const char *optionName)
+{
+    for (int i = from; i < to; i++)
+    {
+        if (strcmp(arg, optionsSet[i]) == 0)
+        {
+            *savePtr = (int)powl(2, i);
+            return;
+        }
+    }
+    
+    throwError("%s: argument not valid", optionName);
 }
 
 static void parseEnumOption(char *arg, int *savePtr, const char **optionsSet, const int from, const int to, const char *optionName)
@@ -382,7 +397,7 @@ void printInfo(Instance *inst)
     // input file
     printf("\t" "Input File/Problem: \"%s\"\n", p->inputFile);
     // mode
-    printf("\t" "Current running mode is %s\n", modeStrings[p->mode]);
+    printf("\t" "Current running mode is %s\n", modeStrings[(int)log2l(p->mode)]);
 
     // grasp
     if (p->graspType == GRASP_NONE)
@@ -400,10 +415,10 @@ void printInfo(Instance *inst)
     
     // metaheuristics modes
     if (p->mode >= HEURISTICS_MODES_COUNT && (p->mode < HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT || p->matheurInitMode >= HEURISTICS_MODES_COUNT))
-        printf("\tMetaheuristics initialization set to: %s\n", modeStrings[p->metaheurInitMode]);
+        printf("\tMetaheuristics initialization set to: %s\n", modeStrings[(int)log2l(p->metaheurInitMode)]);
     // matheuristics modes
     if (p->mode >= HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT)
-        printf("\tMatheuristics initialization set to: %s\n", modeStrings[p->matheurInitMode]);
+        printf("\tMatheuristics initialization set to: %s\n", modeStrings[(int)log2l(p->matheurInitMode)]);
 
     // nn options
     if (p->mode == MODE_NN || (p->mode >= HEURISTICS_MODES_COUNT  && (p->metaheurInitMode == MODE_NN && p->matheurInitMode == MODE_EM)) || 

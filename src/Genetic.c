@@ -5,8 +5,8 @@
 #include "unistd.h" // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 #include "stdio.h"
 
-//#define DEBUG
-
+#define _2OPT_PROBABILITY 0 //0.01
+#define _3OPT_PROBABILITY 0 //0.01
 #define N_PERMUTATIONS(inst) inst->nNodes * 2
 
 #define POPULATION_SIZE(inst) inst->params.geneticParams.populationSize
@@ -22,7 +22,7 @@ typedef struct
 typedef struct
 {
 
-    Solution *bestSol;
+    Solution bestSol;
     pthread_mutex_t mutex;
 
     double timeLimit;
@@ -35,18 +35,14 @@ typedef struct
 
     Solution *baseAddr; // to keep in order to perform the free op
 
-    Solution **population;
-    Solution **crossovers;
-    Solution **mutations;
-    Solution **newerSols;
+    Solution *population;
+    Solution *crossovers;
+    Solution *mutations;
+    Solution *newerSols;
 
     AdiacencyList *adiacencyMatrix;
 
-    // used to speedup cost calculation(avoid using gather function in avx)
-    #if COMPUTATION_TYPE == COMPUTE_AVX
-        float *X;
-        float *Y;
-    #endif
+    int *rejectionProbability;
 
     unsigned int rndState;
 
@@ -54,7 +50,7 @@ typedef struct
 } ThreadSpecificData;
 
 
-static inline ThreadSharedData initThreadSharedData(double timeLimit);
+static inline ThreadSharedData initThreadSharedData(Instance *inst, double timeLimit);
 static inline void destroyThreadSharedData(ThreadSharedData *thShared);
 static inline ThreadSpecificData initThreadSpecificData(Instance *inst, ThreadSharedData *thShared, unsigned int rndState);
 static inline void destroyThreadSpecificData(ThreadSpecificData *thSpecific);
@@ -77,6 +73,8 @@ static inline void mutateSolution(Solution *sol, unsigned int *rndState);
 static inline float fitness(ThreadSpecificData *thSpecific, Solution *sol);
 // Checks whether s1 is a duplicate of s0 and return if that is the case (ASSUMES PATH STARTS AND ENDS WITH ELEMENT 0)
 static inline bool isSolDuplicate(Solution *s0, Solution *s1);
+// "Natural selection" select which solutions will be in the next generation
+static inline void naturalSelection(ThreadSpecificData *thSpecific);
 
 
 Solution GeneticAlgorithm(Instance *inst, double timeLimit)
@@ -91,7 +89,7 @@ Solution GeneticAlgorithm(Instance *inst, double timeLimit)
         srand(inst->params.randomSeed);
     #endif
 
-    ThreadSharedData thShared = initThreadSharedData(startTime + timeLimit);
+    ThreadSharedData thShared = initThreadSharedData(inst, startTime + timeLimit);
 
     ThreadSpecificData thSpecific[MAX_THREADS];
     pthread_t threads[MAX_THREADS];
@@ -110,7 +108,7 @@ Solution GeneticAlgorithm(Instance *inst, double timeLimit)
         iterCount += thSpecific[i].iterCount;
     }
 
-    cloneSolution(thShared.bestSol, &sol);
+    cloneSolution(&thShared.bestSol, &sol);
 
     for (int i = 0; i < inst->params.nThreads; i++)
         destroyThreadSpecificData(&thSpecific[i]);
@@ -129,15 +127,17 @@ Solution GeneticAlgorithm(Instance *inst, double timeLimit)
     return sol;
 }
 
-static inline ThreadSharedData initThreadSharedData(double timeLimit)
+static inline ThreadSharedData initThreadSharedData(Instance *inst, double timeLimit)
 {
-    ThreadSharedData thShared = { .timeLimit=timeLimit, .bestSol=NULL };
+    ThreadSharedData thShared = { .timeLimit=timeLimit, .bestSol=newSolution(inst) };
+    *(float*)&thShared.bestSol.cost = INFINITY;
     pthread_mutex_init(&thShared.mutex, NULL);
     return thShared;
 }
 
 static inline void destroyThreadSharedData(ThreadSharedData *thShared)
 {
+    destroySolution(&thShared->bestSol);
     pthread_mutex_destroy(&thShared->mutex);
 }
 
@@ -148,33 +148,17 @@ static inline ThreadSpecificData initThreadSpecificData(Instance *inst, ThreadSh
     // single malloc = more localization for data = more performance
     int fullSize = POPULATION_SIZE(inst) + CROSSOVER_AMOUNT(inst) + MUTATION_AMOUNT(inst) + REINTRO_AMOUNT(inst);
     int adiacencyMatrixSize = inst->nNodes * sizeof(AdiacencyList);
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        thSpecific.baseAddr = malloc(fullSize * (sizeof(Solution) + sizeof(Solution*)) + adiacencyMatrixSize + 2 * (inst->nNodes + AVX_VEC_SIZE) * sizeof(float));
-    #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
-        thSpecific.baseAddr = malloc(fullSize * (sizeof(Solution) + sizeof(Solution*)) + adiacencyMatrixSize);
-    #endif
+
+    thSpecific.baseAddr = malloc(fullSize * (sizeof(Solution) + sizeof(int)) + adiacencyMatrixSize); //  + sizeof(Solution*)
     if (!thSpecific.baseAddr)
         throwError("Genetic-initThreadSpecificData: Failed to allocate memory");
     
-    thSpecific.population = (Solution**)&thSpecific.baseAddr[fullSize];
+    thSpecific.population = thSpecific.baseAddr;
     thSpecific.crossovers = &thSpecific.population[POPULATION_SIZE(inst)];
     thSpecific.mutations = &thSpecific.crossovers[CROSSOVER_AMOUNT(inst)];
     thSpecific.newerSols = &thSpecific.mutations[MUTATION_AMOUNT(inst)];
     thSpecific.adiacencyMatrix = (AdiacencyList*)&thSpecific.newerSols[REINTRO_AMOUNT(inst)];
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        thSpecific.X = (float*)&thSpecific.adiacencyMatrix[inst->nNodes];
-        thSpecific.Y = &thSpecific.X[inst->nNodes + AVX_VEC_SIZE];
-    #endif
-
-    // assign arbitrarty initial position for each Solution
-    for (int i = 0; i < POPULATION_SIZE(inst); i++)
-        thSpecific.population[i] = &thSpecific.baseAddr[i];
-    for (int i = 0; i < CROSSOVER_AMOUNT(inst); i++)
-        thSpecific.crossovers[i] = &thSpecific.baseAddr[i + POPULATION_SIZE(inst)];
-    for (int i = 0; i < MUTATION_AMOUNT(inst); i++)
-        thSpecific.mutations[i] = &thSpecific.baseAddr[i + POPULATION_SIZE(inst) + CROSSOVER_AMOUNT(inst)];
-    for (int i = 0; i < REINTRO_AMOUNT(inst); i++)
-        thSpecific.newerSols[i] = &thSpecific.baseAddr[i + POPULATION_SIZE(inst) + CROSSOVER_AMOUNT(inst) + MUTATION_AMOUNT(inst)];
+    thSpecific.rejectionProbability = (int*)&thSpecific.adiacencyMatrix[inst->nNodes];
     
     for (int i = 0; i < fullSize; i++)
         thSpecific.baseAddr[i] = newSolution(inst);
@@ -208,13 +192,6 @@ static void * runGenetic(void *arg)
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double currentTime = cvtTimespec2Double(timeStruct);
 
-    if (thShared->bestSol == NULL)
-    {
-        pthread_mutex_lock(&thShared->mutex);
-        thShared->bestSol = thSpecific->baseAddr;
-        pthread_mutex_unlock(&thShared->mutex);
-    }
-
     // setup all solutions to contain each node in indexPath (needed to spare time when doing permutations)
     for (int i = 0; i < POPULATION_SIZE(inst) + CROSSOVER_AMOUNT(inst) + MUTATION_AMOUNT(inst) + REINTRO_AMOUNT(inst); i++)
         for (int j = 0; j < n; j++)
@@ -223,9 +200,9 @@ static void * runGenetic(void *arg)
     // generate first population
     for (int i = 0; i < POPULATION_SIZE(inst); i++)
     {
-        thSpecific->population[i]->indexPath[n] = 0;
-        permuteSolution(thSpecific->population[i], &thSpecific->rndState);
-        *(float*)&thSpecific->population[i]->cost = fitness(thSpecific, thSpecific->population[i]);
+        thSpecific->population[i].indexPath[n] = 0;
+        permuteSolution(&thSpecific->population[i], &thSpecific->rndState);
+        *(float*)&thSpecific->population[i].cost = fitness(thSpecific, &thSpecific->population[i]);
     }
 
     Solution *localBestSol = thSpecific->baseAddr;
@@ -234,7 +211,7 @@ static void * runGenetic(void *arg)
         #ifdef DEBUG
             for (int i = 0; i < POPULATION_SIZE(inst)-1; i++)
                 for (int j = i+1; j < POPULATION_SIZE(inst); j++)
-                    if (isSolDuplicate(thSpecific->population[i], thSpecific->population[j]))
+                    if (isSolDuplicate(&thSpecific->population[i], &thSpecific->population[j]))
                         throwError("There are duplicates inside population at iteration %d: population[%d] and population[%d]", thSpecific->iterCount, i, j);
         #endif
 
@@ -245,9 +222,9 @@ static void * runGenetic(void *arg)
             while (index0 == index1)
                 index1 = genRandom(&thSpecific->rndState, 0, POPULATION_SIZE(inst));
 
-            EdgeRecombinationCrossover(thSpecific->crossovers[i], thSpecific->population[index0], thSpecific->population[index1], thSpecific);
+            EdgeRecombinationCrossover(&thSpecific->crossovers[i], &thSpecific->population[index0], &thSpecific->population[index1], thSpecific);
 
-            *(float*)&thSpecific->crossovers[i]->cost = fitness(thSpecific, thSpecific->crossovers[i]);
+            *(float*)&thSpecific->crossovers[i].cost = fitness(thSpecific, &thSpecific->crossovers[i]);
         }
 
         // mutate solutions
@@ -255,61 +232,58 @@ static void * runGenetic(void *arg)
         {
             int index = genRandom(&thSpecific->rndState, 0, POPULATION_SIZE(inst));
             
-            cloneSolution(thSpecific->population[index], thSpecific->mutations[i]);
-            mutateSolution(thSpecific->mutations[i], &thSpecific->rndState);
+            cloneSolution(&thSpecific->population[index], &thSpecific->mutations[i]);
+            mutateSolution(&thSpecific->mutations[i], &thSpecific->rndState);
         }
 
         // generate new solutions as reintroduction
         for (int i = 0; i < REINTRO_AMOUNT(inst); i++)
         {
-            permuteSolution(thSpecific->newerSols[i], &thSpecific->rndState);
-            *(float*)&thSpecific->newerSols[i]->cost = fitness(thSpecific, thSpecific->newerSols[i]);
+            permuteSolution(&thSpecific->newerSols[i], &thSpecific->rndState);
+            *(float*)&thSpecific->newerSols[i].cost = fitness(thSpecific, &thSpecific->newerSols[i]);
         }
         
-        // "Natural selection" (move the best inside population)
-        // exploit the memory allocation and access mutations and newSols directly by going out of bounds on crossovers(a bit tricky but less code)
-        for (int j = 0; j < CROSSOVER_AMOUNT(inst) + MUTATION_AMOUNT(inst) + REINTRO_AMOUNT(inst); j++)
-        {
-            int populIndexWorst = 0;
-            for (int i = 1; i < POPULATION_SIZE(inst); i++)
-                if (*(float *)&thSpecific->population[i]->cost > *(float *)&thSpecific->population[populIndexWorst]->cost)
-                    populIndexWorst = i;
-            
-            bool alreadyInPopulation = false;
-            for (int i = 0; i < POPULATION_SIZE(inst); i++)
-            {
-                if (isSolDuplicate(thSpecific->population[i], thSpecific->crossovers[j]))
-                {
-                    alreadyInPopulation = true;
-                    break;
-                }
-            }
-
-            if ((*(float *)&thSpecific->population[populIndexWorst]->cost > *(float *)&thSpecific->crossovers[j]->cost) && !alreadyInPopulation)
-                swapElems(thSpecific->population[populIndexWorst], thSpecific->crossovers[j])
-        }
+        naturalSelection(thSpecific);
         
         #ifdef DEBUG
+            for (int i = 0; i < POPULATION_SIZE(inst) + CROSSOVER_AMOUNT(inst) + MUTATION_AMOUNT(inst) + REINTRO_AMOUNT(inst); i++)
+                if ((*(float*)&thSpecific->population[i].cost < 0) || (*(float*)&thSpecific->population[i].cost == INFINITY))
+                    throwError("Cost of Solution[%d] is %f", i, *(float*)&thSpecific->population[i].cost);
+            
             for (int i = 0; i < POPULATION_SIZE(inst); i++)
             {
-                float recompCost = fitness(thSpecific, thSpecific->population[i]);
-                if (abs(*(int*)&recompCost - *(int*)&thSpecific->population[i]->cost) > 7)
-                    throwError("Solution[%d] cost does not match: %f vs recomputed %f", i, *(float*)&thSpecific->population[i]->cost, recompCost);
+                float recompCost = fitness(thSpecific, &thSpecific->population[i]);
+                if (abs(*(int*)&recompCost - *(int*)&thSpecific->population[i].cost) > 7) // allow some tolerance on float approximations
+                    throwError("Solution[%d] cost does not match: %f vs recomputed %f", i, *(float*)&thSpecific->population[i].cost, recompCost);
             }
         #endif
+        
+        for (int i = 0; i < POPULATION_SIZE(inst); i++)
+        {
+            if (rand_r(&thSpecific->rndState) < (int)(_2OPT_PROBABILITY * RAND_MAX))
+            {
+                thSpecific->population[i].cost = computeSolutionCost(&thSpecific->population[i]);
+                apply2OptBestFix(&thSpecific->population[i]);
+
+                if (rand_r(&thSpecific->rndState) < (int)(_3OPT_PROBABILITY * RAND_MAX))
+                    apply3OptBestFix(&thSpecific->population[i]);
+                    
+                *(float*)&thSpecific->population[i].cost = fitness(thSpecific, &thSpecific->population[i]);
+            }
+        }
 
         thSpecific->iterCount++;
 
-        for (int i = 0; i < POPULATION_SIZE(inst); i++)
-            if (*(float*)&thSpecific->population[i]->cost < *(float*)&localBestSol->cost)
-                localBestSol = thSpecific->population[i];
-        if (*(float*)&localBestSol->cost < *(float*)&thShared->bestSol->cost)
+        for (int i = 0; i < POPULATION_SIZE(inst) + CROSSOVER_AMOUNT(inst) + MUTATION_AMOUNT(inst) + REINTRO_AMOUNT(inst); i++)
+            if (*(float*)&thSpecific->population[i].cost < *(float*)&localBestSol->cost)
+                localBestSol = &thSpecific->population[i];
+        if (*(float*)&localBestSol->cost < *(float*)&thShared->bestSol.cost)
         {
             pthread_mutex_lock(&thShared->mutex);
-            if (*(float*)&localBestSol->cost < *(float*)&thShared->bestSol->cost)
+            if (*(float*)&localBestSol->cost < *(float*)&thShared->bestSol.cost)
             {
-                thShared->bestSol = localBestSol;
-                LOG(LOG_LVL_LOG, "Found better solution at iteration %7d with approximate cost: \t%f", thSpecific->iterCount, *(float*)&thShared->bestSol->cost);
+                cloneSolution(localBestSol, &thShared->bestSol);
+                LOG(LOG_LVL_LOG, "Found better solution at iteration %7d with approximate cost: \t%f", thSpecific->iterCount, *(float*)&thShared->bestSol.cost);
             }
             pthread_mutex_unlock(&thShared->mutex);
         }
@@ -543,23 +517,14 @@ static inline void mutateSolution(Solution *sol, unsigned int *rndState)
 static inline float fitness(ThreadSpecificData *thSpecific, Solution *sol)
 {
     Instance *inst = sol->instance;
-    for (int i = 0; i < inst->nNodes; i++)
-    {
-        thSpecific->X[i] = inst->X[sol->indexPath[i]];
-        thSpecific->Y[i] = inst->Y[sol->indexPath[i]];
-    }
-    // set last elements in order to not bother with avx alignment
-    for (int i = inst->nNodes; i < inst->nNodes + AVX_VEC_SIZE; i++)
-    {
-        thSpecific->X[i] = thSpecific->X[0];
-        thSpecific->Y[i] = thSpecific->Y[0];
-    }
 
     __m256 costSumVec = _mm256_setzero_ps();
-    for (int i = 0; i < inst->nNodes; i+=AVX_VEC_SIZE)
+    __m256i permuteVec = _mm256_setr_epi32(1,2,3,4,5,6,7,7);
+    for (int i = 0; i < inst->nNodes - (AVX_VEC_SIZE-2); i+=(AVX_VEC_SIZE-1))
     {
-        __m256 x1 = _mm256_loadu_ps(&thSpecific->X[i]), y1 = _mm256_loadu_ps(&thSpecific->Y[i]);
-        __m256 x2 = _mm256_loadu_ps(&thSpecific->X[i+1]), y2 = _mm256_loadu_ps(&thSpecific->Y[i+1]);
+        __m256i index = _mm256_loadu_si256((__m256i_u*)&sol->indexPath[i]);
+        __m256 x1 = _mm256_i32gather_ps(inst->X, index, 4), y1 = _mm256_i32gather_ps(inst->Y, index, 4);
+        __m256 x2 = _mm256_permutevar8x32_ps(x1, permuteVec), y2 = _mm256_permutevar8x32_ps(y1, permuteVec);
         __m256 cost = computeEdgeCost_VEC(x1, y1, x2, y2, inst);
         costSumVec = _mm256_add_ps(costSumVec, cost);
     }
@@ -567,8 +532,13 @@ static inline float fitness(ThreadSpecificData *thSpecific, Solution *sol)
     float avxStore[AVX_VEC_SIZE];
     float cost = 0;
     _mm256_storeu_ps(avxStore, costSumVec);
-    for (int i = 0; i < AVX_VEC_SIZE; i++)
+    for (int i = 0; i < AVX_VEC_SIZE-1; i++)
         cost += avxStore[i];
+    
+    if (inst->nNodes - (inst->nNodes % (AVX_VEC_SIZE-1)) > 0)
+        for (int i = inst->nNodes - (inst->nNodes % (AVX_VEC_SIZE-1)); i < inst->nNodes; i++)
+            cost += computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i+1]], inst->Y[sol->indexPath[i+1]], inst);
+
     return cost;
 }
 #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
@@ -616,4 +586,43 @@ static inline bool isSolDuplicate(Solution *s0, Solution *s1)
     }
     
     return true;
+}
+
+static inline void naturalSelection(ThreadSpecificData *thSpecific)
+{
+    Instance *inst = thSpecific->thShared->bestSol.instance;
+
+    float min = INFINITY, max = 0;
+    for (int i = 0; i < POPULATION_SIZE(inst) + CROSSOVER_AMOUNT(inst) + MUTATION_AMOUNT(inst) + REINTRO_AMOUNT(inst); i++)
+    {
+        if (min > *(float*)&thSpecific->population[i].cost)
+            min = *(float*)&thSpecific->population[i].cost;
+        if (max < *(float*)&thSpecific->population[i].cost)
+            max = *(float*)&thSpecific->population[i].cost;
+    }
+    
+
+    // compute acceptance probability
+    for (int i = 0; i < POPULATION_SIZE(inst) + CROSSOVER_AMOUNT(inst) + MUTATION_AMOUNT(inst) + REINTRO_AMOUNT(inst); i++)
+    {
+        float fpRejectionProb = (*(float*)&thSpecific->population[i].cost - min) / (max - min);
+
+        thSpecific->rejectionProbability[i] = (int)(fpRejectionProb * RAND_MAX);
+
+        for (int k = 0; k < i; k++)
+            if (isSolDuplicate(&thSpecific->population[k], &thSpecific->population[i]))
+                thSpecific->rejectionProbability[i] = RAND_MAX;
+    }
+
+    for (int i = 0; i < POPULATION_SIZE(inst); i++)
+    {
+        for (int j = i+1; j < POPULATION_SIZE(inst) + CROSSOVER_AMOUNT(inst) + MUTATION_AMOUNT(inst) + REINTRO_AMOUNT(inst); j++)
+        {
+            if ((thSpecific->rejectionProbability[j] == RAND_MAX) || (rand_r(&thSpecific->rndState) < thSpecific->rejectionProbability[j]))
+                continue;
+            
+            swapElems(thSpecific->population[i], thSpecific->population[j])
+            swapElems(thSpecific->rejectionProbability[i], thSpecific->rejectionProbability[j])
+        }
+    }
 }
