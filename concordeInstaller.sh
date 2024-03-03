@@ -9,8 +9,9 @@ mkdir concordeBuild && cd concordeBuild
 CFLAGS="-g -O3 -march=native -mtune=native" ../concorde/configure
 make
 cd ..
-sudo mv ./concordeBuild /opt/concorde
-sudo rm -r ./concorde
+sudo mkdir /opt/concorde
+sudo mv ./concordeBuild/* /opt/concorde/
+sudo rm -r ./concorde ./concordeBuild/
 echo ""
 echo "ALL DONE"
 
