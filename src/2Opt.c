@@ -105,9 +105,9 @@ void apply2OptBestFix(Solution *sol)
 }
 
 #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *costCache)
+int apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *costCache)
 #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-void apply2OptBestFix_fastIteratively(Solution *sol, float *costCache)
+int apply2OptBestFix_fastIteratively(Solution *sol, float *costCache)
 #endif
 {
     struct timespec timeStruct;
@@ -176,6 +176,7 @@ void apply2OptBestFix_fastIteratively(Solution *sol, float *costCache)
     }
 
     sol->execTime += elapsed;
+    return data.iter-1;
 }
 
 static inline void updateSolution(_2optData *data, _2optMoveData bestFix)

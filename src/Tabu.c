@@ -62,6 +62,8 @@ static void setupThSpecificOnBestSol(ThreadSpecificData *thSpecific);
 static inline int randomlySelectEdgeOutsideTenure(ThreadSpecificData *thSpecific, int forbiddenNode);
 // Add node thSpecific.workingSol.indexPath[indexPathIndex] to the tenure, which means also removing one when the tenure is full.
 static void addEdgeToTenure(ThreadSpecificData *thSpecific, int indexPathIndex);
+// Remove oldest element in the tenure if tenure is not empty
+static void removeOldestElementFromTenure(ThreadSpecificData *thSpecific);
 // Perform non-improving 2opt move on thSpecific data using node0 and node1
 static inline void performNonImproving2OptMove(ThreadSpecificData *thSpecific, int edge0, int edge1);
 #ifdef DEBUG
@@ -243,12 +245,16 @@ static void *runTabu(void *arg)
             checkThSpecificData(thSpecific);
         #endif
 
+        int n2OptMoves;
         // use 2opt to optimize (setting edges in the costCache to -INFINITY effectively lock that edges)
         #if ((COMPUTATION_TYPE == COMPUTATE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-            apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->X, thSpecific->Y, thSpecific->costCache);
+            n2OptMoves = apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->X, thSpecific->Y, thSpecific->costCache);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-            apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->costCache);
+            n2OptMoves = apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->costCache);
         #endif
+
+        if (n2OptMoves > 0)
+            removeOldestElementFromTenure(thSpecific);
 
         if (nonImprovingIterCount > restartThreshold)
         {
@@ -369,6 +375,40 @@ static void addEdgeToTenure(ThreadSpecificData *thSpecific, int indexPathIndex)
         thSpecific->nextTenurePos = 0;
 }
 
+static void removeOldestElementFromTenure(ThreadSpecificData *thSpecific)
+{   
+    int n = thSpecific->workingSol.instance->nNodes;
+
+    // find first element position
+    int pos = thSpecific->nextTenurePos;
+    for (; pos != thSpecific->nextTenurePos + 1; pos--)
+    {
+        if (pos < 1)
+            pos = thSpecific->thShared->tenureSize;
+        if (thSpecific->tenure[pos - 1].node0 == -1)
+            break;
+    }
+    if (pos == thSpecific->thShared->tenureSize)
+        pos = 0;
+
+    if (thSpecific->tenure[pos].node0 == -1)
+        return; // tenure empty
+    
+    // replace correct cost into costCache
+    for (int i = 0; i < n; i++)
+    {
+        if (thSpecific->workingSol.indexPath[i] == thSpecific->tenure[pos].node0)
+        {
+            if ((thSpecific->tenure[pos].node1 == thSpecific->workingSol.indexPath[i-1]) && (i > 0))
+                i--;
+            thSpecific->costCache[i] = thSpecific->costBackup[pos];
+            break;
+        }
+    }
+    
+    thSpecific->tenure[pos].node0 = -1;
+}
+
 static inline void performNonImproving2OptMove(ThreadSpecificData *thSpecific, int edge0, int edge1)
 {
     Solution *sol = &thSpecific->workingSol;
@@ -438,7 +478,7 @@ static void checkThSpecificData(ThreadSpecificData *thSpecific)
         bool notInTenure = true;
         for (int j = 0; j < thSpecific->thShared->tenureSize; j++)
         {
-            if (thSpecific->tenure[j].node0 == -1) break;
+            if (thSpecific->tenure[j].node0 == -1) continue;
 
             if (((sol->indexPath[i] == thSpecific->tenure[j].node0) && (sol->indexPath[i+1] == thSpecific->tenure[j].node1)) ||
                 ((sol->indexPath[i] == thSpecific->tenure[j].node1) && (sol->indexPath[i+1] == thSpecific->tenure[j].node0)))

@@ -218,14 +218,16 @@ void apply2OptBestFix(Solution *sol);
 /*!
 * @brief  Same as apply2OptBestFix, but expects costCache array and, if using AVX, X and Y arrays all coherent with sol.indexPath. If not using AVX pass X = Y = NULL
 * @param sol Solution to optimize.
+* @result Number of optmizations made(iterations)
 */
-void apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *costCache);
+int apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *costCache);
 #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
 /*!
 * @brief  Same as apply2OptBestFix, but expects costCache array and, if using AVX, X and Y arrays all coherent with sol.indexPath. If not using AVX pass X = Y = NULL
 * @param sol Solution to optimize.
+* @result Number of optmizations made(iterations)
 */
-void apply2OptBestFix_fastIteratively(Solution *sol, float *costCache);
+int apply2OptBestFix_fastIteratively(Solution *sol, float *costCache);
 #endif
 
 
