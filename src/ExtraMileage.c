@@ -577,10 +577,8 @@ static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCov
     #endif
     indexPath[succ.node] = indexPath[nCovered];
 
-    int i = nCovered;
-
     // shift elements forward one at a time
-    for (i--; i > succ.anchor; i--)
+    for (int i = nCovered-1; i > succ.anchor; i--)
     {
         #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
             thSpecific->X[i+1] = thSpecific->X[i];
@@ -590,17 +588,15 @@ static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCov
         thSpecific->costCache[i+1] = thSpecific->costCache[i];
     }
 
-    i++;
-
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        thSpecific->X[i] = bestX;
-        thSpecific->Y[i] = bestY;
+        thSpecific->X[succ.anchor+1] = bestX;
+        thSpecific->Y[succ.anchor+1] = bestY;
     #endif
-    indexPath[i] = bestIndex;
-    thSpecific->costCache[i-1] = succ.newCost0;
-    thSpecific->costCache[i] = succ.newCost1;
+    indexPath[succ.anchor+1] = bestIndex;
+    thSpecific->costCache[succ.anchor] = succ.newCost0;
+    thSpecific->costCache[succ.anchor+1] = succ.newCost1;
 
-    LOG(LOG_LVL_EVERYTHING, "Extra Mileage Solution Update: Node %d added to solution between nodes %d and %d", indexPath[i], indexPath[i-1], indexPath[i+1]);
+    LOG(LOG_LVL_EVERYTHING, "Extra Mileage Solution Update: Node %d added to solution between nodes %d and %d", indexPath[succ.anchor+1], indexPath[succ.anchor], indexPath[succ.anchor+2]);
 }
 
 #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
@@ -621,8 +617,8 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
     for (int i = 0; i < nCovered; i++)
     {
         // Create vectors containig necessary data on the points attached to the edge i
-        __m256 x1Vec = _mm256_broadcast_ss(&thSpecific->X[i]), y1Vec = _mm256_broadcast_ss(&thSpecific->Y[i]);
-        __m256 x2Vec = _mm256_broadcast_ss(&thSpecific->X[i + 1]), y2Vec = _mm256_broadcast_ss(&thSpecific->Y[i + 1]);
+        __m256 x1 = _mm256_broadcast_ss(&thSpecific->X[i]), y1 = _mm256_broadcast_ss(&thSpecific->Y[i]);
+        __m256 x2 = _mm256_broadcast_ss(&thSpecific->X[i + 1]), y2 = _mm256_broadcast_ss(&thSpecific->Y[i + 1]);
 
         // Vector that contains only the cost of the current edge
         __m256 curEdgeCostVec = _mm256_broadcast_ss(&thSpecific->costCache[i]); //computeEdgeCost_VEC(x1Vec, y1Vec, x2Vec, y2Vec, inst);
@@ -631,7 +627,7 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
         __m256i curEdgeID = _mm256_set1_epi32(i);
 
         // Vector that keeps track of the IDs of the best candidates for the current edge
-        __m256i idsVec = _mm256_add_epi32(_mm256_set_epi32(7, 6, 5, 4, 3, 2, 1, 0), _mm256_set1_epi32(nCovered + 1));
+        __m256i idsVec = _mm256_add_epi32(_mm256_setr_epi32(0, 1, 2, 3, 4, 5, 6, 7), _mm256_set1_epi32(nCovered + 1));
         __m256i incrementVec = _mm256_set1_epi32(AVX_VEC_SIZE);
 
         // check for each edge which ones are the best
@@ -639,9 +635,9 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
         {
             __m256 curExtraMileageVec;
             {
-                __m256 xuVec = _mm256_loadu_ps(&thSpecific->X[u]), yuVec = _mm256_loadu_ps(&thSpecific->Y[u]);
-                __m256 altEdge1CostVec = computeEdgeCost_VEC(xuVec, yuVec, x1Vec, y1Vec, inst);
-                __m256 altEdge2CostVec = computeEdgeCost_VEC(xuVec, yuVec, x2Vec, y2Vec, inst);
+                __m256 xu = _mm256_loadu_ps(&thSpecific->X[u]), yu = _mm256_loadu_ps(&thSpecific->Y[u]);
+                __m256 altEdge1CostVec = computeEdgeCost_VEC(xu, yu, x1, y1, inst);
+                __m256 altEdge2CostVec = computeEdgeCost_VEC(xu, yu, x2, y2, inst);
                 __m256 altEdgeCostVec = _mm256_add_ps(altEdge1CostVec, altEdge2CostVec);
                 curExtraMileageVec = _mm256_sub_ps(altEdgeCostVec, curEdgeCostVec);
             }
