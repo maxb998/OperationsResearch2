@@ -44,6 +44,9 @@ Instance newInstance ()
             .annealingTemperature = -1,
             
             .matheurInitMode = MODE_NN,
+            .cplexWarmStart = false,
+            .cplexSolPosting = true,
+            .cplexUsercuts = true,
             .hardFixPolicy = HARDFIX_POLICY_RANDOM,
 
             .use2Opt=false,

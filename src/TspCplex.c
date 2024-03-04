@@ -181,6 +181,7 @@ int setSEC(double *coeffs, int *indexes, CplexData *cpx, CallbackData *cbData, S
 	char *cname = &sense[2];
 	int *izero = (int*)&cname[20];
 	*izero = 0;
+	double *rhs = (double*)&izero[1];
 
 	for (int subtourID = 0; (subtourID < subData->subtoursCount) && (retVal == 0); subtourID++)
 	{
@@ -189,7 +190,6 @@ int setSEC(double *coeffs, int *indexes, CplexData *cpx, CallbackData *cbData, S
 		for (;subData->subtoursMap[subtourStart] < subtourID; subtourStart++);
 
 		int nnz = 0;
-		double *rhs = (double*)&izero[1];
 		*rhs = -1;
 
 		// follow successor and add all edges that connect each element of the subtour into the constraint
@@ -207,7 +207,7 @@ int setSEC(double *coeffs, int *indexes, CplexData *cpx, CallbackData *cbData, S
 
 		sprintf(cname, "SEC(%d,%d)", iterNum, subtourID);
 
-		if(cpx != NULL)
+		if(cpx)
 			retVal = CPXaddrows(cpx->env, cpx->lp, 0, 1, nnz, rhs, sense, izero, indexes, coeffs, NULL, &cname);
 		else
 			retVal = CPXcallbackrejectcandidate(cbData->context, 1, nnz, rhs, sense, izero, indexes, coeffs);
@@ -276,11 +276,13 @@ int WarmStart(CplexData *cpx, int *successors)
 	Instance *inst = cpx->inst;
 	int n = inst->nNodes;
 
-	if ((inst->params.logLevel >= LOG_LVL_DEBUG) && (!checkSuccessorSolution(inst, successors)))
-		throwError("WarStartSuccessors: successor solution is incorrect");
+	#ifdef DEBUG
+		if (!checkSuccessorSolution(inst, successors))
+			throwError("WarStartSuccessors: successor solution is incorrect");
+	#endif
 
-	double *ones = malloc(n * sizeof(double));
-	int *indexes = malloc(n * sizeof(int));
+	double *ones = malloc(n * (sizeof(double) + sizeof(int)));
+	int *indexes = (int*)&ones[n];
 	for (int i = 0; i < n; i++)
 		ones[i] = 1.0;
 	for (int i = 0; i < n; i++)
@@ -295,7 +297,6 @@ int WarmStart(CplexData *cpx, int *successors)
 	int retVal = CPXaddmipstarts(cpx->env, cpx->lp, 1, n, &izero, indexes, ones, &effort, &mipstartName);
 
 	free(ones);
-	free(indexes);
 
 	return retVal;
 }

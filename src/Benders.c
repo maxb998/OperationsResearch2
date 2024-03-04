@@ -17,9 +17,6 @@ void benders(Solution *sol, double tlim)
 	Instance *inst = sol->instance;
 	int n = inst->nNodes;
 
-	if (!checkSolution(sol))
-		throwError("benders: Input solution is not valid");
-
     CplexData cpx = initCplexData(inst);
 
 	int ncols = CPXgetnumcols(cpx.env, cpx.lp);
@@ -28,22 +25,29 @@ void benders(Solution *sol, double tlim)
 
 	SubtoursData sub = initSubtoursData(n);
 
+	#ifdef DEBUG
+		if (inst->params.cplexWarmStart && (!checkSolution(sol)))
+			throwError("benders: Input solution is not valid");
+	#endif
+
 	int *bestSuccessorsSol = malloc(n * sizeof(int));
 	__uint128_t bestCost = sol->cost;
-	cvtSolutionToSuccessors(sol, bestSuccessorsSol);
+	if (inst->params.cplexWarmStart)
+		cvtSolutionToSuccessors(sol, bestSuccessorsSol);
 
 	int iterNum = 0;
+	int errCode = 0;
 
 	while (currentTime - startTime < tlim)
 	{
-		WarmStart(&cpx, bestSuccessorsSol);
+		if (inst->params.cplexWarmStart || (iterNum > 0)) // always use warm start if the "warm-starting" solution derived from a previous iteration of benders
+			if ((errCode = WarmStart(&cpx, bestSuccessorsSol) != 0))
+				throwError("Benders: error on WarmStart with code %d", errCode);
 
 		// set time limit as remainig time from starting time
 		clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     	currentTime = cvtTimespec2Double(timeStruct);
 		CPXsetdblparam(cpx.env, CPX_PARAM_TILIM, tlim + startTime - currentTime);
-
-		int errCode = 0;
 
 		errCode = CPXmipopt(cpx.env, cpx.lp);
 		if (errCode != 0)

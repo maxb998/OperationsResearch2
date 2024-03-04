@@ -67,21 +67,21 @@ int main (int argc, char *argv[])
     }
     else
     {
-        if (inst.params.matheurInitMode & (MODE_NN | MODE_EM))
+        if (inst.params.cplexWarmStart && (inst.params.matheurInitMode & (MODE_NN | MODE_EM)))
         {
             sol = runHeuristic(&inst, inst.params.matheurInitMode, tlim * MATHEUR_INIT_RATIO);
             run2Opt(&sol);
         }
-        else if (inst.params.matheurInitMode & (MODE_TABU | MODE_VNS | MODE_ANNEALING))
+        else if (inst.params.cplexWarmStart && (inst.params.matheurInitMode & (MODE_TABU | MODE_VNS | MODE_ANNEALING)))
         {
             sol = runHeuristic(&inst, inst.params.metaheurInitMode, tlim * METAHEUR_INIT_RATIO);
             runMetaheuristic(&sol, inst.params.matheurInitMode, tlim * MATHEUR_INIT_RATIO);
             run2Opt(&sol);
         }
-        else // if (m & MODE_GENETIC)
-        {
+        else if (inst.params.cplexWarmStart && (inst.params.matheurInitMode & MODE_GENETIC))
             runMetaheuristic(&sol, MODE_GENETIC, tlim * MATHEUR_INIT_RATIO);
-        }
+        else if (!inst.params.cplexWarmStart)
+            sol = newSolution(&inst);
 
         if (m & (MODE_BENDERS | MODE_BRANCH_CUT))
             runExactSolver(&sol, m, tlim - sol.execTime);

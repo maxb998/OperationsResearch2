@@ -20,7 +20,7 @@
 
 #define COMPUTATION_TYPE COMPUTE_OPTION_AVX
 
-// #define DEBUG
+#define DEBUG
 
 // Amount of "best" elements to save when using grasp almostbest option and NOT using COMPUTE_OPTION_AVX
 #define BASE_GRASP_BEST_SAVE_BUFFER_SIZE 4
@@ -62,9 +62,9 @@ enum Mode{
 };
 
 enum GraspOption{
-	GRASP_NONE=-1,
-	GRASP_ALMOSTBEST,
-	GRASP_RANDOM
+	GRASP_NONE=0,
+	GRASP_ALMOSTBEST=1,
+	GRASP_RANDOM=2
 };
 
 enum NNFirstNodeOptions{
@@ -115,9 +115,10 @@ typedef struct
 	struct GeneticParams geneticParams;
 	int annealingTemperature;
 
-	bool warmStartCplex;
-	bool useConcordeCuts;
 	enum Mode matheurInitMode;
+	bool cplexWarmStart;
+	bool cplexSolPosting;
+	bool cplexUsercuts;
 	enum HardFixPolicy hardFixPolicy;
     
 	bool use2Opt;

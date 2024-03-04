@@ -109,6 +109,9 @@ enum argpKeys{
     ARGP_ANNEAL_TEMP,
 
     ARGP_CPLEX_INIT_MODE,
+    ARGP_CPLEX_WARMSTART,
+    ARGP_CPLEX_POSTING,
+    ARGP_CPLEX_USERCUTS,
     ARGP_HARDFIX_SMALLEST,
 
     ARGP_2OPT='2',
@@ -155,6 +158,9 @@ void argParse(Instance * inst, int argc, char *argv[])
         { .name="annelTemp", .key=ARGP_ANNEAL_TEMP, .arg="UINT", .flags=0, .doc="Specify temperature for Simulated Annealing procedure\n", .group=3 },
 
         { .name="cplexInit", .key=ARGP_CPLEX_INIT_MODE, .arg="STRING", .flags=0, .doc=MATHEUR_INIT_MODE_DOC, .group=4 },
+        { .name="cplexEnableWarmStart", .key=ARGP_CPLEX_WARMSTART, .arg=NULL, .flags=0, .doc="Enable the ability to find a solution by means of heuristic and metaheuristics and use it to \"warm start\" cplex when using benders of branch and cut methods", .group=4 },
+        { .name="cplexDisableSolPosting", .key=ARGP_CPLEX_POSTING, .arg=NULL, .flags=0, .doc="Disable the ability of cplex of posting the best feasible solution found at any point during the branch and cut method", .group=4 },
+        { .name="cplexDisableUsercuts", .key=ARGP_CPLEX_USERCUTS, .arg=NULL, .flags=0, .doc="Disable the ability of using concorde's functions to find connected components during cplex relaxation and add cuts that violate such components as usercuts", .group=4 },
         { .name="hardfixSmallest", .key=ARGP_HARDFIX_SMALLEST, .arg=NULL, .flags=0, .doc="Specify to make Hard Fixing fix only edges with smallest cost instead of fixing random edges\n", .group=4 },
 
         { .name="2opt", .key=ARGP_2OPT, .arg=NULL, .flags=0, .doc="Specify to use 2-opt at the end of the selected heuristic\n", .group=5 },
@@ -251,6 +257,18 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
 
     case ARGP_CPLEX_INIT_MODE:
         parseModeOption(arg, &inst->params.matheurInitMode, modeStrings, 0, HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT, "cplexInit");
+        break;
+
+    case ARGP_CPLEX_WARMSTART:
+        inst->params.cplexWarmStart = true;
+        break;
+    
+    case ARGP_CPLEX_POSTING:
+        inst->params.cplexSolPosting = false;
+        break;
+
+    case ARGP_CPLEX_USERCUTS:
+        inst->params.cplexUsercuts = false;
         break;
 
     case ARGP_HARDFIX_SMALLEST:
@@ -392,6 +410,13 @@ void printInfo(Instance *inst)
 {
     Parameters *p = &inst->params;
 
+    bool useNN = (p->mode & MODE_NN) || 
+        (p->mode & (MODE_TABU | MODE_VNS | MODE_ANNEALING) & (p->metaheurInitMode & MODE_NN)) || 
+        (p->mode & (MODE_BENDERS | MODE_BRANCH_CUT) && p->cplexWarmStart && ((p->matheurInitMode & MODE_NN) | (p->metaheurInitMode & MODE_NN) && (p->matheurInitMode & (MODE_TABU | MODE_VNS | MODE_ANNEALING))));
+    bool useEM = (p->mode & MODE_EM) || 
+        (p->mode & (MODE_TABU | MODE_VNS | MODE_ANNEALING) & (p->metaheurInitMode & MODE_EM)) || 
+        (p->mode & (MODE_BENDERS | MODE_BRANCH_CUT) && p->cplexWarmStart && ((p->matheurInitMode & MODE_EM) | (p->metaheurInitMode & MODE_EM) && (p->matheurInitMode & (MODE_TABU | MODE_VNS | MODE_ANNEALING))));
+
     printf("SETTINGS:\n");
 
     // input file
@@ -399,35 +424,51 @@ void printInfo(Instance *inst)
     // mode
     printf("\t" "Current running mode is %s\n", modeStrings[(int)log2l(p->mode)]);
 
-    // grasp
-    if (p->graspType == GRASP_NONE)
-        printf("\tGrasp is off\n");
-    else
-        printf("\tGrasp is on, grasp mode id is %s with chance %lf\n", graspStrings[p->graspType], p->graspChance);
-    // 2Opt
-    if (p->use2Opt || p->mode == MODE_VNS)
-        printf("\tUsing 2Opt\n");
     // time limit
     if (p->tlim != -1)
         printf("\tTime limit of %lf seconds\n", p->tlim);
     else
         printf("\tTime limit is not set\n");
+
+    // grasp
+    if (useNN | useNN)
+    {
+        if (p->graspType == GRASP_NONE)
+            printf("\tGrasp is off\n");
+        else
+            printf("\tGrasp is on, grasp mode id is %s with chance %lf\n", graspStrings[p->graspType], p->graspChance);
+    }
+    // 2Opt
+    if (p->use2Opt || (p->mode & (MODE_TABU | MODE_VNS)))
+        printf("\tUsing 2Opt\n");
     
     // metaheuristics modes
-    if (p->mode >= HEURISTICS_MODES_COUNT && (p->mode < HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT || p->matheurInitMode >= HEURISTICS_MODES_COUNT))
+    if ((p->mode & (MODE_TABU | MODE_VNS | MODE_ANNEALING)) ||
+        ((p->mode & (MODE_BENDERS | MODE_BRANCH_CUT)) && p->cplexWarmStart) ||
+        (p->mode & (MODE_HARDFIX | MODE_LOCAL_BRANCHING) & p->matheurInitMode & (MODE_TABU | MODE_VNS | MODE_ANNEALING)))
         printf("\tMetaheuristics initialization set to: %s\n", modeStrings[(int)log2l(p->metaheurInitMode)]);
     // matheuristics modes
-    if (p->mode >= HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT)
-        printf("\tMatheuristics initialization set to: %s\n", modeStrings[(int)log2l(p->matheurInitMode)]);
+    if (((p->mode & (MODE_BENDERS | MODE_BRANCH_CUT)) && p->cplexWarmStart) || 
+        (p->mode & (MODE_HARDFIX | MODE_LOCAL_BRANCHING)))
+        printf("\tMatheuristics/Cplex initialization set to: %s\n", modeStrings[(int)log2l(p->matheurInitMode)]);
 
     // nn options
-    if (p->mode == MODE_NN || (p->mode >= HEURISTICS_MODES_COUNT  && (p->metaheurInitMode == MODE_NN && p->matheurInitMode == MODE_EM)) || 
-            (p->mode >= (HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT) && p->matheurInitMode == MODE_NN))
+    if (useNN)
         printf("\tNearest Neighbor starting node set to: %s\n", inst->params.nnFirstNodeOption == NN_FIRST_RANDOM ? "random" : "tryall");
     // em options
-    if (p->mode == MODE_EM || (p->mode >= HEURISTICS_MODES_COUNT  && (p->metaheurInitMode == MODE_EM && p->matheurInitMode == MODE_NN)) || 
-            (p->mode >= (HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT) && p->matheurInitMode == MODE_EM))
+    if (useEM)
         printf("\tExtra Mileage initialization set to: %s\n", inst->params.emInitOption == EM_INIT_RANDOM ? "random" : "farthest");
+    // cplex options
+    if (p->mode & (MODE_BENDERS | MODE_BRANCH_CUT | MODE_LOCAL_BRANCHING | MODE_HARDFIX))
+        if (p->cplexWarmStart)
+            printf("\tCplex will be warm started using an heuristic/metaheuristic solution\n");
+    if (p->mode & (MODE_BRANCH_CUT | MODE_LOCAL_BRANCHING | MODE_HARDFIX))
+    {
+        if (!p->cplexSolPosting)
+            printf("\tCplex solution posting is disabled\n");
+        if (!p->cplexWarmStart)
+            printf("\tCplex usercuts are disabled\n");
+    }
     // hardfix options
     if (p->mode == MODE_HARDFIX)
         printf("\tHard Fixing policy set to: %s\n", inst->params.hardFixPolicy == HARDFIX_POLICY_RANDOM ? "random" : "smallest");

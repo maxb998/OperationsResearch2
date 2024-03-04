@@ -12,11 +12,11 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
-                "--file", "data/500-800/u724.tsp",
-                "--mode", "nn",
-                "--tlim", "1",
+                "--file", "data/220-320/a280.tsp",
+                "--mode", "branch-cut",
+                "--tlim", "10",
 
-                "--graspType", "random",
+                //"--graspType", "random",
                 //"--graspChance", "0.01",
                 //"--nnTryall",
                 //"--emFarthest",
@@ -29,17 +29,20 @@
                 //"--annelTemp", "1000",
 
                 //"--cplexInit", "em",
+                //"--cplexEnableWarmStart",
+                //"--cplexDisableSolPosting",
+                //"--cplexDisableUsercuts",
                 //"--hardfixSmallest",
 
                 //"--2opt",
-                "--3opt",
+                //"--3opt",
 
-                "--seed", "2023",
-                "--threads", "1",
+                //"--seed", "2023",
+                //"--threads", "1",
                 "--roundcosts",
-                "--plot", 
+                //"--plot", 
                 //"--save",
-                "--loglvl", "all"
+                "--loglvl", "log"
             ],
             "cwd": "${workspaceFolder}"
        },
@@ -50,11 +53,11 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/exec/main",
             "args": [
-                "--file", "data/3000-6000/rl5915.tsp",
-                "--mode", "nn",
+                "--file", "data/220-320/a280.tsp",
+                "--mode", "branch-cut",
                 "--tlim", "20",
 
-                "--graspType", "almostbest",
+                //"--graspType", "almostbest",
                 //"--graspChance", "0.05",
                 //"--nnTryall",
                 //"--emFarthest",
@@ -67,9 +70,12 @@
                 //"--annelTemp", "1000",
 
                 //"--cplexInit", "em",
+                //"--cplexEnableWarmStart",
+                //"--cplexDisableSolPosting",
+                //"--cplexDisableUsercuts",
                 //"--hardfixSmallest",
 
-                "--2opt",
+                //"--2opt",
                 //"--3opt",
 
                 //"--seed", "2023",
