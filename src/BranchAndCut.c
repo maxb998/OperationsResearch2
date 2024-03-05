@@ -11,6 +11,7 @@ typedef struct
 {
 	CallbackData *cbData;
 	void *allocatedMemory;
+	bool fromConcorde;
 }ConcordePassthroughData;
 
 
@@ -175,10 +176,8 @@ static inline void candidatePartCallback(CallbackData *cbData)
 	{
 		double * coeffs = xstar;
 		int errCode = setSEC(coeffs, indicies, NULL, cbData, &sub, 0, inst, cbData->ncols);
-		if ((errCode == CPXERR_NO_ENVIRONMENT) || (errCode == CPXERR_PRESLV_CRUSHFORM)) // ignore this type of errors
-			LOG(LOG_LVL_WARNING, "Branch & Cut: setSEC failed with code %d(NOT-FATAL). Continuing...", errCode);
-		else if (errCode != 0)
-			throwError("BranchAndCut callback: setSEC failed with code %d", errCode);
+		if (errCode != 0) // ignore this type of errors
+			LOG(LOG_LVL_WARNING, "Branch & Cut: setSEC failed with code %d. Continuing...", errCode);
 
 		cost = PatchingHeuristic(&sub, inst);
 	}
@@ -215,7 +214,6 @@ static inline void candidatePartCallback(CallbackData *cbData)
 static inline void PostSolution(CallbackData *cbData, double *vals, int *indicies)
 {
 	#ifdef DEBUG
-		LOG(LOG_LVL_DEBUG, "Solution Posted");
 		if (!checkSuccessorSolution(cbData->inst, cbData->bestSuccessors) != 0)
 			throwError("Successor solution to be posted is incorrect");
 	#endif
@@ -236,10 +234,10 @@ static inline void PostSolution(CallbackData *cbData, double *vals, int *indicie
 	#endif
 
 	int errCode = CPXcallbackpostheursoln(cbData->context, cbData->ncols, indicies, vals, cvtCost2Double(cbData->bestCost), strat);
-	if ((errCode == CPXERR_NO_ENVIRONMENT) || (errCode == CPXERR_PRESLV_CRUSHFORM)) // ignore this type of errors
+	if (errCode != 0) // ignore this type of errors
 		LOG(LOG_LVL_WARNING, "Branch & Cut solution posting failed with code %d. Continuing...", errCode);
-	else if (errCode != 0)
-		throwError("Branch & Cut Callback solution posting failed with error code %d", errCode);
+	else
+		LOG(LOG_LVL_DEBUG, "Branch & Cut: new solution has been posted correctly");
 }
 
 
@@ -262,13 +260,15 @@ static inline void relaxationPartCallback(CallbackData *cbData)
 	if ((errCode = CCcut_connect_components(cbData->inst->nNodes, ecount, cbData->elist, xstar, &ncomp, &compsCount, &comps)) != 0)
 		throwError("Branch&Cut: CCcut_connect_components failed with code %d", errCode);
 	
-	ConcordePassthroughData passthroughData = { .cbData=cbData, .allocatedMemory=(void*)xstar };
+	ConcordePassthroughData passthroughData = { .cbData=cbData, .allocatedMemory=(void*)xstar, .fromConcorde=false };
 
 	if (ncomp == 1)
 	{
-		LOG(LOG_LVL_DEBUG, "Cutting Single component");
+
+		LOG(LOG_LVL_EVERYTHING, "Cutting Single component");
+		passthroughData.fromConcorde = true;
 		if ((errCode = CCcut_violated_cuts(cbData->inst->nNodes, cbData->ncols, cbData->elist, xstar, 1.9, applyCplexUsercut, &passthroughData)) != 0)
-			throwError("Branch&Cut - relaxationPartCallback: CCcut_violated_cuts returned error code %d", errCode);
+			LOG(LOG_LVL_WARNING, "Branch&Cut - relaxationPartCallback: CCcut_violated_cuts returned error code %d", errCode);
 	}
 	else if (ncomp > 1)
 	{
@@ -293,8 +293,8 @@ int applyCplexUsercut(double cutValue, int cutNcount, int *cutMembers, void *arg
 
 	int cutEcount = cutNcount * (cutNcount - 1) / 2;
 
-	double *value = (double*)passthroughData->allocatedMemory;
-	int *index = (int*)&value[cutEcount];
+	double *coeffs = (double*)passthroughData->allocatedMemory;
+	int *index = (int*)&coeffs[cutEcount];
 	double rhs = (double)(cutNcount - 1);
 	char sense = 'L';
 	int purgeable = CPX_USECUT_FILTER;
@@ -302,7 +302,7 @@ int applyCplexUsercut(double cutValue, int cutNcount, int *cutMembers, void *arg
 	int local = 0;
 
 	for (int i = 0; i < cutEcount; i++)
-		value[i] = 1.0;
+		coeffs[i] = 1.0;
 	
 	int k = 0;
 	for (int i = 0; i < cutNcount; i++)
@@ -310,11 +310,14 @@ int applyCplexUsercut(double cutValue, int cutNcount, int *cutMembers, void *arg
 			index[k] = xpos(cutMembers[i], cutMembers[j], n);
 	
 
-	int errCode = 0;
-	if((errCode = CPXcallbackaddusercuts(cbData->context, 1, cutEcount, &rhs, &sense, &matbeg, index, value, &purgeable, &local)) != 0)
-        throwError("Branch&Cut - applyCplexUsercut: CPXcallbackaddusercuts returned error code %d", errCode);
+	int errCode = CPXcallbackaddusercuts(cbData->context, 1, cutEcount, &rhs, &sense, &matbeg, index, coeffs, &purgeable, &local);
+	if (errCode != 0) // ignore this type of errors
+		LOG(LOG_LVL_DEBUG, "Branch&Cut - applyCplexUsercut: CPXcallbackaddusercuts returned error code %d. Continuing...", errCode);
 	
-	LOG(LOG_LVL_DEBUG, "Added usercut");
+	if (passthroughData->fromConcorde)
+		LOG(LOG_LVL_EVERYTHING, "Added CONCORDE usercut");
+	else
+		LOG(LOG_LVL_EVERYTHING, "Added manual usercut");
 
 	return 0;
 }

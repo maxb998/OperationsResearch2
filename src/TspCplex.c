@@ -211,6 +211,9 @@ int setSEC(double *coeffs, int *indexes, CplexData *cpx, CallbackData *cbData, S
 			retVal = CPXaddrows(cpx->env, cpx->lp, 0, 1, nnz, rhs, sense, izero, indexes, coeffs, NULL, &cname);
 		else
 			retVal = CPXcallbackrejectcandidate(cbData->context, 1, nnz, rhs, sense, izero, indexes, coeffs);
+		
+		// if (retVal == 1811)
+		// 	LOG(LOG_LVL_WARNING, "setSec failed??");
 	}
 
 	free(sense);

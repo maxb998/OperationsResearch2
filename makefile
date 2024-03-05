@@ -55,6 +55,11 @@ $(BIN_DIR)main: $(OBJ_FILES)
 $(OBJ_DIR)%.o: $(SRC_DIR)%.c $(HEADER_FILES_NO_CPLEX)
 	$(CC) -c $(CFLAGS) $(CPLEX_HEADERS_COMPILER_FLAG) $(SRC_DIR)$(*F).c -o $@
 
+SRC_FILES_PATH := $(SOURCE_NAMES_NO_CPLEX:%=$(SRC_DIR)%) $(SOURCE_NAMES_CPLEX:%=$(SRC_DIR)%)
+
+final:
+	$(CC) -O3 -mavx2 -march=native -mtune=native -Isrc/headers $(LDFLAGS1) $(CPLEX_HEADERS_COMPILER_FLAG) $(SRC_FILES_PATH) -o bin/exec/main $(LDFLAGS2)
+
 # delete all gcc output files
 clean:
 	rm -f bin/debug/main bin/exec/main
