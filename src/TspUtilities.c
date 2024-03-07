@@ -8,13 +8,13 @@
 #include <stdint.h>
 
 const char * logLevelString [] = {
-	"\033[1;31mERR \033[0m", // 0
-	"\033[1;35mCRIT\033[0m", // 1
-	"\033[1;33mWARN\033[0m", // 2
-	"\033[1;36mNOTI\033[0m", // 3
-	"\033[1;34mLOG \033[0m", // 4
-	"\033[1;32mDEBG\033[0m", // 5
-	"\033[1;90mALL \033[0m"	// 6
+	"[\033[1;31mFATAL\033[0m]", // 0
+	"[\033[0;35mERROR\033[0m]", // 1
+	"[\033[0;33mWARN\033[0m]", // 2
+	"[\033[0;36mNOTICE\033[0m]", // 3
+	"[\033[0;34mINFO\033[0m]", // 4
+	"[\033[0;32mDEBUG\033[0m]", // 5
+	"[\033[0;90mTRACE\033[0m]"  // 6
 };
 
 static int nProcessors();
@@ -57,7 +57,7 @@ Instance newInstance ()
             .roundWeights = false,
             .showPlot = false,
             .saveSolution = false,
-            .logLevel=LOG_LVL_LOG,
+            .logLevel=LOG_LVL_INFO,
 
             .edgeWeightType  = -1,
             .name = { 0 },
@@ -125,7 +125,7 @@ void cloneSolution(Solution *src, Solution *dst)
         dst->indexPath[i] = src->indexPath[i];
 }
 
-static enum LogLevel LOG_LEVEL = LOG_LVL_LOG;
+static enum LogLevel LOG_LEVEL = LOG_LVL_INFO;
 void setLogLevel(enum LogLevel lvl)
 {
     LOG_LEVEL = lvl;
@@ -137,7 +137,7 @@ void LOG (enum LogLevel lvl, char * line, ...)
     if (lvl > LOG_LEVEL) return;
 
     // print log level
-    printf("  [%s] ", logLevelString[lvl]);
+    printf("%s ", logLevelString[lvl]);
     fflush(stdout);
 
     // print passed message and values
@@ -153,7 +153,7 @@ void LOG (enum LogLevel lvl, char * line, ...)
 
 void throwError (char * line, ...)
 {
-    printf("[%s] ", logLevelString[0]);
+    printf("%s", logLevelString[0]);
 
     va_list params;
     va_start(params, line);
@@ -178,10 +178,10 @@ bool checkSolution(Solution *sol)
         int currentNode = sol->indexPath[i];
 
         if ((currentNode < 0) || (currentNode > n))
-        { LOG(LOG_LVL_CRITICAL, "SolutionCheck: iterpath[%d]=%d is not both >= 0 and < nNodes", i, currentNode); return false; }
+        { LOG(LOG_LVL_ERROR, "SolutionCheck: iterpath[%d]=%d is not both >= 0 and < nNodes", i, currentNode); return false; }
 
         if(coveredNodes[currentNode] == 1)
-        { LOG(LOG_LVL_CRITICAL, "SolutionCheck: node %d repeated in the solution. Loop iteration %d", currentNode, i); return false; }
+        { LOG(LOG_LVL_ERROR, "SolutionCheck: node %d repeated in the solution. Loop iteration %d", currentNode, i); return false; }
         else
             coveredNodes[currentNode] = 1;
     }
@@ -189,13 +189,13 @@ bool checkSolution(Solution *sol)
     // Check that all the nodes are covered in the path
     for (int i = 0; i < inst->nNodes; i++)
         if(coveredNodes[i] == 0)
-        { LOG(LOG_LVL_CRITICAL, "SolutionCheck: node %d is not in the path", i); return false; }
+        { LOG(LOG_LVL_ERROR, "SolutionCheck: node %d is not in the path", i); return false; }
     free(coveredNodes);
 
     __uint128_t recomputedCost = computeSolutionCost(sol);
 
     if (recomputedCost != sol->cost)
-    { LOG(LOG_LVL_CRITICAL, "SolutionCheck: Error in the computation of the pathCost. Recomputed Cost: %f Cost in Solution: %f", cvtCost2Double(recomputedCost), cvtCost2Double(sol->cost)); return false; }
+    { LOG(LOG_LVL_ERROR, "SolutionCheck: Error in the computation of the pathCost. Recomputed Cost: %f Cost in Solution: %f", cvtCost2Double(recomputedCost), cvtCost2Double(sol->cost)); return false; }
 
     return true;
 }

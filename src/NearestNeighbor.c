@@ -271,7 +271,7 @@ static void *loopNearestNeighbor(void *arg)
                         if (!checkSolution(&thShared->bestSol))
                             throwError("New solution not correct");
                     #endif
-                    LOG(LOG_LVL_LOG, "Found better solution starting from node %d\t with cost: %f", thSpecific->localBestPath[0], thShared->bestCost);
+                    LOG(LOG_LVL_INFO, "Found better solution starting from node %d\t with cost: %f", thSpecific->localBestPath[0], thShared->bestCost);
                 }
                 pthread_mutex_unlock(&thShared->saveSolutionMutex);
             }

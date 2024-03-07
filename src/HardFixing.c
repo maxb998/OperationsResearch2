@@ -91,7 +91,7 @@ void HardFixing(Solution *sol, double timeLimit)
         }
 
         #ifdef DEBUG
-        LOG(LOG_LVL_EVERYTHING, "HardFix: Bounds were fixed");
+        LOG(LOG_LVL_TRACE, "HardFix: Bounds were fixed");
         #endif
 
         // update time limit
@@ -104,7 +104,7 @@ void HardFixing(Solution *sol, double timeLimit)
             throwError("HardFix: WarmStart failed with code %d", errCode);
 
         #ifdef DEBUG
-        LOG(LOG_LVL_EVERYTHING, "HardFix: WarmStart was set");
+        LOG(LOG_LVL_TRACE, "HardFix: WarmStart was set");
         #endif
 
         // run cplex
@@ -113,7 +113,7 @@ void HardFixing(Solution *sol, double timeLimit)
             throwError("HardFix: CPXmipopt failed with code %d", errCode);
 
         #ifdef DEBUG
-        LOG(LOG_LVL_EVERYTHING, "HardFix: CPXmipopt finished");
+        LOG(LOG_LVL_TRACE, "HardFix: CPXmipopt finished");
         #endif
 
         if (hfAlloc.fixAmount == 0)
@@ -135,7 +135,7 @@ void HardFixing(Solution *sol, double timeLimit)
     if (hfAlloc.cbData.bestCost < sol->cost)
         cvtSuccessorsToSolution(hfAlloc.cbData.bestSuccessors, sol);
     else
-        LOG(LOG_LVL_WARNING, "HardFixing: Solution could not be optimized any further");
+        LOG(LOG_LVL_WARN, "HardFixing: Solution could not be optimized any further");
 
     destroyHardfixAllocatedMem(&hfAlloc);
 
@@ -164,7 +164,7 @@ static HardfixAllocatedMem initHardfixAllocatedMem(Solution *sol)
     // init fixAmount
     if(n < MIN_UNFIX)
     {
-        LOG(LOG_LVL_WARNING, "HardFix: Solution is small, so no edge will be fixed, resulting in a computation that is the same as branch-cut");
+        LOG(LOG_LVL_WARN, "HardFix: Solution is small, so no edge will be fixed, resulting in a computation that is the same as branch-cut");
         hfAlloc.fixAmount = 0;
     }
     else if (n < MIN_UNFIX + MIN_FIX)
@@ -210,7 +210,7 @@ static void updateFixAmount(HardfixAllocatedMem *hfAlloc)
         if (hfAlloc->fixAmount < 0) // overflow of unsigned operation (fixAmount is way too big) -> set fixAmount to 0
             hfAlloc->fixAmount = 0;
 
-        LOG(LOG_LVL_LOG, "Decreasing the amount of fixed edges to %u", hfAlloc->fixAmount);
+        LOG(LOG_LVL_INFO, "Decreasing the amount of fixed edges to %u", hfAlloc->fixAmount);
         staticCostCount = 0; //(n - fixAmount - MIN_UNFIX) / FIX_OFFSET;
     }
     

@@ -135,7 +135,7 @@ static ThreadSharedData initThreadSharedData (Solution *sol, int tenureSize, dou
     ThreadSharedData thShared = { .timeLimit = timeLimit, .bestSol=sol, .tenureSize=tenureSize };
 
     if (thShared.tenureSize > sol->instance->nNodes)
-        LOG(LOG_LVL_WARNING, "Specified Tenure size is bigger than the instance, %d vs %d nodes", thShared.tenureSize, sol->instance->nNodes);
+        LOG(LOG_LVL_WARN, "Specified Tenure size is bigger than the instance, %d vs %d nodes", thShared.tenureSize, sol->instance->nNodes);
 
     if (pthread_mutex_init(&thShared.mutex, NULL)) throwError("VariableNeighborhoodSearch -> initThreadSharedData: Failed to initialize mutex");
 
@@ -266,7 +266,7 @@ static void *runTabu(void *arg)
             pthread_mutex_lock(&thShared->mutex);
             if (thSpecific->workingSol.cost < thShared->bestSol->cost)
             {
-                LOG(LOG_LVL_LOG, "Found better solution: cost = %lf", cvtCost2Double(thSpecific->workingSol.cost));
+                LOG(LOG_LVL_INFO, "Found better solution: cost = %lf", cvtCost2Double(thSpecific->workingSol.cost));
                 cloneSolution(&thSpecific->workingSol, thShared->bestSol);
             }
             else
@@ -428,7 +428,7 @@ static inline void performNonImproving2OptMove(ThreadSpecificData *thSpecific, i
         altEdge1Cost = inst->edgeCostMat[(size_t)indexPath[edge0+1] * (size_t)inst->nNodes + (size_t)indexPath[edge1+1]];
     #endif
 
-    LOG(LOG_LVL_EVERYTHING, "Tabu[%d]: Updating solution by switching edge (%d,%d) with edge (%d,%d) degrading cost by %f. New Cost = %lf", thSpecific->iterCount,
+    LOG(LOG_LVL_TRACE, "Tabu[%d]: Updating solution by switching edge (%d,%d) with edge (%d,%d) degrading cost by %f. New Cost = %lf", thSpecific->iterCount,
         thSpecific->workingSol.indexPath[edge0], thSpecific->workingSol.indexPath[edge0+1],
         thSpecific->workingSol.indexPath[edge1], thSpecific->workingSol.indexPath[edge1+1],
         altEdge0Cost + altEdge1Cost - thSpecific->costCache[edge0] - thSpecific->costCache[edge1], cvtCost2Double(sol->cost));

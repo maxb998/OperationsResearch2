@@ -92,11 +92,11 @@ void benders(Solution *sol, double tlim)
 			{
 				swapElems(bestSuccessorsSol, sub.successors)
 				bestCost = cost;
-				LOG(LOG_LVL_LOG, "Found new best solution with cost %lf", cvtCost2Double(bestCost));
+				LOG(LOG_LVL_INFO, "Found new best solution with cost %lf", cvtCost2Double(bestCost));
 			}
 		}
 		else
-			LOG(LOG_LVL_LOG, "Subtours at iteration %d is %d. ObjValue = %lf", iterNum, sub.subtoursCount, objVal);
+			LOG(LOG_LVL_INFO, "Subtours at iteration %d is %d. ObjValue = %lf", iterNum, sub.subtoursCount, objVal);
 
 		iterNum++;
 	}

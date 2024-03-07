@@ -170,7 +170,7 @@ static void * runSimulatedAnnealing(void * arg)
         {
             swapElems(thSpecific->thSol.indexPath[swapInfo.index1], thSpecific->thSol.indexPath[swapInfo.index2]);
             thSpecific->thSol.cost = computeSolutionCost(&thSpecific->thSol);
-            LOG(LOG_LVL_LOG, "Sim Annealing: Good move. Offset: %lf\t New cost: %lf", swapInfo.offset, cvtCost2Double(thSpecific->thSol.cost));
+            LOG(LOG_LVL_INFO, "Sim Annealing: Good move. Offset: %lf\t New cost: %lf", swapInfo.offset, cvtCost2Double(thSpecific->thSol.cost));
             thSpecific->iterationsSinceUpdate = 0;
         }
         if(swapInfo.offset > 1) // we implement the move with some probability
@@ -182,7 +182,7 @@ static void * runSimulatedAnnealing(void * arg)
             {
                 swapElems(thSpecific->thSol.indexPath[swapInfo.index1], thSpecific->thSol.indexPath[swapInfo.index2]);
                 thSpecific->thSol.cost = computeSolutionCost(&thSpecific->thSol);
-                LOG(LOG_LVL_LOG, "Sim Annealing: Bad move. Offset: %lf\t New cost: %lf", swapInfo.offset, cvtCost2Double(thSpecific->thSol.cost));
+                LOG(LOG_LVL_INFO, "Sim Annealing: Bad move. Offset: %lf\t New cost: %lf", swapInfo.offset, cvtCost2Double(thSpecific->thSol.cost));
                 thSpecific->iterationsSinceUpdate = 0;
             }
             
@@ -197,7 +197,7 @@ static void * runSimulatedAnnealing(void * arg)
         if(thSpecific->thSol.cost < thShared->bestSol->cost)
         {
             double timeInSimAnn = currentTime - simAnnStartTime;
-            LOG(LOG_LVL_LOG, "Sim Annealing: Best sol updated. Iteration: %d\t Time in Sim Ann: %lf", thSpecific->iterations, timeInSimAnn);
+            LOG(LOG_LVL_INFO, "Sim Annealing: Best sol updated. Iteration: %d\t Time in Sim Ann: %lf", thSpecific->iterations, timeInSimAnn);
             cloneSolution(&thSpecific->thSol, thShared->bestSol);
         }
         pthread_mutex_unlock(&thShared->mutex);
@@ -206,7 +206,7 @@ static void * runSimulatedAnnealing(void * arg)
         // if solution has not been updated for metaRestartThreshold iterations, and the time limit hasn't passed yet, we restart the annealing process from the best solution found so far
         if(thSpecific->iterationsSinceUpdate == thShared->bestSol->instance->params.metaRestartThreshold)
         {
-            LOG(LOG_LVL_LOG, "Restarting Simulated Annealing from best solution found so far");
+            LOG(LOG_LVL_INFO, "Restarting Simulated Annealing from best solution found so far");
             thSpecific->iterationsSinceUpdate = 0;
             thSpecific->temperature = thShared->startingTemperature;
             cloneSolution(thShared->bestSol, &thSpecific->thSol);
@@ -251,7 +251,7 @@ static inline SwapInformation randomSwap(Solution *sol, unsigned int * rndState)
 
     SwapInformation swapInfo = {.offset = newArcsCost - oldArcsCost, .index1 = index1, .index2 = index2};
 
-    //if(swapInfo.offset < 0) LOG(LOG_LVL_LOG, "Good swap found. Offset: %lf", swapInfo.offset);
+    //if(swapInfo.offset < 0) LOG(LOG_LVL_INFO, "Good swap found. Offset: %lf", swapInfo.offset);
 
     return swapInfo;
 }

@@ -17,7 +17,7 @@ CplexData initCplexData(Instance *inst)
 		throwError("buildCPXModel: error at CPXopenCPLEX with code %d", errno);
 
 	// screen output
-	// if (inst->params.logLevel >= LOG_LVL_EVERYTHING)
+	// if (inst->params.logLevel >= LOG_LVL_TRACE)
 	// 	CPXsetintparam(cpxData.env, CPX_PARAM_SCRIND, CPX_ON);
 
 	// random seed for cplex
@@ -110,7 +110,7 @@ void cvtCPXtoSuccessors(double *xstar, int ncols, int nNodes, SubtoursData *subD
 	for (int i = 0; i < nNodes; i++)
 		subData->subtoursMap[i] = -1;
 
-	//LOG(LOG_LVL_EVERYTHING, "###################################################");
+	//LOG(LOG_LVL_TRACE, "###################################################");
 
 	for (int i = 0; i < nNodes; i++)
 	{
@@ -121,7 +121,7 @@ void cvtCPXtoSuccessors(double *xstar, int ncols, int nNodes, SubtoursData *subD
 			{
 				subData->successors[succ] = j;
 				subData->subtoursMap[succ] = subData->subtoursCount;
-				//LOG(LOG_LVL_EVERYTHING, "x(%3d,%3d) = 1   subtour n° %d\n", succ, j, subData->subtoursMap[succ] + 1);
+				//LOG(LOG_LVL_TRACE, "x(%3d,%3d) = 1   subtour n° %d\n", succ, j, subData->subtoursMap[succ] + 1);
 				succ = j;
 				j = 0;
 			}
@@ -130,7 +130,7 @@ void cvtCPXtoSuccessors(double *xstar, int ncols, int nNodes, SubtoursData *subD
 		{
 			subData->successors[succ] = i;
 			subData->subtoursMap[succ] = subData->subtoursCount;
-			//LOG(LOG_LVL_EVERYTHING, "x(%3d,%3d) = 1   subtour n° %d\n", succ, i, subData->subtoursMap[succ] + 1);
+			//LOG(LOG_LVL_TRACE, "x(%3d,%3d) = 1   subtour n° %d\n", succ, i, subData->subtoursMap[succ] + 1);
 			(subData->subtoursCount)++;
 		}
 	}
@@ -162,7 +162,7 @@ void cvtSolutionToSuccessors(Solution *sol, int* successors)
 	for (int i = 0; i < n; i++)
 		successors[sol->indexPath[i]] = sol->indexPath[i+1];
 
-	if ((sol->instance->params.logLevel >= LOG_LVL_EVERYTHING) && (!checkSuccessorSolution(sol->instance, successors) != 0))
+	if ((sol->instance->params.logLevel >= LOG_LVL_TRACE) && (!checkSuccessorSolution(sol->instance, successors) != 0))
 		throwError("cvtSolutionToSuccessors: Converted solution is wrong");	
 }
 
@@ -258,7 +258,7 @@ bool checkSuccessorSolution(Instance *inst, int *successors)
 	do
 	{
 		if (indexChecked[i] == 1)
-		{ LOG(LOG_LVL_CRITICAL, "checkSuccessorSolution: Node %d appears multiple times in successors", i); retVal = false; break; }
+		{ LOG(LOG_LVL_ERROR, "checkSuccessorSolution: Node %d appears multiple times in successors", i); retVal = false; break; }
 
 		indexChecked[i]++;
 		i = successors[i];

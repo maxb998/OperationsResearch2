@@ -286,7 +286,7 @@ static void *runExtraMileage(void * arg)
                         if (!checkSolution(&thShared->bestSol))
                             throwError("New solution not correct");
                     #endif
-                    LOG(LOG_LVL_LOG, "Found better solution starting from edge (%5d,%5d) with cost: %f", thSpecific->initIndexes[0], thSpecific->initIndexes[1], thShared->bestCost);
+                    LOG(LOG_LVL_INFO, "Found better solution starting from edge (%5d,%5d) with cost: %f", thSpecific->initIndexes[0], thSpecific->initIndexes[1], thShared->bestCost);
                 }
                 pthread_mutex_unlock(&thShared->saveSolutionMutex);
             }
@@ -596,7 +596,7 @@ static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCov
     thSpecific->costCache[succ.anchor] = succ.newCost0;
     thSpecific->costCache[succ.anchor+1] = succ.newCost1;
 
-    LOG(LOG_LVL_EVERYTHING, "Extra Mileage Solution Update: Node %d added to solution between nodes %d and %d", indexPath[succ.anchor+1], indexPath[succ.anchor], indexPath[succ.anchor+2]);
+    LOG(LOG_LVL_TRACE, "Extra Mileage Solution Update: Node %d added to solution between nodes %d and %d", indexPath[succ.anchor+1], indexPath[succ.anchor], indexPath[succ.anchor+2]);
 }
 
 #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)

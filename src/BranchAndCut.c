@@ -194,7 +194,7 @@ static inline void candidatePartCallback(CPXCALLBACKCONTEXTptr context, Callback
 		{
 			swapElems(cbData->bestSuccessors, sub.successors)
 
-			LOG(LOG_LVL_LOG, "Branch & Cut: Found new best solution with cost: %lf", cvtCost2Double(cost));
+			LOG(LOG_LVL_INFO, "Branch & Cut: Found new best solution with cost: %lf", cvtCost2Double(cost));
 
 			cbData->bestCost = cost;
 
@@ -269,10 +269,10 @@ static inline void relaxationPartCallback(CPXCALLBACKCONTEXTptr context, Callbac
 	if (ncomp == 1)
 	{
 
-		LOG(LOG_LVL_EVERYTHING, "Cutting with a single component");
+		LOG(LOG_LVL_TRACE, "Cutting with a single component, concorde will add usercuts if necessary");
 		passthroughData.fromConcorde = true;
 		if ((errCode = CCcut_violated_cuts(cbData->inst->nNodes, cbData->ncols, cbData->elist, xstar, 1.9, applyCplexUsercut, &passthroughData)) != 0)
-			LOG(LOG_LVL_WARNING, "Branch&Cut - relaxationPartCallback: CCcut_violated_cuts returned error code %d", errCode);
+			LOG(LOG_LVL_WARN, "Branch&Cut - relaxationPartCallback: CCcut_violated_cuts returned error code %d", errCode);
 	}
 	else if (ncomp > 1)
 	{
@@ -319,9 +319,9 @@ int applyCplexUsercut(double cutValue, int cutNcount, int *cutMembers, void *arg
 		throwError("Branch&Cut - applyCplexUsercut: CPXcallbackaddusercuts returned error code %d", errCode);
 	
 	if (passthroughData->fromConcorde)
-		LOG(LOG_LVL_EVERYTHING, "Added CONCORDE usercut");
+		LOG(LOG_LVL_TRACE, "Concorde added a usercut, subtour size: %d", cutNcount);
 	else
-		LOG(LOG_LVL_EVERYTHING, "Added manual usercut");
+		LOG(LOG_LVL_TRACE, "Added a simple usercut, subtour size: %d", cutNcount);
 
 	return 0;
 }

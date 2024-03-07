@@ -391,7 +391,7 @@ static double parseDouble(char *arg, const char *paramName)
     if (cvt <= 0)
         throwError("The value specified as %s must be a real number", paramName);
     if (endPtr != &arg[strlen(arg)])
-        LOG(LOG_LVL_WARNING, "There are extra character after the %s value", paramName);
+        LOG(LOG_LVL_WARN, "There are extra character after the %s value", paramName);
 
     return cvt;
 }

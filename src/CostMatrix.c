@@ -19,7 +19,7 @@ static void * computeDistMatThread(void * arg);
 
 void printCostMatrix(Instance *inst)
 {
-    LOG(LOG_LVL_LOG, "Printing the distance matrix");
+    LOG(LOG_LVL_INFO, "Printing the distance matrix");
 
     for (int row = 0; row < inst->nNodes; row++)
     {
@@ -47,7 +47,7 @@ double computeCostMatrix(Instance *inst)
     if (inst->edgeCostMat == NULL)
         throwError("Could not allocate memory for the edgeCostMatrix. Required amount is %.2f GB", (float)allocSize / (1024.F * 1024.F * 1024.F));
     else
-        LOG(LOG_LVL_LOG, "EdgeCostMatrix: %.2f GB of memory allocated successfully", (float)allocSize / (1024.F * 1024.F * 1024.F));
+        LOG(LOG_LVL_INFO, "EdgeCostMatrix: %.2f GB of memory allocated successfully", (float)allocSize / (1024.F * 1024.F * 1024.F));
         
     // init data structure to pass to threads
     ThreadsData thInst = { .inst = inst, .nextRow = 0 };

@@ -73,7 +73,7 @@ double readFile (Instance *inst)
     while ((keywordFinished == 0) && ((lineSize = (int)getline(&line, &lineMemSize, f)) != EOF))
     {
         keywordsLinesCount++;
-        //LOG(LOG_LVL_EVERYTHING, line);
+        //LOG(LOG_LVL_TRACE, line);
 
         // check in the first part of each line if we find a useful keyword
         int keywordID = NO_KEYWORD_FOUND_ID;
@@ -150,7 +150,7 @@ double readFile (Instance *inst)
         // check if the number of data lines are not more than the number specified in dimension
         if (i >= inst->nNodes)
         {
-            LOG(LOG_LVL_WARNING, "There may be more elements than the number specified with keyword \"DIMENSION\" in the .tsp file. Ignoring extra data");
+            LOG(LOG_LVL_WARN, "There may be more elements than the number specified with keyword \"DIMENSION\" in the .tsp file. Ignoring extra data");
             break;
         }
 
@@ -161,7 +161,7 @@ double readFile (Instance *inst)
 
     if (i < inst->nNodes)
     {
-        LOG(LOG_LVL_WARNING, "readFile: number of nodes in file are less than the number specified in the file. Setting total number of nodes to %ld", i);
+        LOG(LOG_LVL_WARN, "readFile: number of nodes in file are less than the number specified in the file. Setting total number of nodes to %ld", i);
         inst->nNodes = i;
 
         // reallocataing memory to better fit the smaller instance
@@ -192,7 +192,7 @@ double readFile (Instance *inst)
 
     // print the coordinates data with enough log level
     //for (int i = 0; i < inst->nNodes; i++)
-    //    LOG(LOG_LVL_EVERYTHING, "Node %4lu: [%.2e, %.2e]", i+1, inst->X[i], inst->Y[i]);
+    //    LOG(LOG_LVL_TRACE, "Node %4lu: [%.2e, %.2e]", i+1, inst->X[i], inst->Y[i]);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     return cvtTimespec2Double(timeStruct) - startTime;
@@ -218,7 +218,7 @@ static void checkFileType(char * line, int lineSize, Instance *inst)
     // here check if last 3 charaters(excludiing the '\n') are "TSP"
     char substr[3] = {0};
     memcpy(substr, &line[lineSize - 4], 3); // generate substring of 3 chars for logging/debugging purposes
-    //LOG(LOG_LVL_EVERYTHING, "Checking file TYPE keyword: comparing \"TSP\" with what is found at the of the line which is:%s", substr);
+    //LOG(LOG_LVL_TRACE, "Checking file TYPE keyword: comparing \"TSP\" with what is found at the of the line which is:%s", substr);
     if (strncmp(&line[lineSize - 4], "TSP", 3) != 0)
         throwError("The file is either not of type TSP, or there are some characters (even blank spaces) after \"TSP\" and before the next line. \nCheck that the file used in input is of the correct type and correctly formatted. Only \"TSP\" files are currently supported");
 }
@@ -233,7 +233,7 @@ static int getDimensionFromLine(char * line, int lineSize, Instance *inst)
     else
         numberFirstChar++;
     // now numberFirstChar should be pointing to the first character that makes the decimal number in line
-    //LOG(LOG_LVL_EVERYTHING, "Getting the number of nodes from file: the first character of the number is:%c", *numberFirstChar);
+    //LOG(LOG_LVL_TRACE, "Getting the number of nodes from file: the first character of the number is:%c", *numberFirstChar);
 
     char *endPtr = NULL;
     int dimension = (int)strtoul(numberFirstChar, &endPtr, 10);
@@ -265,7 +265,7 @@ static int getEdgeWeightTypeFromLine(char * line, int lineSize, Instance *inst)
         firstWgtTypePtr++;
 
     // now firstEdgeTypePtr should be pointing to the first character that describes the weight type
-    LOG(LOG_LVL_EVERYTHING, "Getting the edge weight type from file: the first character of the weight type is:%c", *firstWgtTypePtr);
+    LOG(LOG_LVL_TRACE, "Getting the edge weight type from file: the first character of the weight type is:%c", *firstWgtTypePtr);
 
     int foundEdgeWeightTypeID = -1;
     for (int i = 0; i < EDGE_WEIGHT_TYPES_COUNT; i++)
@@ -317,7 +317,7 @@ static void readTspLine(char *line, int length, int index, Instance *inst, int k
     }
 
     if ((int)numbers[0] != index + 1)
-        LOG(LOG_LVL_WARNING, "readFile: File has inconsistent enumeration, node %lu at line %lu should be identified with %ld", (int)numbers[0], keywordsLinesCount + index + 1, index + 1);
+        LOG(LOG_LVL_WARN, "readFile: File has inconsistent enumeration, node %lu at line %lu should be identified with %ld", (int)numbers[0], keywordsLinesCount + index + 1, index + 1);
 
     inst->X[index] = numbers[1];
     inst->Y[index] = numbers[2];

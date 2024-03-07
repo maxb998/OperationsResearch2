@@ -203,7 +203,7 @@ static void *runVns(void *arg)
 
         kick(thSpecific);
 
-        LOG(LOG_LVL_EVERYTHING, "runVns: [%d] solution has been kicked. Cost=%lf", cvtCost2Double(thSpecific->workingSol.cost));
+        LOG(LOG_LVL_TRACE, "runVns: [%d] solution has been kicked. Cost=%lf", cvtCost2Double(thSpecific->workingSol.cost));
 
         #if ((COMPUTATION_TYPE == COMPUTATE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
             apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->X, thSpecific->Y, thSpecific->costCache);
@@ -211,14 +211,14 @@ static void *runVns(void *arg)
             apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->costCache);
         #endif
 
-        LOG(LOG_LVL_EVERYTHING, "runVns: [%d] solution has been optimized. Cost=%lf", thSpecific->iterCount, cvtCost2Double(thSpecific->workingSol.cost));
+        LOG(LOG_LVL_TRACE, "runVns: [%d] solution has been optimized. Cost=%lf", thSpecific->iterCount, cvtCost2Double(thSpecific->workingSol.cost));
 
         if (thSpecific->workingSol.cost < thShared->bestSol->cost)
         {
             pthread_mutex_lock(&thShared->mutex);
             if (thSpecific->workingSol.cost < thShared->bestSol->cost)
             {
-                LOG(LOG_LVL_LOG, "Found better solution: cost = %lf", cvtCost2Double(thSpecific->workingSol.cost));
+                LOG(LOG_LVL_INFO, "Found better solution: cost = %lf", cvtCost2Double(thSpecific->workingSol.cost));
                 cloneSolution(&thSpecific->workingSol, thShared->bestSol);
             }
             else

@@ -161,7 +161,7 @@ int apply2OptBestFix_fastIteratively(Solution *sol, float *costCache)
         double currentTime = cvtTimespec2Double(timeStruct);
         if (printPerformanceLog && (currentTime - printTimeSec > LOG_INTERVAL))
         {   
-            LOG(LOG_LVL_LOG, "2Opt running: cost is %lf at iteration %4lu with last optimization of %lf", cvtCost2Double(sol->cost), data.iter, -bestFix.costOffset);
+            LOG(LOG_LVL_INFO, "2Opt running: cost is %lf at iteration %4lu with last optimization of %lf", cvtCost2Double(sol->cost), data.iter, -bestFix.costOffset);
             printTimeSec = currentTime;
         }
         data.iter++;
@@ -213,7 +213,7 @@ static inline void updateSolution(_2optData *data, _2optMoveData bestFix)
 
     int smallID = bestFix.edge0 + 1, bigID = bestFix.edge1;
 
-    LOG(LOG_LVL_EVERYTHING, "2Opt: [%d] Updating solution by switching edge (%d,%d) with edge (%d,%d) improving cost by %f. New Cost = %lf", data->iter,
+    LOG(LOG_LVL_TRACE, "2Opt: [%d] Updating solution by switching edge (%d,%d) with edge (%d,%d) improving cost by %f. New Cost = %lf", data->iter,
         sol->indexPath[bestFix.edge0], sol->indexPath[bestFix.edge0 + 1],
         sol->indexPath[bestFix.edge1], sol->indexPath[bestFix.edge1 + 1],
         bestFix.costOffset, cvtCost2Double(sol->cost));

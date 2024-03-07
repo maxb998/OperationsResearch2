@@ -93,7 +93,7 @@ void LocalBranching(Solution *sol, double timeLimit)
 
         if (lbData.k >= sol->instance->nNodes)
         {
-            LOG(LOG_LVL_WARNING, "LocalBranching: Solution similarity constraint is deactivated -> Optimal Solution found");
+            LOG(LOG_LVL_WARN, "LocalBranching: Solution similarity constraint is deactivated -> Optimal Solution found");
             break;
         }
 
@@ -107,7 +107,7 @@ void LocalBranching(Solution *sol, double timeLimit)
     if (lbData.cbData.bestCost < sol->cost)
         cvtSuccessorsToSolution(lbData.cbData.bestSuccessors, sol);
     else
-        LOG(LOG_LVL_WARNING, "LocalBranching: Solution could not be optimized any further");
+        LOG(LOG_LVL_WARN, "LocalBranching: Solution could not be optimized any further");
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     currentTime = cvtTimespec2Double(timeStruct);

@@ -201,7 +201,7 @@ void apply3OptBestFix_fastIteratively(Solution *sol, float *costCache, int *sect
         double currentTime = cvtTimespec2Double(timeStruct);
         if (printPerformanceLog && (currentTime - printTimeSec > LOG_INTERVAL))
         {   
-            LOG(LOG_LVL_LOG, "3Opt running: cost is %lf at iteration %4lu with last optimization of %lf", cvtCost2Double(sol->cost), data.iter, -bestFix.costOffset);
+            LOG(LOG_LVL_INFO, "3Opt running: cost is %lf at iteration %4lu with last optimization of %lf", cvtCost2Double(sol->cost), data.iter, -bestFix.costOffset);
             printTimeSec = currentTime;
         }
         data.iter++;
@@ -285,7 +285,7 @@ static inline void updateSolution(_3optData *data, _3optMoveData bestFix)
     // }
 
     // if (bestOffset != bestFix.costOffset)
-    //     LOG(LOG_LVL_WARNING, "3OptBestFix -> updateSolution: recomputed cost is different from the one specified (%f vs %f)", bestOffset, bestFix.costOffset);
+    //     LOG(LOG_LVL_WARN, "3OptBestFix -> updateSolution: recomputed cost is different from the one specified (%f vs %f)", bestOffset, bestFix.costOffset);
 
     // if (bestOffset >= -EPSILON)
     //     throwError("Recomputed move is not improving");
@@ -316,7 +316,7 @@ static inline void updateSolution(_3optData *data, _3optMoveData bestFix)
     }
     sol->cost += cvtFloat2Cost(altE0) + cvtFloat2Cost(altE1) + cvtFloat2Cost(altE2) - cvtFloat2Cost(data->costCache[e0]) - cvtFloat2Cost(data->costCache[e1]) - cvtFloat2Cost(data->costCache[e2]);
 
-    LOG(LOG_LVL_EVERYTHING, "3Opt: [%d] Updating solution by switching edges (%d,%d,%d) with moveType %d improving cost by %f. New Cost = %lf", data->iter,
+    LOG(LOG_LVL_TRACE, "3Opt: [%d] Updating solution by switching edges (%d,%d,%d) with moveType %d improving cost by %f. New Cost = %lf", data->iter,
         e0, e1, e2, moveType,
         bestFix.costOffset, cvtCost2Double(sol->cost));
 
@@ -370,7 +370,7 @@ static inline void updateSolution(_3optData *data, _3optMoveData bestFix)
     }
 
     // if (moveType & _3OPT_MOVE_14_52_36)
-    //     LOG(LOG_LVL_WARNING, "Finally found moveType: _3OPT_MOVE_14_52_36!");
+    //     LOG(LOG_LVL_WARN, "Finally found moveType: _3OPT_MOVE_14_52_36!");
 }
 
 static inline void invertSection(_3optData *data, int firstEdgePos, int lastEdgePos)

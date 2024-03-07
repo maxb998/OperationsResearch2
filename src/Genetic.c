@@ -283,7 +283,7 @@ static void * runGenetic(void *arg)
             if (*(float*)&localBestSol->cost < *(float*)&thShared->bestSol.cost)
             {
                 cloneSolution(localBestSol, &thShared->bestSol);
-                LOG(LOG_LVL_LOG, "Found better solution at iteration %7d with approximate cost: \t%f", thSpecific->iterCount, *(float*)&thShared->bestSol.cost);
+                LOG(LOG_LVL_INFO, "Found better solution at iteration %7d with approximate cost: \t%f", thSpecific->iterCount, *(float*)&thShared->bestSol.cost);
             }
             pthread_mutex_unlock(&thShared->mutex);
         }
