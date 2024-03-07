@@ -10,17 +10,18 @@
 typedef struct 
 {
 	CallbackData *cbData;
+	CPXCALLBACKCONTEXTptr context;
 	void *allocatedMemory;
 	bool fromConcorde;
 }ConcordePassthroughData;
 
 
 // Function to post the solution to cplex. Vals and indicies are two allocated portions of memory of ncols elements each.
-static inline void PostSolution(CallbackData *cbData, double *vals, int *indicies);
+static inline int PostSolution(CPXCALLBACKCONTEXTptr context, CallbackData *cbData, double *vals, int *indicies);
 // Function called when a candidate solution has been found(look for subtours and add suitable constraints if necessary)
-static inline void candidatePartCallback(CallbackData *cbData);
+static inline void candidatePartCallback(CPXCALLBACKCONTEXTptr context, CallbackData *cbData);
 // Function called during lp relaxation. Finds possible subtours using concorde library and add suitable constrains
-static inline void relaxationPartCallback(CallbackData *cbData);
+static inline void relaxationPartCallback(CPXCALLBACKCONTEXTptr context, CallbackData *cbData);
 // Function used to add user cuts to cplex environment
 int applyCplexUsercut(double cutValue, int cutNcount, int *cutMembers, void *arg);
 
@@ -84,12 +85,11 @@ void BranchAndCut(Solution *sol, double timeLimit)
 int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG contextid, void *userhandle ) 
 {
 	CallbackData *cbData = (CallbackData *) userhandle;
-	cbData->context = context;
 
 	if (contextid & CPX_CALLBACKCONTEXT_RELAXATION)
-		relaxationPartCallback(cbData);
+		relaxationPartCallback(context, cbData);
 	else if (contextid & CPX_CALLBACKCONTEXT_CANDIDATE)
-		candidatePartCallback(cbData);
+		candidatePartCallback(context, cbData);
 
 	return 0;
 }
@@ -146,7 +146,7 @@ void destroyCallbackData(CallbackData *cbData)
 	pthread_mutex_destroy(&cbData->mutex);
 }
 
-static inline void candidatePartCallback(CallbackData *cbData)
+static inline void candidatePartCallback(CPXCALLBACKCONTEXTptr context, CallbackData *cbData)
 {
 	// Stores current vector x from CPLEX
 	double *xstar = malloc(cbData->ncols * (sizeof(double) + sizeof(int)));
@@ -154,9 +154,10 @@ static inline void candidatePartCallback(CallbackData *cbData)
 		throwError("Branch&Cut: could not allocate memory for xstar and indicies");
 	// Stores the index of the coefficients that we pass to CPLEX 
 	int *indicies = (int*)&xstar[cbData->ncols];
+	double objVal;
 
 	int errCode;
-	if ((errCode = CPXcallbackgetcandidatepoint(cbData->context, xstar, 0, cbData->ncols-1, NULL)) != 0) 
+	if ((errCode = CPXcallbackgetcandidatepoint(context, xstar, 0, cbData->ncols-1, &objVal)) != 0) 
 		throwError("Branch&Cut: CPXcallbackgetcandidatepoint failed with code %d", errCode);
 	
 	Instance *inst = cbData->inst;
@@ -167,7 +168,7 @@ static inline void candidatePartCallback(CallbackData *cbData)
 
 	pthread_mutex_lock(&cbData->mutex);
 	if (inst->params.mode == MODE_BRANCH_CUT) // avoids too much output in hard fixing and local branching
-		LOG(LOG_LVL_DEBUG, "Branch & Cut: iteration %d subtours detected %d", cbData->iterNum, sub.subtoursCount);
+		LOG(LOG_LVL_DEBUG, "Branch & Cut: iteration %d subtours detected %d. ObjValue = %lf", cbData->iterNum, sub.subtoursCount, objVal);
 	cbData->iterNum++;
 	pthread_mutex_unlock(&cbData->mutex);
 
@@ -175,11 +176,12 @@ static inline void candidatePartCallback(CallbackData *cbData)
 	if(sub.subtoursCount > 1)
 	{
 		double * coeffs = xstar;
-		int errCode = setSEC(coeffs, indicies, NULL, cbData, &sub, 0, inst, cbData->ncols);
+		int errCode = setSEC(coeffs, indicies, NULL, context, &sub, 0, inst, cbData->ncols);
 		if (errCode != 0) // ignore this type of errors
-			LOG(LOG_LVL_WARNING, "Branch & Cut: setSEC failed with code %d. Continuing...", errCode);
+			throwError("Branch & Cut: setSEC failed with code %d", errCode);
 
-		cost = PatchingHeuristic(&sub, inst);
+		if (inst->params.cplexPatching)
+			cost = PatchingHeuristic(&sub, inst);
 	}
 	else
 		cost = computeSuccessorsSolCost(sub.successors, inst);
@@ -202,7 +204,11 @@ static inline void candidatePartCallback(CallbackData *cbData)
 					throwError("BranchAndCut callback: The number of subtours in the solution intended for posting is %d while it must be == 1");
 			#endif
 			if (inst->params.cplexSolPosting)
-				PostSolution(cbData, xstar, indicies);
+			{
+				 errCode = PostSolution(context, cbData, xstar, indicies);
+				 if (errCode != 0)
+				 	throwError("Branch & Cut solution posting failed with code %d ", errCode);
+			}
 		}
 		pthread_mutex_unlock(&cbData->mutex);
 	}
@@ -211,7 +217,7 @@ static inline void candidatePartCallback(CallbackData *cbData)
 	free(xstar);
 }
 
-static inline void PostSolution(CallbackData *cbData, double *vals, int *indicies)
+static inline int PostSolution(CPXCALLBACKCONTEXTptr context, CallbackData *cbData, double *vals, int *indicies)
 {
 	#ifdef DEBUG
 		if (!checkSuccessorSolution(cbData->inst, cbData->bestSuccessors) != 0)
@@ -233,15 +239,13 @@ static inline void PostSolution(CallbackData *cbData, double *vals, int *indicie
 		strat = CPXCALLBACKSOLUTION_CHECKFEAS;
 	#endif
 
-	int errCode = CPXcallbackpostheursoln(cbData->context, cbData->ncols, indicies, vals, cvtCost2Double(cbData->bestCost), strat);
-	if (errCode != 0) // ignore this type of errors
-		LOG(LOG_LVL_WARNING, "Branch & Cut solution posting failed with code %d. Continuing...", errCode);
-	else
-		LOG(LOG_LVL_DEBUG, "Branch & Cut: new solution has been posted correctly");
+	int errCode = CPXcallbackpostheursoln(context, cbData->ncols, indicies, vals, cvtCost2Double(cbData->bestCost), strat);
+
+	return errCode;
 }
 
 
-static inline void relaxationPartCallback(CallbackData *cbData)
+static inline void relaxationPartCallback(CPXCALLBACKCONTEXTptr context, CallbackData *cbData)
 {
 	// Stores current vector x from CPLEX
 	size_t allocSize = cbData->ncols * (sizeof(double) + sizeof(int));
@@ -252,7 +256,7 @@ static inline void relaxationPartCallback(CallbackData *cbData)
 	//int *indicies = (int*)&xstar[cbData->ncols];
 
 	int errCode;
-	if ((errCode = CPXcallbackgetrelaxationpoint(cbData->context, xstar, 0, cbData->ncols-1, NULL)) != 0) 
+	if ((errCode = CPXcallbackgetrelaxationpoint(context, xstar, 0, cbData->ncols-1, NULL)) != 0) 
 		throwError("Branch&Cut: CPXcallbackgetrelaxationpoint failed with code %d", errCode);
 	
 	int ncomp = 0, *compsCount = NULL, *comps = NULL, ecount = cbData->ncols;
@@ -260,12 +264,12 @@ static inline void relaxationPartCallback(CallbackData *cbData)
 	if ((errCode = CCcut_connect_components(cbData->inst->nNodes, ecount, cbData->elist, xstar, &ncomp, &compsCount, &comps)) != 0)
 		throwError("Branch&Cut: CCcut_connect_components failed with code %d", errCode);
 	
-	ConcordePassthroughData passthroughData = { .cbData=cbData, .allocatedMemory=(void*)xstar, .fromConcorde=false };
+	ConcordePassthroughData passthroughData = { .context=context, .cbData=cbData, .allocatedMemory=(void*)xstar, .fromConcorde=false };
 
 	if (ncomp == 1)
 	{
 
-		LOG(LOG_LVL_EVERYTHING, "Cutting Single component");
+		LOG(LOG_LVL_EVERYTHING, "Cutting with a single component");
 		passthroughData.fromConcorde = true;
 		if ((errCode = CCcut_violated_cuts(cbData->inst->nNodes, cbData->ncols, cbData->elist, xstar, 1.9, applyCplexUsercut, &passthroughData)) != 0)
 			LOG(LOG_LVL_WARNING, "Branch&Cut - relaxationPartCallback: CCcut_violated_cuts returned error code %d", errCode);
@@ -310,9 +314,9 @@ int applyCplexUsercut(double cutValue, int cutNcount, int *cutMembers, void *arg
 			index[k] = xpos(cutMembers[i], cutMembers[j], n);
 	
 
-	int errCode = CPXcallbackaddusercuts(cbData->context, 1, cutEcount, &rhs, &sense, &matbeg, index, coeffs, &purgeable, &local);
+	int errCode = CPXcallbackaddusercuts(passthroughData->context, 1, cutEcount, &rhs, &sense, &matbeg, index, coeffs, &purgeable, &local);
 	if (errCode != 0) // ignore this type of errors
-		LOG(LOG_LVL_DEBUG, "Branch&Cut - applyCplexUsercut: CPXcallbackaddusercuts returned error code %d. Continuing...", errCode);
+		throwError("Branch&Cut - applyCplexUsercut: CPXcallbackaddusercuts returned error code %d", errCode);
 	
 	if (passthroughData->fromConcorde)
 		LOG(LOG_LVL_EVERYTHING, "Added CONCORDE usercut");

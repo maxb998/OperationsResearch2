@@ -29,6 +29,7 @@
                 //"--annelTemp", "1000",
 
                 //"--cplexInit", "em",
+                //"--cplexDisablePatching",
                 //"--cplexEnableWarmStart",
                 //"--cplexDisableSolPosting",
                 //"--cplexDisableUsercuts",
@@ -42,7 +43,7 @@
                 "--roundcosts",
                 //"--plot", 
                 //"--save",
-                "--loglvl", "log"
+                "--loglvl", "debug"
             ],
             "cwd": "${workspaceFolder}"
        },
@@ -70,6 +71,7 @@
                 //"--annelTemp", "1000",
 
                 //"--cplexInit", "em",
+                //"--cplexDisablePatching",
                 //"--cplexEnableWarmStart",
                 //"--cplexDisableSolPosting",
                 //"--cplexDisableUsercuts",
@@ -79,11 +81,11 @@
                 //"--3opt",
 
                 //"--seed", "2023",
-                //"--threads", "1",
+                //"--threads", "4",
                 "--roundcosts",
                 //"--plot", 
                 //"--save",
-                "--loglvl", "log"
+                "--loglvl", "all"
             ],
             "cwd": "${workspaceFolder}"
         }

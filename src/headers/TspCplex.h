@@ -22,7 +22,6 @@ typedef struct
 
 typedef struct
 {
-	CPXCALLBACKCONTEXTptr context;
 	Instance *inst;
 
 	int ncols; // Number of columns of the matrix inside cplex linear problem
@@ -107,7 +106,7 @@ void cvtSolutionToSuccessors(Solution *sol, int* successors);
 * @param nCols Number of Columns/Variables defined by the problem
 * @result 0 if everything run smoothly, Cplex Error code is returned otherwise
 */
-int setSEC(double *coeffs, int *indexes, CplexData *cpx, CallbackData *cbData, SubtoursData *subData, int iterNum, Instance *inst, int nCols);
+int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, SubtoursData *subData, int iterNum, Instance *inst, int nCols);
 
 /*!
 * @brief "Fix" a successors-based solution that presents subtours by merging them in the best possible way.

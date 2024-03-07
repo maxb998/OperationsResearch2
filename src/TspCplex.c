@@ -17,8 +17,8 @@ CplexData initCplexData(Instance *inst)
 		throwError("buildCPXModel: error at CPXopenCPLEX with code %d", errno);
 
 	// screen output
-	if (inst->params.logLevel >= LOG_LVL_EVERYTHING)
-		CPXsetintparam(cpxData.env, CPX_PARAM_SCRIND, CPX_ON);
+	// if (inst->params.logLevel >= LOG_LVL_EVERYTHING)
+	// 	CPXsetintparam(cpxData.env, CPX_PARAM_SCRIND, CPX_ON);
 
 	// random seed for cplex
 	if (inst->params.randomSeed != -1)
@@ -166,31 +166,27 @@ void cvtSolutionToSuccessors(Solution *sol, int* successors)
 		throwError("cvtSolutionToSuccessors: Converted solution is wrong");	
 }
 
-int setSEC(double *coeffs, int *indexes, CplexData *cpx, CallbackData *cbData, SubtoursData *subData, int iterNum, Instance *inst, int nCols)
+int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, SubtoursData *subData, int iterNum, Instance *inst, int nCols)
 {
-	int retVal = 0;
 	int n = inst->nNodes;
 
 	// set all coeffs to 1 at the beggining so we don't have to think about them again
 	for (int i = 0; i < nCols; i++)
 		coeffs[i] = 1.;
 
-	char *sense = malloc(2 + 20 + sizeof(int) + sizeof(double));
-	sense[0] = 'L';
-	sense[1] = 0;
-	char *cname = &sense[2];
-	int *izero = (int*)&cname[20];
-	*izero = 0;
-	double *rhs = (double*)&izero[1];
+	char sense[2] = { 'L', 0};
+	char cname[30]; // size of 30 should be more than enough
+	char *cnamePtr = cname;
+	int izero = 0;
 
-	for (int subtourID = 0; (subtourID < subData->subtoursCount) && (retVal == 0); subtourID++)
+	for (int subtourID = 0; subtourID < subData->subtoursCount; subtourID++)
 	{
 		// get first node of next subtour
 		int subtourStart = 0;
 		for (;subData->subtoursMap[subtourStart] < subtourID; subtourStart++);
 
 		int nnz = 0;
-		*rhs = -1;
+		double rhs = -1;
 
 		// follow successor and add all edges that connect each element of the subtour into the constraint
 		int next = subtourStart;
@@ -201,24 +197,24 @@ int setSEC(double *coeffs, int *indexes, CplexData *cpx, CallbackData *cbData, S
 				indexes[nnz] = xpos(next, i, n);
 				nnz++;
 			}
-			*rhs += 1;
+			rhs += 1;
 			next = subData->successors[next];
 		} while (next != subtourStart);
 
-		sprintf(cname, "SEC(%d,%d)", iterNum, subtourID);
+		if (inst->params.mode & MODE_BENDERS)
+			sprintf(cname, "SEC(%d,%d)", iterNum, subtourID);
 
+		int errCode;
 		if(cpx)
-			retVal = CPXaddrows(cpx->env, cpx->lp, 0, 1, nnz, rhs, sense, izero, indexes, coeffs, NULL, &cname);
+			errCode = CPXaddrows(cpx->env, cpx->lp, 0, 1, nnz, &rhs, sense, &izero, indexes, coeffs, NULL, &cnamePtr);
 		else
-			retVal = CPXcallbackrejectcandidate(cbData->context, 1, nnz, rhs, sense, izero, indexes, coeffs);
+			errCode = CPXcallbackrejectcandidate(context, 1, nnz, &rhs, sense, &izero, indexes, coeffs);
 		
-		// if (retVal == 1811)
-		// 	LOG(LOG_LVL_WARNING, "setSec failed??");
+		if (errCode != 0)
+			return errCode;
 	}
 
-	free(sense);
-
-	return retVal;
+	return 0;
 }
 
 __uint128_t computeSuccessorsSolCost(int *successors, Instance *inst)

@@ -40,7 +40,7 @@ void benders(Solution *sol, double tlim)
 
 	while (currentTime - startTime < tlim)
 	{
-		if (inst->params.cplexWarmStart || (iterNum > 0)) // always use warm start if the "warm-starting" solution derived from a previous iteration of benders
+		if (inst->params.cplexWarmStart || ((iterNum > 0) && inst->params.cplexPatching)) // always use warm start if the "warm-starting" solution derived from a previous iteration of benders
 			if ((errCode = WarmStart(&cpx, bestSuccessorsSol) != 0))
 				throwError("Benders: error on WarmStart with code %d", errCode);
 
@@ -56,6 +56,11 @@ void benders(Solution *sol, double tlim)
 		errCode = CPXgetx(cpx.env, cpx.lp, xstar, 0, ncols - 1);
 		if (errCode != 0)
 			throwError("Benders: output of CPXgetx != 0");
+
+		double objVal;
+		errCode = CPXgetobjval(cpx.env, cpx.lp, &objVal);
+		if (errCode != 0)
+			throwError("Benders: output of CPXgetobjval != 0");
 
 		sub.subtoursCount = 0;
 		
@@ -73,20 +78,25 @@ void benders(Solution *sol, double tlim)
 		if (errCode != 0)
 			throwError("Benders: SetSEC failed");
 		
-		// generate a solution using Repair Heuristic and check if it is better than the previous solutions
-		__uint128_t cost = PatchingHeuristic(&sub, inst);
-
-		if (!checkSuccessorSolution(inst, sub.successors))
-			throwError("Benders: Successors after repair heuristic does not represent a loop");
-
-		LOG(LOG_LVL_DEBUG, "Subtours at iteration %d is %d. Cost of Repaired Solution: %lf", iterNum, sub.subtoursCount, cvtCost2Double(cost));
-
-		if (cost < bestCost)
+		if (inst->params.cplexPatching)
 		{
-			swapElems(bestSuccessorsSol, sub.successors)
-			bestCost = cost;
-			LOG(LOG_LVL_LOG, "Found new best solution with cost %lf", cvtCost2Double(bestCost));
+			// generate a solution using Repair Heuristic and check if it is better than the previous solutions
+			__uint128_t cost = PatchingHeuristic(&sub, inst);
+
+			if (!checkSuccessorSolution(inst, sub.successors))
+				throwError("Benders: Successors after repair heuristic does not represent a loop");
+
+			LOG(LOG_LVL_DEBUG, "Subtours at iteration %d is %d. ObjValue = %lf Cost of Repaired Solution: %lf", iterNum, sub.subtoursCount, objVal, cvtCost2Double(cost));
+
+			if (cost < bestCost)
+			{
+				swapElems(bestSuccessorsSol, sub.successors)
+				bestCost = cost;
+				LOG(LOG_LVL_LOG, "Found new best solution with cost %lf", cvtCost2Double(bestCost));
+			}
 		}
+		else
+			LOG(LOG_LVL_LOG, "Subtours at iteration %d is %d. ObjValue = %lf", iterNum, sub.subtoursCount, objVal);
 
 		iterNum++;
 	}

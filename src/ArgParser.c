@@ -109,6 +109,7 @@ enum argpKeys{
     ARGP_ANNEAL_TEMP,
 
     ARGP_CPLEX_INIT_MODE,
+    ARGP_CPLEX_PATCHING,
     ARGP_CPLEX_WARMSTART,
     ARGP_CPLEX_POSTING,
     ARGP_CPLEX_USERCUTS,
@@ -158,6 +159,7 @@ void argParse(Instance * inst, int argc, char *argv[])
         { .name="annelTemp", .key=ARGP_ANNEAL_TEMP, .arg="UINT", .flags=0, .doc="Specify temperature for Simulated Annealing procedure\n", .group=3 },
 
         { .name="cplexInit", .key=ARGP_CPLEX_INIT_MODE, .arg="STRING", .flags=0, .doc=MATHEUR_INIT_MODE_DOC, .group=4 },
+        { .name="cplexDisablePatching", .key=ARGP_CPLEX_PATCHING, .arg=NULL, .flags=0, .doc="Disable the ability to find a way to merge subtours during benders and branch and cut to build a feasible solution", .group=4 },
         { .name="cplexEnableWarmStart", .key=ARGP_CPLEX_WARMSTART, .arg=NULL, .flags=0, .doc="Enable the ability to find a solution by means of heuristic and metaheuristics and use it to \"warm start\" cplex when using benders of branch and cut methods", .group=4 },
         { .name="cplexDisableSolPosting", .key=ARGP_CPLEX_POSTING, .arg=NULL, .flags=0, .doc="Disable the ability of cplex of posting the best feasible solution found at any point during the branch and cut method", .group=4 },
         { .name="cplexDisableUsercuts", .key=ARGP_CPLEX_USERCUTS, .arg=NULL, .flags=0, .doc="Disable the ability of using concorde's functions to find connected components during cplex relaxation and add cuts that violate such components as usercuts", .group=4 },
@@ -257,6 +259,10 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
 
     case ARGP_CPLEX_INIT_MODE:
         parseModeOption(arg, &inst->params.matheurInitMode, modeStrings, 0, HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT, "cplexInit");
+        break;
+
+    case ARGP_CPLEX_PATCHING:
+        inst->params.cplexPatching = false;
         break;
 
     case ARGP_CPLEX_WARMSTART:
@@ -460,8 +466,12 @@ void printInfo(Instance *inst)
         printf("\tExtra Mileage initialization set to: %s\n", inst->params.emInitOption == EM_INIT_RANDOM ? "random" : "farthest");
     // cplex options
     if (p->mode & (MODE_BENDERS | MODE_BRANCH_CUT | MODE_LOCAL_BRANCHING | MODE_HARDFIX))
+    {
+        if (!p->cplexPatching)
+            printf("\tSolutions with more than subtours found running cplex won't be patched using the Patching Heurisitic\n");
         if (p->cplexWarmStart)
             printf("\tCplex will be warm started using an heuristic/metaheuristic solution\n");
+    }
     if (p->mode & (MODE_BRANCH_CUT | MODE_LOCAL_BRANCHING | MODE_HARDFIX))
     {
         if (!p->cplexSolPosting)

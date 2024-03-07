@@ -44,6 +44,7 @@ Instance newInstance ()
             .annealingTemperature = -1,
             
             .matheurInitMode = MODE_NN,
+            .cplexPatching=true,
             .cplexWarmStart = false,
             .cplexSolPosting = true,
             .cplexUsercuts = true,
@@ -137,6 +138,7 @@ void LOG (enum LogLevel lvl, char * line, ...)
 
     // print log level
     printf("  [%s] ", logLevelString[lvl]);
+    fflush(stdout);
 
     // print passed message and values
     va_list params;
