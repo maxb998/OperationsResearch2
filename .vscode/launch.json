@@ -12,60 +12,18 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/debug/main",
             "args": [
-                "--file", "data/220-320/a280.tsp",
-                "--mode", "branch-cut",
-                "--tlim", "10",
+                "--file", "data/3000-6000/rl5915.tsp",
+                "--mode", "tabu",
+                "--tlim", "600",
 
-                //"--graspType", "random",
-                //"--graspChance", "0.01",
-                //"--nnTryall",
-                //"--emFarthest",
-
-                //"--metaInit", "em",
-                //"--metaRestartThreshold", "1000",
-                //"--tabuTenureSize", "5",
-                //"--vnsKickSize", "5,30",
-                //"--geneticParams", "100,50,50,50",
-                //"--annelTemp", "1000",
-
-                //"--cplexInit", "em",
-                //"--cplexDisablePatching",
-                //"--cplexEnableWarmStart",
-                //"--cplexDisableSolPosting",
-                //"--cplexDisableUsercuts",
-                //"--hardfixSmallest",
-
-                //"--2opt",
-                //"--3opt",
-
-                //"--seed", "2023",
-                //"--threads", "1",
-                "--roundcosts",
-                //"--plot", 
-                //"--save",
-                "--loglvl", "debug"
-            ],
-            "cwd": "${workspaceFolder}"
-       },
-       {
-            "type":"cppdbg",
-            "name": "Exec",
-            "preLaunchTask": "Build Exec",
-            "request": "launch",
-            "program": "${workspaceFolder}/bin/exec/main",
-            "args": [
-                "--file", "data/220-320/a280.tsp",
-                "--mode", "branch-cut",
-                "--tlim", "20",
-
-                //"--graspType", "almostbest",
+                "--graspType", "almostbest",
                 //"--graspChance", "0.05",
                 //"--nnTryall",
                 //"--emFarthest",
 
-                //"--metaInit", "em",
+                "--metaInit", "nn",
                 //"--metaRestartThreshold", "1000",
-                //"--tabuTenureSize", "1",
+                "--tabuTenureSize", "50",
                 //"--vnsKickSize", "5,30",
                 //"--geneticParams", "20,10,100,100",
                 //"--annelTemp", "1000",
@@ -85,7 +43,49 @@
                 "--roundcosts",
                 //"--plot", 
                 //"--save",
-                "--loglvl", "all"
+                "--loglvl", "info"
+            ],
+            "cwd": "${workspaceFolder}"
+       },
+       {
+            "type":"cppdbg",
+            "name": "Exec",
+            "preLaunchTask": "Build Exec",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/exec/main",
+            "args": [
+                "--file", "data/3000-6000/rl5915.tsp",
+                "--mode", "tabu",
+                "--tlim", "600",
+
+                "--graspType", "almostbest",
+                //"--graspChance", "0.05",
+                //"--nnTryall",
+                //"--emFarthest",
+
+                "--metaInit", "nn",
+                //"--metaRestartThreshold", "1000",
+                "--tabuTenureSize", "50",
+                //"--vnsKickSize", "5,30",
+                //"--geneticParams", "20,10,100,100",
+                //"--annelTemp", "1000",
+
+                //"--cplexInit", "em",
+                //"--cplexDisablePatching",
+                //"--cplexEnableWarmStart",
+                //"--cplexDisableSolPosting",
+                //"--cplexDisableUsercuts",
+                //"--hardfixSmallest",
+
+                //"--2opt",
+                //"--3opt",
+
+                //"--seed", "2023",
+                //"--threads", "4",
+                "--roundcosts",
+                //"--plot", 
+                //"--save",
+                "--loglvl", "info"
             ],
             "cwd": "${workspaceFolder}"
         }

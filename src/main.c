@@ -6,8 +6,8 @@
 
 #define SEPARATOR_STR "##############################################################################################################################\n"
 
-#define METAHEUR_INIT_RATIO 1/10
-#define MATHEUR_INIT_RATIO 1/10
+#define METAHEUR_INIT_RATIO 0.05
+#define MATHEUR_INIT_RATIO 0.05
 
 static Solution runHeuristic(Instance *inst, enum Mode mode, double tlim);
 static void runMetaheuristic(Solution *sol, enum Mode mode, double tlim);
@@ -190,7 +190,7 @@ static void runMetaheuristic(Solution *sol, enum Mode mode, double tlim)
         break;
 
 
-    default: throwError("runMetaheuristic: specified mode must be in [MODE_TABU, MODE_VNS, MODE_ANNEALING]"); break;
+    default: throwError("runMetaheuristic: specified mode must be in [MODE_TABU, MODE_VNS, MODE_ANNEALING, MODE_GENETIC]"); break;
     }
 
     printf(SEPARATOR_STR"\n");

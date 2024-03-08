@@ -24,9 +24,9 @@
 #define SUBOPT_LOG_CRITICAL "critical"
 #define SUBOPT_LOG_WARNING "warning"
 #define SUBOPT_LOG_NOTICE "notice"
-#define SUBOPT_LOG_LOG "log"
+#define SUBOPT_LOG_INFO "info"
 #define SUBOPT_LOG_DEBUG "debug"
-#define SUBOPT_LOG_ALL "all"
+#define SUBOPT_LOG_TRACE "trace"
 
 #define DOC_NN SUBOPT_BLANKSPACE SUBOPT_NN "\t\t: Use Nearest Neighbor\n"
 #define DOC_EM SUBOPT_BLANKSPACE SUBOPT_EM "\t\t: Use Extra Mileage\n"
@@ -84,11 +84,11 @@ SUBOPT_BLANKSPACE SUBOPT_LOG_ERROR "\t\t: Show only error messages\n" \
 SUBOPT_BLANKSPACE SUBOPT_LOG_CRITICAL "\t: Show critical messages and all above\n" \
 SUBOPT_BLANKSPACE SUBOPT_LOG_WARNING "\t: Show warning and all above\n" \
 SUBOPT_BLANKSPACE SUBOPT_LOG_NOTICE "\t: Show notice messages and all above\n" \
-SUBOPT_BLANKSPACE SUBOPT_LOG_LOG "\t\t: Show log messages and all above\n" \
+SUBOPT_BLANKSPACE SUBOPT_LOG_INFO "\t\t: Show info messages and all above\n" \
 SUBOPT_BLANKSPACE SUBOPT_LOG_DEBUG "\t\t: Show debug messages and all above\n" \
-SUBOPT_BLANKSPACE SUBOPT_LOG_ALL "\t\t: Show all messages\n"
+SUBOPT_BLANKSPACE SUBOPT_LOG_TRACE "\t\t: Show all messages\n"
 
-static const char *logLevelStrings[] = { SUBOPT_LOG_ERROR, SUBOPT_LOG_CRITICAL, SUBOPT_LOG_WARNING, SUBOPT_LOG_NOTICE, SUBOPT_LOG_LOG, SUBOPT_LOG_DEBUG, SUBOPT_LOG_ALL };
+static const char *logLevelStrings[] = { SUBOPT_LOG_ERROR, SUBOPT_LOG_CRITICAL, SUBOPT_LOG_WARNING, SUBOPT_LOG_NOTICE, SUBOPT_LOG_INFO, SUBOPT_LOG_DEBUG, SUBOPT_LOG_TRACE };
 static const int loglvlsCount = sizeof(logLevelStrings)/sizeof(*logLevelStrings);
 
 enum argpKeys{
@@ -229,7 +229,7 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
         break;
     
     case ARGP_META_INIT_MODE:
-        parseEnumOption(arg, (int*)&inst->params.metaheurInitMode, modeStrings, 0, HEURISTICS_MODES_COUNT, "metaInit");
+        parseModeOption(arg, &inst->params.metaheurInitMode, modeStrings, 0, HEURISTICS_MODES_COUNT, "metaInit");
         break;
 
     case ARGP_RESTART_THRESHOLD:
@@ -403,12 +403,7 @@ static void checkEssentials(Instance *inst)
     if (inst->params.inputFile[0] == 0)
         throwError("Missing --file (-f) option in arguments. An input file must be specified");
     if (inst->params.tlim == -1.)
-    {
-        if (inst->params.graspType != GRASP_NONE)
-            throwError("If grasp is used a time limit must be provided with option --tlim (-t)");
-        if (inst->params.mode >= MODE_VNS)
-            throwError("When using an heuristic that is intrinsically using grasp(like %s), a time limit must also be specified", modeStrings[inst->params.mode]);
-    }
+        throwError("Missing --tlim (-t) option in arguments. A time limit must be specified");
 }
 
 
