@@ -238,6 +238,8 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
 
     case ARGP_TABU_TENURESIZE:
         inst->params.tabuTenureSize = parseUint(arg, 0, "tabuTenureSize");
+        if (inst->params.tabuTenureSize == 0)
+            throwError("tabuTenureSize cannot be set to 0");
         break;
     
     case ARGP_VNS_KICKSIZE:

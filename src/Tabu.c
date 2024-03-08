@@ -42,6 +42,7 @@ typedef struct
     float *costBackup;
 
     int nextTenurePos;
+    int lastTenurePos;
 
 } ThreadSpecificData;
 
@@ -79,8 +80,13 @@ void TabuSearch(Solution *sol, double timeLimit)
 {
     Instance *inst = sol->instance;
 
-    if (inst->params.tabuTenureSize == -1)
-        inst->params.tabuTenureSize = (int)log2f((float)inst->nNodes);
+    if (inst->params.tabuTenureSize == -1) // auto tenure size
+        inst->params.tabuTenureSize = 2;
+    else if (inst->params.tabuTenureSize >= sol->instance->nNodes)
+        throwError("Specified Tenure size[%d] is bigger or equal to the instance size[%d]", inst->params.tabuTenureSize, sol->instance->nNodes);
+    else if (inst->params.tabuTenureSize >= sol->instance->nNodes * 97/100)
+        LOG(LOG_LVL_WARN, "Specified Tenure size[%d] is big considering the size of the instance[%d]. Tabu might get stuck and not respect the time limit", inst->params.tabuTenureSize, sol->instance->nNodes);
+
     LOG(LOG_LVL_NOTICE, "Tabu tenure size is set to %d", inst->params.tabuTenureSize);
 
 
@@ -93,11 +99,12 @@ void TabuSearch(Solution *sol, double timeLimit)
     double initialSolutionRuntime = sol->execTime;
 
     // reset seed if debugging
-    if (inst->params.logLevel == LOG_LVL_DEBUG)
+    #ifdef DEBUG
         srand(inst->params.randomSeed);
 
-    if (!checkSolution(sol))
-        throwError("Tabu Search: Input solution is not valid");
+        if (!checkSolution(sol))
+            throwError("Tabu Search: Input solution is not valid");
+    #endif
 
     sol->indexPath[inst->nNodes] = sol->indexPath[0];
 
@@ -134,9 +141,6 @@ static ThreadSharedData initThreadSharedData (Solution *sol, int tenureSize, dou
 {
     ThreadSharedData thShared = { .timeLimit = timeLimit, .bestSol=sol, .tenureSize=tenureSize };
 
-    if (thShared.tenureSize > sol->instance->nNodes)
-        LOG(LOG_LVL_WARN, "Specified Tenure size is bigger than the instance, %d vs %d nodes", thShared.tenureSize, sol->instance->nNodes);
-
     if (pthread_mutex_init(&thShared.mutex, NULL)) throwError("VariableNeighborhoodSearch -> initThreadSharedData: Failed to initialize mutex");
 
     return thShared;
@@ -156,7 +160,8 @@ static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, un
         .thShared=thShared,
         .rndState=rndState,
         .iterCount=0,
-        .nextTenurePos=0
+        .nextTenurePos=0,
+        .lastTenurePos=0
     };
 
     thSpecific.tenure = malloc(thShared->tenureSize * (sizeof(Edge) + sizeof(float)));
@@ -241,7 +246,7 @@ static void *runTabu(void *arg)
         addEdgeToTenure(thSpecific, edgeToLock);
 
         #ifdef DEBUG
-            LOG(LOG_LVL_DEBUG, "Added edge to tenure");
+            LOG(LOG_LVL_DEBUG, "Added an edge to tenure");
             checkThSpecificData(thSpecific);
         #endif
 
@@ -253,8 +258,20 @@ static void *runTabu(void *arg)
             n2OptMoves = apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->costCache);
         #endif
 
-        if (n2OptMoves > 0)
+        while (n2OptMoves > 0)
+        {
             removeOldestElementFromTenure(thSpecific);
+            #ifdef DEBUG
+                LOG(LOG_LVL_DEBUG, "Removed an edge from tenure");
+                checkThSpecificData(thSpecific);
+            #endif
+
+            #if ((COMPUTATION_TYPE == COMPUTATE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+                n2OptMoves = apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->X, thSpecific->Y, thSpecific->costCache);
+            #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+                n2OptMoves = apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->costCache);
+            #endif
+        }
 
         if (nonImprovingIterCount > restartThreshold)
         {
@@ -329,6 +346,7 @@ static void setupThSpecificOnBestSol(ThreadSpecificData *thSpecific)
         thSpecific->tenure[i].node0 = -1;
     
     thSpecific->nextTenurePos = 0;
+    thSpecific->lastTenurePos = 0;
 }
 
 static inline int randomlySelectEdgeOutsideTenure(ThreadSpecificData *thSpecific, int forbiddenNode)
@@ -349,10 +367,9 @@ static void addEdgeToTenure(ThreadSpecificData *thSpecific, int indexPathIndex)
             throwError("Tabu -> addEdgeToTenure: indexPathIndex is not valid : %d", indexPathIndex);
     #endif
 
-    if (thSpecific->tenure[thSpecific->nextTenurePos].node0 != -1) // tenure full: remove last element from tenure and then add the new one
+    if (thSpecific->nextTenurePos == thSpecific->lastTenurePos) // tenure full: remove last element from tenure and then add the new one
     {
-        int n = thSpecific->workingSol.instance->nNodes;
-        for (int i = 0; i < n; i++)
+        for (int i = 0; i < thSpecific->workingSol.instance->nNodes; i++)
         {
             if (thSpecific->workingSol.indexPath[i] == thSpecific->tenure[thSpecific->nextTenurePos].node0)
             {
@@ -362,6 +379,9 @@ static void addEdgeToTenure(ThreadSpecificData *thSpecific, int indexPathIndex)
                 break;
             }
         }
+        thSpecific->lastTenurePos++;
+        if (thSpecific->lastTenurePos == thSpecific->thShared->tenureSize)
+            thSpecific->lastTenurePos = 0;
     }
 
     // add one element to the tenure
@@ -379,34 +399,26 @@ static void removeOldestElementFromTenure(ThreadSpecificData *thSpecific)
 {   
     int n = thSpecific->workingSol.instance->nNodes;
 
-    // find first element position
-    int pos = thSpecific->nextTenurePos;
-    for (; pos != thSpecific->nextTenurePos + 1; pos--)
-    {
-        if (pos < 1)
-            pos = thSpecific->thShared->tenureSize;
-        if (thSpecific->tenure[pos - 1].node0 == -1)
-            break;
-    }
-    if (pos == thSpecific->thShared->tenureSize)
-        pos = 0;
-
-    if (thSpecific->tenure[pos].node0 == -1)
+    if (thSpecific->lastTenurePos == thSpecific->nextTenurePos)
         return; // tenure empty
     
     // replace correct cost into costCache
     for (int i = 0; i < n; i++)
     {
-        if (thSpecific->workingSol.indexPath[i] == thSpecific->tenure[pos].node0)
+        if (thSpecific->workingSol.indexPath[i] == thSpecific->tenure[thSpecific->lastTenurePos].node0)
         {
-            if ((thSpecific->tenure[pos].node1 == thSpecific->workingSol.indexPath[i-1]) && (i > 0))
+            if ((thSpecific->tenure[thSpecific->lastTenurePos].node1 == thSpecific->workingSol.indexPath[i-1]) && (i > 0))
                 i--;
-            thSpecific->costCache[i] = thSpecific->costBackup[pos];
+            thSpecific->costCache[i] = thSpecific->costBackup[thSpecific->lastTenurePos];
             break;
         }
     }
     
-    thSpecific->tenure[pos].node0 = -1;
+    thSpecific->tenure[thSpecific->lastTenurePos].node0 = -1;
+
+    thSpecific->lastTenurePos++;
+    if (thSpecific->lastTenurePos == thSpecific->thShared->tenureSize)
+            thSpecific->lastTenurePos = 0;
 }
 
 static inline void performNonImproving2OptMove(ThreadSpecificData *thSpecific, int edge0, int edge1)
@@ -473,6 +485,20 @@ static void checkThSpecificData(ThreadSpecificData *thSpecific)
     Instance *inst = sol->instance;
 
     // check tenure
+    for (int i = thSpecific->lastTenurePos; i != thSpecific->nextTenurePos; i++)
+    {
+        if (i >= thSpecific->thShared->tenureSize)
+        {
+            i = -1;
+            continue;
+        }
+        if ((thSpecific->tenure[i].node0 < 0) || (thSpecific->tenure[i].node0 >= inst->nNodes))
+            throwError("Tabu -> Tenure has node0 ad position %d set to %d which is invalid", i, thSpecific->tenure[i].node0);
+        float recompCost = computeEdgeCost(inst->X[thSpecific->tenure[i].node0], inst->Y[thSpecific->tenure[i].node0], inst->X[thSpecific->tenure[i].node1], inst->Y[thSpecific->tenure[i].node1], inst);
+        if (thSpecific->costBackup[i] != recompCost)
+            throwError("Tabu -> CostBackup contains %f while it should contain %f", thSpecific->costBackup[i], recompCost);
+    }
+    
     for (int i = 0; i < inst->nNodes; i++)
     {
         bool notInTenure = true;

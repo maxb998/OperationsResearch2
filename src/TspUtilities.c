@@ -153,7 +153,7 @@ void LOG (enum LogLevel lvl, char * line, ...)
 
 void throwError (char * line, ...)
 {
-    printf("%s", logLevelString[0]);
+    printf("%s ", logLevelString[0]);
 
     va_list params;
     va_start(params, line);
