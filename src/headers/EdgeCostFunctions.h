@@ -130,6 +130,31 @@ static inline __m256 computeEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2, __m2
 	return costVec;
 }
 
+static inline __m256 computeApproxEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2, __m256 y2, Instance *inst)
+{
+	register __m256 costVec = noSquaredRootEdgeCost_VEC (x1, y1, x2, y2, inst);
+
+	if (inst->params.edgeWeightType == ATT)
+		costVec = _mm256_mul_ps(costVec, _mm256_set1_ps(0.1F));
+
+	#ifdef USE_REDUCED_DISTANCE_SET
+		costVec = _mm256_rcp_ps(_mm256_rsqrt_ps(costVec));
+	#else
+		if (inst->params.edgeWeightType >= EUC_2D)
+			costVec = _mm256_rcp_ps(_mm256_rsqrt_ps(costVec));
+	#endif
+
+	if (inst->params.roundWeights)
+	{
+		if (inst->params.edgeWeightType >= CEIL_2D)
+			return _mm256_ceil_ps(costVec);
+		else
+			return _mm256_round_ps(costVec, _MM_FROUND_TO_NEAREST_INT |_MM_FROUND_NO_EXC); // round to nearest, and suppress exceptions
+	}
+	
+	return costVec;
+}
+
 #endif
 
 #endif // EDGE_COST_FUNCTIONS

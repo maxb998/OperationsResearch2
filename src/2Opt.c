@@ -43,6 +43,9 @@ static inline bool updateSolution(_2optData *data, _2optMoveData bestFix);
 
 // Search for best possible 2opt move in data->sol
 static inline _2optMoveData _2OptBestFix(_2optData *data);
+#if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+static inline _2optMoveData _2OptBestFixApprox(_2optData *data); // allows almost 30% speedup in usa13509
+#endif
 
 
 void apply2OptBestFix(Solution *sol)
@@ -147,12 +150,29 @@ int apply2OptBestFix_fastIteratively(Solution *sol, float *costCache)
     #endif
     
 
-    bool notFinishedFlag = true;
+    bool notFinishedFlag = true, approxSearch = true;
     while (notFinishedFlag) // runs 2opt until no more moves are made in one iteration of 2opt
     {
-        _2optMoveData bestFix = _2OptBestFix(&data);
+        #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+            _2optMoveData bestFix;
+            if (approxSearch)
+                bestFix = _2OptBestFixApprox(&data);
+            else
+                bestFix = _2OptBestFix(&data);
 
-        notFinishedFlag = updateSolution(&data, bestFix);
+            bool result = updateSolution(&data, bestFix);
+            if (!result && approxSearch)
+            {
+                LOG(LOG_LVL_DEBUG, "apply2OptBestFix_fastIteratively[%d]: Switching from Approximated Search to Exact Search", data.iter);
+                approxSearch = false;
+                continue;
+            }
+            else if (!result)
+                notFinishedFlag = false;
+        #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
+            _2optMoveData bestFix = _2OptBestFix(&data);
+            notFinishedFlag = updateSolution(&data, bestFix);
+        #endif
 
         #ifdef DEBUG
             if (!checkSolution(data.sol))
@@ -263,7 +283,6 @@ static inline _2optMoveData _2OptBestFix(_2optData *data)
                 __m256 x3 = _mm256_loadu_ps(&X[i]), y3 = _mm256_loadu_ps(&Y[i]);
                 __m256 x4 = _mm256_loadu_ps(&X[i + 1]), y4 = _mm256_loadu_ps(&Y[i + 1]);
                 solEdgeWgt = _mm256_add_ps(partialSolEdgeWgt, _mm256_loadu_ps(&data->costCache[i]));
-
                 altEdgeWgt = _mm256_add_ps(computeEdgeCost_VEC(x1, y1, x3, y3, inst), computeEdgeCost_VEC(x2, y2, x4, y4, inst));
             }
 
@@ -300,6 +319,72 @@ static inline _2optMoveData _2OptBestFix(_2optData *data)
 
     return bestFix;
 }
+
+static inline _2optMoveData _2OptBestFixApprox(_2optData *data)
+{
+    Solution *sol = data->sol;
+    Instance *inst = sol->instance;
+    int n = inst->nNodes;
+    float *X = data->X, *Y = data->Y;
+
+    _2optMoveData bestFix = { .costOffset=0, .edge0=-1, .edge1=-1 };
+
+    for (int edge0 = 0; edge0 < n - 1; edge0++) // check for one edge at a time every other edge(except already checked)
+    {
+        __m256 x1 = _mm256_broadcast_ss(&X[edge0]), y1 = _mm256_broadcast_ss(&Y[edge0]);
+        __m256 x2 = _mm256_broadcast_ss(&X[edge0 + 1]), y2 = _mm256_broadcast_ss(&Y[edge0 + 1]);
+        __m256 partialSolEdgeWgt = _mm256_broadcast_ss(&data->costCache[edge0]);
+        __m256 bestOffsetVec = _mm256_set1_ps(INFINITY);
+
+        __m256i idsVec = _mm256_add_epi32((_mm256_set_epi32(9, 8, 7, 6, 5, 4, 3, 2)), _mm256_set1_epi32(edge0));
+        __m256i increment = _mm256_set1_epi32(AVX_VEC_SIZE);
+        __m256i bestIDsVec = _mm256_set1_epi32(-1);
+
+        for (int i = 2 + edge0; (i < n - 1) || ((i < n) && (edge0 > 0)); i += AVX_VEC_SIZE)
+        {
+            __m256 altEdgeWgt, solEdgeWgt;
+            { // scope "force" a thing compiler should do automatically -> x3,y3,x4,y4 destroyed as soon as we don't need them anymore
+                __m256 x3 = _mm256_loadu_ps(&X[i]), y3 = _mm256_loadu_ps(&Y[i]);
+                __m256 x4 = _mm256_loadu_ps(&X[i + 1]), y4 = _mm256_loadu_ps(&Y[i + 1]);
+                solEdgeWgt = _mm256_add_ps(partialSolEdgeWgt, _mm256_loadu_ps(&data->costCache[i]));
+                altEdgeWgt = _mm256_add_ps(computeApproxEdgeCost_VEC(x1, y1, x3, y3, inst), computeApproxEdgeCost_VEC(x2, y2, x4, y4, inst));
+            }
+
+            __m256 offsetVec = _mm256_sub_ps(altEdgeWgt, solEdgeWgt); // value is negative if altEdgeWgt is better
+
+            // compare current offset with best offsets
+            __m256 mask = _mm256_cmp_ps(offsetVec, bestOffsetVec, _CMP_LT_OQ);
+
+            // set new bests if any
+            bestOffsetVec = _mm256_blendv_ps(bestOffsetVec, offsetVec, mask);
+            bestIDsVec = _mm256_blendv_epi8(bestIDsVec, idsVec, _mm256_castps_si256(mask));
+
+            // increment ids vec
+            idsVec = _mm256_add_epi32(idsVec, increment);
+        }
+
+        float vecStore[AVX_VEC_SIZE];
+        int idsVecStore[AVX_VEC_SIZE];
+
+        // update the best variables
+        _mm256_storeu_ps(vecStore, bestOffsetVec);
+        _mm256_storeu_si256((__m256i *)idsVecStore, bestIDsVec);
+
+        for (int i = 0; i < AVX_VEC_SIZE; i++)
+        {
+            if (bestFix.costOffset > vecStore[i])
+            {
+                bestFix.costOffset = vecStore[i];
+                bestFix.edge0 = edge0;
+                bestFix.edge1 = idsVecStore[i];
+            }
+        }
+    }
+
+    return bestFix;
+
+}
+
 #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
 static inline _2optMoveData _2OptBestFix(_2optData *data)
 {

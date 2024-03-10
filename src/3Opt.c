@@ -4,10 +4,9 @@
 #include <time.h>
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
-#define DEBUG
-
 // in seconds
 #define LOG_INTERVAL 30
+//#define USE_MOVE_14_52_36
 
 typedef struct
 {
@@ -28,7 +27,9 @@ enum _3optMoveType {
     _3OPT_MOVE_13_25_46=2,
     _3OPT_MOVE_14_53_26=4,
     _3OPT_MOVE_15_42_36=8,
-    //_3OPT_MOVE_14_52_36=16
+    #ifdef USE_MOVE_14_52_36
+        _3OPT_MOVE_14_52_36=16
+    #endif
 };
 
 typedef struct
@@ -37,7 +38,6 @@ typedef struct
     int edge0;
     int edge1;
     int edge2;
-    enum _3optMoveType movetype;
 } _3optMoveData;
 
 
@@ -51,7 +51,7 @@ void set3OptPerformanceBenchmarkLog(bool val)
 
 
 // Perform solution update accordingly (invert part of the solution between selected indexes(edge0,edge1) of the bestFix)
-static inline void updateSolution(_3optData *data, _3optMoveData bestFix);
+static inline bool updateSolution(_3optData *data, _3optMoveData bestFix);
 
 // Invert a section of the path of the solution adapting all data in data
 static inline void invertSection(_3optData *data, int firstEdgePos, int lastEdgePos);
@@ -61,6 +61,10 @@ static inline void swapSections(int *baseAddr, int *backupArray, int smallSectio
 
 // Search for best possible 3Opt move in data->sol
 static inline _3optMoveData _3OptBestFix(_3optData *data);
+#if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+    // Search for best possible 3Opt move in data->sol using approximated cost computation (needed a second function in order to have some kind of performance improvement)
+    static inline _3optMoveData _3OptBestFixApprox(_3optData *data);
+#endif
 
 
 
@@ -166,8 +170,11 @@ void apply3OptBestFix_fastIteratively(Solution *sol, float *costCache, int *sect
     #endif
     
 
-    bool notFinishedFlag = true;
-    while (notFinishedFlag) // runs 3Opt until no more moves are made in one iteration of 3Opt
+    bool improvingUpdate = true;
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        bool approxSearch = true;
+    #endif
+    while (improvingUpdate) // runs 3Opt until no more moves are made in one iteration of 3Opt
     {
         #ifdef DEBUG
             if (!checkSolution(sol))
@@ -190,12 +197,27 @@ void apply3OptBestFix_fastIteratively(Solution *sol, float *costCache, int *sect
                 #endif
         #endif
 
-        _3optMoveData bestFix = _3OptBestFix(&data);
+        #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+            _3optMoveData bestFix;
+            if (approxSearch)
+                bestFix = _3OptBestFixApprox(&data);
+            else
+                bestFix = _3OptBestFix(&data);
 
-        if (bestFix.costOffset < -EPSILON)
-            updateSolution(&data, bestFix);
-        else
-            notFinishedFlag = false;
+            bool result = updateSolution(&data, bestFix);
+            if (!result && approxSearch)
+            {
+                LOG(LOG_LVL_DEBUG, "apply3OptBestFix_fastIteratively[%d]: Switching from Approximated Search to Exact Search", data.iter);
+                approxSearch = false;
+                continue;
+            }
+            else if (!result)
+                improvingUpdate = false;
+
+        #elif((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
+            _3optMoveData bestFix = _3OptBestFix(&data);
+            improvingUpdate = updateSolution(&data, bestFix);
+        #endif
 
         clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
         double currentTime = cvtTimespec2Double(timeStruct);
@@ -218,12 +240,15 @@ void apply3OptBestFix_fastIteratively(Solution *sol, float *costCache, int *sect
     sol->execTime += elapsed;
 }
 
-static inline void updateSolution(_3optData *data, _3optMoveData bestFix)
+static inline bool updateSolution(_3optData *data, _3optMoveData bestFix)
 {
     Solution *sol = data->sol;
     Instance *inst = sol->instance;
 
     int e0 = bestFix.edge0, e1 = bestFix.edge1, e2 = bestFix.edge2;
+
+    if (e0 == -1)
+        return false;
 
     // compute necessary costs
     #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
@@ -250,49 +275,62 @@ static inline void updateSolution(_3optData *data, _3optMoveData bestFix)
         float cost26 = inst->edgeCostMat[p[e0+1] * n + p[e2+1]];
     #endif
 
-    // find type to move to apply
-    enum _3optMoveType moveType = bestFix.movetype;
-    // float bestOffset = INFINITY;
-    // {
-    //     // _3OPT_MOVE_NONE
-    //     float oldE0E1Cost = data->costCache[e0] + data->costCache[e1], oldE0E1E2Cost = oldE0E1Cost + data->costCache[e2];
-    //     moveType = _3OPT_MOVE_NONE;
+    // find out if best move type is selected
+    float bestOffset = INFINITY;
+    // _3OPT_MOVE_NONE
+    float oldE0E1Cost = data->costCache[e0] + data->costCache[e1], oldE0E1E2Cost = oldE0E1Cost + data->costCache[e2];
+    enum _3optMoveType bestMoveType = _3OPT_MOVE_NONE;
 
-    //     // _3OPT_MOVE_13_24
-    //     float offset = cost13 + cost24 - oldE0E1Cost;
-    //     if (offset < bestOffset)
-    //     {   moveType = _3OPT_MOVE_13_24; bestOffset = offset; }
+    // _3OPT_MOVE_13_24
+    float offset = cost13 + cost24 - oldE0E1Cost;
+    if (offset < bestOffset)
+    {
+        bestMoveType = _3OPT_MOVE_13_24;
+        bestOffset = offset;
+    }
 
-    //     // _3OPT_MOVE_15_42_36
-    //     offset = cost15 + cost36 + cost24 - oldE0E1E2Cost;
-    //     if (offset < bestOffset)
-    //     {   moveType = _3OPT_MOVE_15_42_36; bestOffset = offset; }
+    // _3OPT_MOVE_15_42_36
+    offset = cost15 + cost36 + cost24 - oldE0E1E2Cost;
+    if (offset < bestOffset)
+    {
+        bestMoveType = _3OPT_MOVE_15_42_36;
+        bestOffset = offset;
+    }
 
-    //     // _3OPT_MOVE_13_25_46
-    //     offset = cost13 + cost46 + cost25 - oldE0E1E2Cost;
-    //     if (offset < bestOffset)
-    //     {   moveType = _3OPT_MOVE_13_25_46; bestOffset = offset; }
+    // _3OPT_MOVE_13_25_46
+    offset = cost13 + cost46 + cost25 - oldE0E1E2Cost;
+    if (offset < bestOffset)
+    {
+        bestMoveType = _3OPT_MOVE_13_25_46;
+        bestOffset = offset;
+    }
 
-    //     // _3OPT_MOVE_14_53_26
-    //     offset = cost14 + cost35 + cost26 - oldE0E1E2Cost;
-    //     if (offset < bestOffset)
-    //     {   moveType = _3OPT_MOVE_14_53_26; bestOffset = offset; }
+    // _3OPT_MOVE_14_53_26
+    offset = cost14 + cost35 + cost26 - oldE0E1E2Cost;
+    if (offset < bestOffset)
+    {
+        bestMoveType = _3OPT_MOVE_14_53_26;
+        bestOffset = offset;
+    }
 
-    //     // _3OPT_MOVE_14_52_36
-    //     offset = cost14 + cost36 + cost25 - oldE0E1E2Cost;
-    //     if (offset < bestOffset)
-    //     {   moveType = _3OPT_MOVE_14_52_36; bestOffset = offset; }
-    // }
+    // _3OPT_MOVE_14_52_36
+    #ifdef USE_MOVE_14_52_36
+        offset = cost14 + cost36 + cost25 - oldE0E1E2Cost;
+        if (offset < bestOffset)
+        {
+            bestMoveType = _3OPT_MOVE_14_52_36;
+            bestOffset = offset;
+        }
+    #endif
 
-    // if (bestOffset != bestFix.costOffset)
-    //     LOG(LOG_LVL_WARN, "3OptBestFix -> updateSolution: recomputed cost is different from the one specified (%f vs %f)", bestOffset, bestFix.costOffset);
+    #ifdef DEBUG
+        if (bestOffset != bestFix.costOffset)
+            LOG(LOG_LVL_WARN, "3OptBestFix -> updateSolution[%d]: recomputed cost is different from the one specified (%f vs %f)", data->iter, bestOffset, bestFix.costOffset);
+    #endif
 
-    // if (bestOffset >= -EPSILON)
-    //     throwError("Recomputed move is not improving");
-
-    // update cost
+    // (check and) update cost
     float altE0, altE1, altE2;
-    switch (moveType)
+    switch (bestMoveType)
     {
     case _3OPT_MOVE_NONE:
         throwError("3Opt: Error during solution update, found no matching costOffset");
@@ -309,26 +347,39 @@ static inline void updateSolution(_3optData *data, _3optMoveData bestFix)
     case _3OPT_MOVE_15_42_36:
         altE0 = cost15; altE1 = cost24; altE2 = cost36;
         break;
-    /*
-    case _3OPT_MOVE_14_52_36:
-        altE0 = cost14; altE1 = cost25; altE2 = cost36;
-        break;*/
+    #ifdef USE_MOVE_14_52_36
+        case _3OPT_MOVE_14_52_36:
+            altE0 = cost14; altE1 = cost25; altE2 = cost36;
+            break;
+    #endif
     }
+
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        float recompOffset = altE0 + altE1 + altE2;
+        recompOffset -= (data->costCache[e0] + data->costCache[e1] + data->costCache[e2]);
+        if (recompOffset > -EPSILON)
+            return false;
+    #endif
+
     sol->cost += cvtFloat2Cost(altE0) + cvtFloat2Cost(altE1) + cvtFloat2Cost(altE2) - cvtFloat2Cost(data->costCache[e0]) - cvtFloat2Cost(data->costCache[e1]) - cvtFloat2Cost(data->costCache[e2]);
 
     LOG(LOG_LVL_TRACE, "3Opt: [%d] Updating solution by switching edges (%d,%d,%d) with moveType %d improving cost by %f. New Cost = %lf", data->iter,
-        e0, e1, e2, moveType,
+        e0, e1, e2, bestMoveType,
         bestFix.costOffset, cvtCost2Double(sol->cost));
 
     // invert first section if necessary
-    if (moveType & (_3OPT_MOVE_13_24 | _3OPT_MOVE_13_25_46 | _3OPT_MOVE_14_53_26))
+    if (bestMoveType & (_3OPT_MOVE_13_24 | _3OPT_MOVE_13_25_46 | _3OPT_MOVE_14_53_26))
         invertSection(data, e0, e1);
     // invert second section if necessary
-    if (moveType & (_3OPT_MOVE_13_25_46 | _3OPT_MOVE_15_42_36))
+    if (bestMoveType & (_3OPT_MOVE_13_25_46 | _3OPT_MOVE_15_42_36))
         invertSection(data, e1, e2);
 
     // swap sections if necessary
-    if (moveType & (_3OPT_MOVE_14_53_26 | _3OPT_MOVE_15_42_36 ))//| _3OPT_MOVE_14_52_36))
+    #ifdef USE_MOVE_14_52_36
+        if (bestFix.movetype & (_3OPT_MOVE_14_53_26 | _3OPT_MOVE_15_42_36 | _3OPT_MOVE_14_52_36))
+    #else
+        if (bestMoveType & (_3OPT_MOVE_14_53_26 | _3OPT_MOVE_15_42_36 ))
+    #endif
     {
         // find smallest section in order to use copy that one into the sectionCopy
         int smallSectionSize = e1 - e0, smallSectionStartPos = e0 + 1;
@@ -351,26 +402,34 @@ static inline void updateSolution(_3optData *data, _3optMoveData bestFix)
     }
 
     // update costCache with new weights
-    if (moveType & _3OPT_MOVE_13_24)
+    if (bestMoveType & _3OPT_MOVE_13_24)
     {
         data->costCache[e0] = altE0;
         data->costCache[e1] = altE1;
     }
-    else if (moveType & (_3OPT_MOVE_14_53_26 | _3OPT_MOVE_15_42_36))// | _3OPT_MOVE_14_52_36))
+    #ifdef USE_MOVE_14_52_36
+        else if (bestMoveType & (_3OPT_MOVE_14_53_26 | _3OPT_MOVE_15_42_36 | _3OPT_MOVE_14_52_36))
+    #else
+        else if (bestMoveType & (_3OPT_MOVE_14_53_26 | _3OPT_MOVE_15_42_36))
+    #endif
     {
         data->costCache[e0] = altE0;
         data->costCache[e0 + (e2 - e1)] = altE1;
         data->costCache[e2] = altE2;
     }
-    else if (moveType & _3OPT_MOVE_13_25_46)
+    else if (bestMoveType & _3OPT_MOVE_13_25_46)
     {
         data->costCache[e0] = altE0;
         data->costCache[e1] = altE1;
         data->costCache[e2] = altE2;
     }
 
-    // if (moveType & _3OPT_MOVE_14_52_36)
-    //     LOG(LOG_LVL_WARN, "Finally found moveType: _3OPT_MOVE_14_52_36!");
+    #ifdef USE_MOVE_14_52_36
+        if (bestFix.movetype & _3OPT_MOVE_14_52_36)
+            LOG(LOG_LVL_WARN, "Finally found moveType: _3OPT_MOVE_14_52_36!");
+    #endif
+
+    return true;
 }
 
 static inline void invertSection(_3optData *data, int firstEdgePos, int lastEdgePos)
@@ -431,7 +490,7 @@ static inline _3optMoveData _3OptBestFix(_3optData *data)
     int n = inst->nNodes;
     float *X = data->X, *Y = data->Y;
 
-    _3optMoveData bestFix = { .costOffset=0 };
+    _3optMoveData bestFix = { .costOffset=0, .edge0=-1 };
 
     for (int edge0 = 0; edge0 < n - 1; edge0++) // check for one edge at a time every other edge(except already checked)
     {
@@ -443,7 +502,6 @@ static inline _3optMoveData _3OptBestFix(_3optData *data)
             __m256 bestOffsetVec = _mm256_set1_ps(INFINITY);
             __m256i edge2Vec = _mm256_add_epi32((_mm256_setr_epi32(0, 1, 2, 3, 4, 5, 6, 7)), _mm256_set1_epi32(edge1+2));
             __m256i bestEdge2Vec = _mm256_set1_epi32(-1);
-            __m256i bestMoveVec = _mm256_set1_epi32(-1);
 
 
             __m256 x3 = _mm256_broadcast_ss(&X[edge1]), y3 = _mm256_broadcast_ss(&Y[edge1]);
@@ -461,7 +519,6 @@ static inline _3optMoveData _3OptBestFix(_3optData *data)
                 __m256 offsetVec = _mm256_sub_ps(_mm256_add_ps(cost13, cost24), _mm256_set1_ps(sumE0E1Cost));
                 __m256 mask = _mm256_cmp_ps(offsetVec, bestOffsetVec, _CMP_LT_OQ);
                 bestOffsetVec = _mm256_blendv_ps(bestOffsetVec, offsetVec, mask);
-                bestMoveVec = _mm256_blendv_epi8(bestMoveVec, _mm256_set1_epi32(_3OPT_MOVE_13_24), _mm256_castps_si256(mask));
             }
 
             for (int edge2Pos = 2 + edge1; edge2Pos < n; edge2Pos+=AVX_VEC_SIZE)
@@ -476,11 +533,12 @@ static inline _3optMoveData _3OptBestFix(_3optData *data)
                 __m256 cost25 = computeEdgeCost_VEC(x2, y2, x5, y5, inst);
 
                 //_3OPT_MOVE_14_52_36
-                // __m256 offsetVec = _mm256_add_ps(_mm256_add_ps(cost14, cost36), cost25);
-                // __m256 mask = _mm256_cmp_ps(offsetVec, bestOffsetVec, _CMP_LT_OQ);
-                // bestOffsetVec = _mm256_blendv_ps(bestOffsetVec, offsetVec, mask);
-                // bestEdge2Vec = _mm256_blendv_epi8(bestEdge2Vec, edge2Vec, _mm256_castps_si256(mask));
-                // bestMoveVec = _mm256_blendv_epi8(bestMoveVec, _mm256_set1_epi32(_3OPT_MOVE_14_52_36), _mm256_castps_si256(mask));
+                #ifdef USE_MOVE_14_52_36
+                    __m256 offsetVec = _mm256_add_ps(_mm256_add_ps(cost14, cost36), cost25);
+                    __m256 mask = _mm256_cmp_ps(offsetVec, bestOffsetVec, _CMP_LT_OQ);
+                    bestOffsetVec = _mm256_blendv_ps(bestOffsetVec, offsetVec, mask);
+                    bestEdge2Vec = _mm256_blendv_epi8(bestEdge2Vec, edge2Vec, _mm256_castps_si256(mask));
+                #endif
 
                 if (edge0 + 1 != edge1)
                 {
@@ -489,21 +547,18 @@ static inline _3optMoveData _3OptBestFix(_3optData *data)
                     __m256 mask = _mm256_cmp_ps(offsetVec, bestOffsetVec, _CMP_LT_OQ);
                     bestOffsetVec = _mm256_blendv_ps(bestOffsetVec, offsetVec, mask);
                     bestEdge2Vec = _mm256_blendv_epi8(bestEdge2Vec, edge2Vec, _mm256_castps_si256(mask));
-                    bestMoveVec = _mm256_blendv_epi8(bestMoveVec, _mm256_set1_epi32(_3OPT_MOVE_15_42_36), _mm256_castps_si256(mask));
 
                     //_3OPT_MOVE_13_25_46
                     offsetVec = _mm256_sub_ps(_mm256_add_ps(_mm256_add_ps(cost13, cost25), computeEdgeCost_VEC(x4, y4, x6, y6, inst)), solutionCostVec);
                     mask = _mm256_cmp_ps(offsetVec, bestOffsetVec, _CMP_LT_OQ);
                     bestOffsetVec = _mm256_blendv_ps(bestOffsetVec, offsetVec, mask);
                     bestEdge2Vec = _mm256_blendv_epi8(bestEdge2Vec, edge2Vec, _mm256_castps_si256(mask));
-                    bestMoveVec = _mm256_blendv_epi8(bestMoveVec, _mm256_set1_epi32(_3OPT_MOVE_13_25_46), _mm256_castps_si256(mask));
 
                     //_3OPT_MOVE_14_53_26
                     offsetVec = _mm256_sub_ps(_mm256_add_ps(_mm256_add_ps(cost14, computeEdgeCost_VEC(x3, y3, x5, y5, inst)), computeEdgeCost_VEC(x2, y2, x6, y6, inst)), solutionCostVec);
                     mask = _mm256_cmp_ps(offsetVec, bestOffsetVec, _CMP_LT_OQ);
                     bestOffsetVec = _mm256_blendv_ps(bestOffsetVec, offsetVec, mask);
                     bestEdge2Vec = _mm256_blendv_epi8(bestEdge2Vec, edge2Vec, _mm256_castps_si256(mask));
-                    bestMoveVec = _mm256_blendv_epi8(bestMoveVec, _mm256_set1_epi32(_3OPT_MOVE_14_53_26), _mm256_castps_si256(mask));
                 }
 
                 edge2Vec = _mm256_add_epi32(edge2Vec, _mm256_set1_epi32(AVX_VEC_SIZE));
@@ -511,12 +566,10 @@ static inline _3optMoveData _3OptBestFix(_3optData *data)
 
             float bestOffsetVecStore[AVX_VEC_SIZE];
             int bestEdge2VecStore[AVX_VEC_SIZE];
-            int bestMoveVecStore[AVX_VEC_SIZE];
 
             // update the best variables
             _mm256_storeu_ps(bestOffsetVecStore, bestOffsetVec);
             _mm256_storeu_si256((__m256i *)bestEdge2VecStore, bestEdge2Vec);
-            _mm256_storeu_si256((__m256i *)bestMoveVecStore, bestMoveVec);
 
             for (int i = 0; i < AVX_VEC_SIZE; i++)
             {
@@ -526,7 +579,109 @@ static inline _3optMoveData _3OptBestFix(_3optData *data)
                     bestFix.edge0 = edge0;
                     bestFix.edge1 = edge1;
                     bestFix.edge2 = bestEdge2VecStore[i];
-                    bestFix.movetype = bestMoveVecStore[i];
+                }
+            }
+        }
+    }
+
+    return bestFix;
+}
+static inline _3optMoveData _3OptBestFixApprox(_3optData *data)
+{
+    Solution *sol = data->sol;
+    Instance *inst = sol->instance;
+    int n = inst->nNodes;
+    float *X = data->X, *Y = data->Y;
+
+    _3optMoveData bestFix = { .costOffset=0, .edge0=-1 };
+
+    for (int edge0 = 0; edge0 < n - 1; edge0++) // check for one edge at a time every other edge(except already checked)
+    {
+        __m256 x1 = _mm256_broadcast_ss(&X[edge0]), y1 = _mm256_broadcast_ss(&Y[edge0]);
+        __m256 x2 = _mm256_broadcast_ss(&X[edge0 + 1]), y2 = _mm256_broadcast_ss(&Y[edge0 + 1]);
+
+        for (int edge1 = 1 + edge0; edge1 < n; edge1++)
+        {
+            __m256 bestOffsetVec = _mm256_set1_ps(INFINITY);
+            __m256i edge2Vec = _mm256_add_epi32((_mm256_setr_epi32(0, 1, 2, 3, 4, 5, 6, 7)), _mm256_set1_epi32(edge1+2));
+            __m256i bestEdge2Vec = _mm256_set1_epi32(-1);
+
+
+            __m256 x3 = _mm256_broadcast_ss(&X[edge1]), y3 = _mm256_broadcast_ss(&Y[edge1]);
+            __m256 x4 = _mm256_broadcast_ss(&X[edge1 + 1]), y4 = _mm256_broadcast_ss(&Y[edge1 + 1]);
+
+            float sumE0E1Cost = data->costCache[edge0] + data->costCache[edge1];
+
+            // compute here some costs that will be needed always in order to avoid useless sqrt operations
+            __m256 cost13 = computeApproxEdgeCost_VEC(x1, y1, x3, y3, inst);
+            __m256 cost14 = computeApproxEdgeCost_VEC(x1, y1, x4, y4, inst);
+            __m256 cost24 = computeApproxEdgeCost_VEC(x2, y2, x4, y4, inst);
+
+            // 2opt check between edge0 and edge1
+            {
+                __m256 offsetVec = _mm256_sub_ps(_mm256_add_ps(cost13, cost24), _mm256_set1_ps(sumE0E1Cost));
+                __m256 mask = _mm256_cmp_ps(offsetVec, bestOffsetVec, _CMP_LT_OQ);
+                bestOffsetVec = _mm256_blendv_ps(bestOffsetVec, offsetVec, mask);
+            }
+
+            for (int edge2Pos = 2 + edge1; edge2Pos < n; edge2Pos+=AVX_VEC_SIZE)
+            {
+                __m256 x5 = _mm256_loadu_ps(&data->X[edge2Pos]), y5 = _mm256_loadu_ps(&data->Y[edge2Pos]);
+                __m256 x6 = _mm256_loadu_ps(&data->X[edge2Pos+1]), y6 = _mm256_loadu_ps(&data->Y[edge2Pos+1]);
+
+                // sum of the cost of the three edges in the solution
+                __m256 solutionCostVec = _mm256_add_ps(_mm256_set1_ps(sumE0E1Cost), _mm256_loadu_ps(&data->costCache[edge2Pos]));
+
+                __m256 cost36 = computeApproxEdgeCost_VEC(x3, y3, x6, y6, inst);
+                __m256 cost25 = computeApproxEdgeCost_VEC(x2, y2, x5, y5, inst);
+
+                //_3OPT_MOVE_14_52_36
+                #ifdef USE_MOVE_14_52_36
+                    __m256 offsetVec = _mm256_add_ps(_mm256_add_ps(cost14, cost36), cost25);
+                    __m256 mask = _mm256_cmp_ps(offsetVec, bestOffsetVec, _CMP_LT_OQ);
+                    bestOffsetVec = _mm256_blendv_ps(bestOffsetVec, offsetVec, mask);
+                    bestEdge2Vec = _mm256_blendv_epi8(bestEdge2Vec, edge2Vec, _mm256_castps_si256(mask));
+                #endif
+
+                if (edge0 + 1 != edge1)
+                {
+                    //_3OPT_MOVE_15_42_36
+                    __m256 offsetVec = _mm256_sub_ps(_mm256_add_ps(_mm256_add_ps(cost24, cost36), computeApproxEdgeCost_VEC(x1, y1, x5, y5, inst)), solutionCostVec);
+                    __m256 mask = _mm256_cmp_ps(offsetVec, bestOffsetVec, _CMP_LT_OQ);
+                    bestOffsetVec = _mm256_blendv_ps(bestOffsetVec, offsetVec, mask);
+                    bestEdge2Vec = _mm256_blendv_epi8(bestEdge2Vec, edge2Vec, _mm256_castps_si256(mask));
+
+                    //_3OPT_MOVE_13_25_46
+                    offsetVec = _mm256_sub_ps(_mm256_add_ps(_mm256_add_ps(cost13, cost25), computeApproxEdgeCost_VEC(x4, y4, x6, y6, inst)), solutionCostVec);
+                    mask = _mm256_cmp_ps(offsetVec, bestOffsetVec, _CMP_LT_OQ);
+                    bestOffsetVec = _mm256_blendv_ps(bestOffsetVec, offsetVec, mask);
+                    bestEdge2Vec = _mm256_blendv_epi8(bestEdge2Vec, edge2Vec, _mm256_castps_si256(mask));
+
+                    //_3OPT_MOVE_14_53_26
+                    offsetVec = _mm256_sub_ps(_mm256_add_ps(_mm256_add_ps(cost14, computeApproxEdgeCost_VEC(x3, y3, x5, y5, inst)), computeApproxEdgeCost_VEC(x2, y2, x6, y6, inst)), solutionCostVec);
+                    mask = _mm256_cmp_ps(offsetVec, bestOffsetVec, _CMP_LT_OQ);
+                    bestOffsetVec = _mm256_blendv_ps(bestOffsetVec, offsetVec, mask);
+                    bestEdge2Vec = _mm256_blendv_epi8(bestEdge2Vec, edge2Vec, _mm256_castps_si256(mask));
+                }
+
+                edge2Vec = _mm256_add_epi32(edge2Vec, _mm256_set1_epi32(AVX_VEC_SIZE));
+            }
+
+            float bestOffsetVecStore[AVX_VEC_SIZE];
+            int bestEdge2VecStore[AVX_VEC_SIZE];
+
+            // update the best variables
+            _mm256_storeu_ps(bestOffsetVecStore, bestOffsetVec);
+            _mm256_storeu_si256((__m256i *)bestEdge2VecStore, bestEdge2Vec);
+
+            for (int i = 0; i < AVX_VEC_SIZE; i++)
+            {
+                if (bestFix.costOffset > bestOffsetVecStore[i])
+                {
+                    bestFix.costOffset = bestOffsetVecStore[i];
+                    bestFix.edge0 = edge0;
+                    bestFix.edge1 = edge1;
+                    bestFix.edge2 = bestEdge2VecStore[i];
                 }
             }
         }
@@ -544,7 +699,7 @@ static inline _3optMoveData _3OptBestFix(_3optData *data)
         float *X = data->X, *Y = data->Y;
     #endif
 
-    _3optMoveData bestFix = { .costOffset=0 };
+    _3optMoveData bestFix = { .costOffset=0, .edge0=-1 };
 
     for (_3optMoveData m = {.edge0=0}; m.edge0 < n - 1; m.edge0++) // check for one edge at a time every other edge(except already checked)
     {
@@ -581,7 +736,6 @@ static inline _3optMoveData _3OptBestFix(_3optData *data)
 
             // 2opt check between edge0 and edge1
             m.costOffset = cost13 + cost24 - sumE0E1Cost;
-            m.movetype = _3OPT_MOVE_13_24;
             if (m.costOffset < bestFix.costOffset)
                 bestFix = m;
 
@@ -607,10 +761,11 @@ static inline _3optMoveData _3OptBestFix(_3optData *data)
                 #endif
 
                 //_3OPT_MOVE_14_52_36
-                // m.costOffset = cost14 + cost36 + cost25;
-                // m.movetype = _3OPT_MOVE_14_52_36;
-                // if (m.costOffset < bestFix.costOffset)
-                //     bestFix = m;
+                #ifdef USE_MOVE_14_52_36
+                    m.costOffset = cost14 + cost36 + cost25;
+                    if (m.costOffset < bestFix.costOffset)
+                        bestFix = m;
+                #endif
 
                 if (m.edge0 + 1 != m.edge1)
                 {
@@ -620,7 +775,6 @@ static inline _3optMoveData _3OptBestFix(_3optData *data)
                     #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
                         m.costOffset = cost24 + cost36 + inst->edgeCostMat[p1 * (size_t)n + p5] - costInSolution;
                     #endif
-                    m.movetype = _3OPT_MOVE_15_42_36;
                     if (m.costOffset < bestFix.costOffset)
                         bestFix = m;
 
@@ -630,7 +784,6 @@ static inline _3optMoveData _3OptBestFix(_3optData *data)
                     #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
                         m.costOffset = cost13 + cost25 + inst->edgeCostMat[p4 * (size_t)n + p6] - costInSolution;
                     #endif
-                    m.movetype = _3OPT_MOVE_13_25_46;
                     if (m.costOffset < bestFix.costOffset)
                         bestFix = m;
 
@@ -640,7 +793,6 @@ static inline _3optMoveData _3OptBestFix(_3optData *data)
                     #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
                         m.costOffset = cost14 + inst->edgeCostMat[p3 * (size_t)n + p5] + inst->edgeCostMat[p2 * (size_t)n + p6] - costInSolution;
                     #endif
-                    m.movetype = _3OPT_MOVE_14_53_26;
                     if (m.costOffset < bestFix.costOffset)
                         bestFix = m;
                 }
