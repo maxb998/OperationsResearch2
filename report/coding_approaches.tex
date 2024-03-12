@@ -1,0 +1,21 @@
+\chapter{Coding Approaches}
+
+\section{Coding Approaches to Cost Function}
+
+When talking about TSP we refer to the cost as the distance between nodes. These type of distances are defined by TSPLIB(REFERENCE) and can be computed or precomputed and given as input inside the .tsp files. In our case all the instances will be complete graphs and we will only be considering the instances where the cost is not given but has to be computed. Having said this, there is more than one way to handle such costs. We explored three ways:
+
+\begin{enumerate}
+	\item \textbf{Basic Approach}: Compute the distance using the distance function each time the value is needed.
+	\item \textbf{Matrix Approach}: Compute only at the beginning a matrix of size $nNodes^2$ containing the costs of all possible pairing of nodes.
+	\item \textbf{AVX Approach}: Same as the basic approach but with the added bonus of using special vectorized instructions capable of computing multiple costs at once.
+\end{enumerate}
+
+\section{Technical Comparison}
+
+Each one of the approaches described above has some advantages over the others as well as some disadvantages. Starting with the Basic Approach we can say that it is by itself the easiest one to implement since it only requires to call the cost function each time there is the need to know the cost of the edge between two nodes and this is the directed and most straightforward method. \\
+When looking at the second approach, the one that uses the matrix of costs, things don't actually get more complicated: after the construction of the matrix, one just need to access it at the specific coordinate in which there is the information needed. To get the right coordinate one must select as row and column the numbers of the two interested nodes. \\
+Finally the AVX method is actually the most complicated one. This is because AVX2 instructions are a special kind of instructions used by mothern cpus introduced in 2011\cite{avxWikipedia}. These instructions are SIMD instructions that allow to perform vectorized operations, or perform operations on vectors of memory up to 256 bit in the case of simple AVX\cite{avxWikipedia}.
+
+\section{Performance Comparison}
+
+When considering the difference performance wise there are a few consideration to take into account, one of these is the fact that most of the instances considered by this paper have a complicated cost function that is very expensive in the algorithms described later in this paper. So theoretically speaking the fastest approach should be the one that uses the cost matrix since reading a value should be faster than recomputing it from scratch over and over. As we will see, this is not always the case. 
