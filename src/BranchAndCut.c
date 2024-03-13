@@ -48,22 +48,28 @@ void BranchAndCut(Solution *sol, double timeLimit)
 		if ((errCode = WarmStart(&cpx, cbData.bestSuccessors)) != 0)
 			throwError("Branch&Cut: error on WarmStart with code %d", errCode);
 
-	if (CPXsetintparam(cpx.env, CPX_PARAM_MIPCBREDLP, CPX_OFF))
-		throwError("Branch&Cut: error on CPXsetinitparam(CPX_PARAM_MIPCBREDLP)");
+	errCode = CPXsetintparam(cpx.env, CPX_PARAM_MIPCBREDLP, CPX_OFF);
+	if (errCode != 0)
+		throwError("Branch&Cut: CPXsetinitparam(CPX_PARAM_MIPCBREDLP) failed with code %d", errCode);
 
 	CPXLONG contextMask = CPX_CALLBACKCONTEXT_CANDIDATE;
 	if (inst->params.cplexUsercuts) contextMask = CPX_CALLBACKCONTEXT_CANDIDATE | CPX_CALLBACKCONTEXT_RELAXATION;
 
-	if (CPXcallbacksetfunc(cpx.env, cpx.lp, contextMask, genericCallbackCandidate, &cbData))
-		throwError("Branch&Cut: error on CPXsetlazyconstraintcallbackfunc");
+	errCode = CPXcallbacksetfunc(cpx.env, cpx.lp, contextMask, genericCallbackCandidate, &cbData);
+	if (errCode != 0)
+		throwError("Branch&Cut: CPXsetlazyconstraintcallbackfunc failed with code %d", errCode);
 	
-	if (CPXsetintparam(cpx.env, CPX_PARAM_THREADS, inst->params.nThreads))
-		throwError("Branch&Cut: error on CPXsetintparam(CPX_PARAM_THREADS)");
+	errCode = CPXsetintparam(cpx.env, CPX_PARAM_THREADS, inst->params.nThreads);
+	if (errCode != 0)
+		throwError("Branch&Cut: CPXsetintparam(CPX_PARAM_THREADS) failed with code %d", errCode);
 
-	CPXsetdblparam(cpx.env, CPX_PARAM_TILIM, timeLimit);
+	errCode = CPXsetdblparam(cpx.env, CPX_PARAM_TILIM, timeLimit);
+	if (errCode != 0)
+		throwError("Branch&Cut: CPXsetintparam(CPX_PARAM_TILIM) failed with code %d", errCode);
 
-	if (CPXmipopt(cpx.env, cpx.lp))
-		throwError("Branch&Cut: output of CPXmipopt != 0");
+	errCode = CPXmipopt(cpx.env, cpx.lp);
+	if (errCode != 0)
+		throwError("Branch&Cut: CPXmipopt failed with code %d", errCode);
 
 	// asses if the best solution has been found based on whether there is time remainig from the time limit or not(probably not good method)
 	clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
@@ -73,8 +79,7 @@ void BranchAndCut(Solution *sol, double timeLimit)
 		LOG(LOG_LVL_NOTICE, "Branch & Cut found the optimal solution");
 	}
 	
-	cvtSuccessorsToSolution(cbData.bestSuccessors, sol);
-	//sol->cost = cbData.bestCost;
+	cvtSuccessorsToSolution(cbData.bestSuccessors, cbData.bestCost, sol);
 
 	destroyCallbackData(&cbData);
 
@@ -107,7 +112,7 @@ CallbackData initCallbackData(CplexData *cpx, Solution *sol)
 	if (cbData.ncols <= 0)
 		throwError("initCallbackData: CPXgetnumcols returned 0. Cpx.env is probably empty");
 
-	cbData.bestSuccessors = malloc((cpx->inst->nNodes + AVX_VEC_SIZE) * sizeof(int));
+	cbData.bestSuccessors = malloc((cpx->inst->nNodes + AVX_VEC_SIZE) * sizeof(int) * 2);
 	if (cbData.bestSuccessors == NULL)
 		throwError("initCallbackData: Failed to allocate memory");
 
@@ -132,7 +137,7 @@ CallbackData initCallbackData(CplexData *cpx, Solution *sol)
 	pthread_mutex_init(&cbData.mutex, NULL);
 
 	cbData.bestCost = sol->cost;
-	if (cbData.inst->params.cplexWarmStart)
+	if (cbData.bestCost != -1LL)
 		cvtSolutionToSuccessors(sol, cbData.bestSuccessors);
 
 	return cbData;
@@ -164,7 +169,7 @@ static inline void candidatePartCallback(CPXCALLBACKCONTEXTptr context, Callback
 
 	SubtoursData sub = initSubtoursData(inst->nNodes);
 	
-	cvtCPXtoSuccessors(xstar, cbData->ncols, inst->nNodes, &sub);
+	cvtCPXtoSuccessors(xstar, cbData->ncols, inst, &sub);
 
 	pthread_mutex_lock(&cbData->mutex);
 	if (inst->params.mode == MODE_BRANCH_CUT) // avoids too much output in hard fixing and local branching
@@ -193,6 +198,7 @@ static inline void candidatePartCallback(CPXCALLBACKCONTEXTptr context, Callback
 		if (cost < cbData->bestCost)
 		{
 			swapElems(cbData->bestSuccessors, sub.successors)
+			sub.subtoursMap = &sub.successors[inst->nNodes +AVX_VEC_SIZE];
 
 			LOG(LOG_LVL_INFO, "Branch & Cut: Found new best solution with cost: %lf", cvtCost2Double(cost));
 
@@ -219,11 +225,6 @@ static inline void candidatePartCallback(CPXCALLBACKCONTEXTptr context, Callback
 
 static inline int PostSolution(CPXCALLBACKCONTEXTptr context, CallbackData *cbData, double *vals, int *indicies)
 {
-	#ifdef DEBUG
-		if (!checkSuccessorSolution(cbData->inst, cbData->bestSuccessors) != 0)
-			throwError("Successor solution to be posted is incorrect");
-	#endif
-
 	for (int i = 0; i < cbData->ncols; i++)
 		vals[i] = 0.0;
 	for (int i = 0; i < cbData->ncols; i++)
@@ -234,9 +235,10 @@ static inline int PostSolution(CPXCALLBACKCONTEXTptr context, CallbackData *cbDa
 		vals[pos] = 1.0;
 	}
 
-	int strat = CPXCALLBACKSOLUTION_NOCHECK;
 	#ifdef DEBUG
-		strat = CPXCALLBACKSOLUTION_CHECKFEAS;
+		int strat = CPXCALLBACKSOLUTION_CHECKFEAS;
+	#else
+		int strat = CPXCALLBACKSOLUTION_NOCHECK;
 	#endif
 
 	int errCode = CPXcallbackpostheursoln(context, cbData->ncols, indicies, vals, cvtCost2Double(cbData->bestCost), strat);

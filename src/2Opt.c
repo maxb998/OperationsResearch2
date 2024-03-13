@@ -150,7 +150,10 @@ int apply2OptBestFix_fastIteratively(Solution *sol, float *costCache)
     #endif
     
 
-    bool notFinishedFlag = true, approxSearch = true;
+    bool notFinishedFlag = true;
+    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        bool approxSearch = true;
+    #endif
     while (notFinishedFlag) // runs 2opt until no more moves are made in one iteration of 2opt
     {
         #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)

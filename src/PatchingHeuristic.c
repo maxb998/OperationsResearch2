@@ -55,12 +55,19 @@ __uint128_t PatchingHeuristic(SubtoursData *sub, Instance *inst)
 
 	__uint128_t cost = computeSuccessorsSolCost(sub->successors, inst);
 
+	#ifdef DEBUG
+		if (!checkSuccessorSolution(inst, sub->successors))
+			throwError("Patching Heurisitc: Produced successors is not valid");
+	#endif
+
 	return cost;
 }
 
 static inline MergingData findBestSubtourMerge(SubtoursData *sub, int subtoursCount, Instance *inst)
 {
-	float *X = inst->X, *Y =inst->Y;
+	#if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+		float *X = inst->X, *Y =inst->Y;
+	#endif
 
 	float min = INFINITY;
 
@@ -95,8 +102,12 @@ static inline MergingData findBestSubtourMerge(SubtoursData *sub, int subtoursCo
 
 					// successor of j'th node
 					int succJ = sub->successors[j];
-
-					float cost = computeEdgeCost(X[i], Y[i], X[succJ], Y[succJ], inst) + computeEdgeCost(X[succI], Y[succI], X[j], Y[j], inst);
+					
+					#if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+						float cost = computeEdgeCost(X[i], Y[i], X[succJ], Y[succJ], inst) + computeEdgeCost(X[succI], Y[succI], X[j], Y[j], inst);
+					#elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+						float cost = inst->edgeCostMat[i * (size_t)inst->nNodes + succJ] + inst->edgeCostMat[succI * (size_t)inst->nNodes + j];
+					#endif
 
 					if (cost < min)
 					{
@@ -105,7 +116,11 @@ static inline MergingData findBestSubtourMerge(SubtoursData *sub, int subtoursCo
 						retVal.invertOrientation = false;
 					}
 					
-					cost = computeEdgeCost(X[i], Y[i], X[j], Y[j], inst) + computeEdgeCost(X[succI], Y[succI], X[succJ], Y[succJ], inst);
+					#if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+						cost = computeEdgeCost(X[i], Y[i], X[j], Y[j], inst) + computeEdgeCost(X[succI], Y[succI], X[succJ], Y[succJ], inst);
+					#elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+						cost = inst->edgeCostMat[i * (size_t)inst->nNodes + j] + inst->edgeCostMat[succI * (size_t)inst->nNodes + succJ];
+					#endif
 
 					if (cost < min)
 					{

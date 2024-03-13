@@ -54,9 +54,8 @@ void LocalBranching(Solution *sol, double timeLimit)
 
     LocalBranchingData lbData = initLocalBranchingData(sol);
 
-    int errCode;
-
-    if ((errCode = CPXcallbacksetfunc(lbData.cpx.env, lbData.cpx.lp, CPX_CALLBACKCONTEXT_CANDIDATE, genericCallbackCandidate, &lbData.cbData)))
+    int errCode = CPXcallbacksetfunc(lbData.cpx.env, lbData.cpx.lp, CPX_CALLBACKCONTEXT_CANDIDATE, genericCallbackCandidate, &lbData.cbData);
+    if (errCode != 0)
         throwError("LocalBranching: CPXcallbacksetfunc failed with code %d", errCode);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
@@ -72,28 +71,30 @@ void LocalBranching(Solution *sol, double timeLimit)
 
         // update time limit
         double remainingTime = startTime + timeLimit - currentTime;
-        if ((errCode = CPXsetdblparam(lbData.cpx.env, CPX_PARAM_TILIM, remainingTime)))
+        errCode = CPXsetdblparam(lbData.cpx.env, CPX_PARAM_TILIM, remainingTime);
+        if (errCode != 0)
             throwError("LocalBranching: CPXsetdblparam failed with code %d", errCode);
 
         // update/set warm start solution
-        if ((errCode = WarmStart(&lbData.cpx, lbData.cbData.bestSuccessors)))
+        LOG(LOG_LVL_TRACE, "LocalBranching: Setting WarmStart solution");
+        errCode = WarmStart(&lbData.cpx, lbData.cbData.bestSuccessors);
+        if (errCode != 0)
             throwError("LocalBranching: WarmStart failed with code %d", errCode);
-
-        LOG(LOG_LVL_DEBUG, "LocalBranching: WarmStart was set");
 
         // run cplex
         LOG(LOG_LVL_NOTICE, "LocalBranching: Iteration %4d, running Branch&Cut method with k = %d", iterCount, lbData.k);
-        if ((errCode = CPXmipopt(lbData.cpx.env, lbData.cpx.lp)))
+        LOG(LOG_LVL_TRACE, "LocalBranching: Running CPXmipopt");
+        errCode = CPXmipopt(lbData.cpx.env, lbData.cpx.lp);
+        if (errCode != 0)
             throwError("LocalBranching: CPXmipopt failed with code %d", errCode);
 
-        LOG(LOG_LVL_DEBUG, "LocalBranching: CPXmipopt finished");
-
-        if ((errCode = removeSolSimilarityConstraint(&lbData)))
+        errCode = removeSolSimilarityConstraint(&lbData);
+        if (errCode != 0)
             throwError("LocalBranching: removeSolSimilarityConstraint -> CPXdelrows failed with code %d", errCode);
 
         if (lbData.k >= sol->instance->nNodes)
         {
-            LOG(LOG_LVL_WARN, "LocalBranching: Solution similarity constraint is deactivated -> Optimal Solution found");
+            LOG(LOG_LVL_WARN, "LocalBranching: Solution similarity constraint is deactivated -> Optimal Solution found if finished before the time limit");
             break;
         }
 
@@ -105,7 +106,7 @@ void LocalBranching(Solution *sol, double timeLimit)
     
     // update sol if necessary(very likely)
     if (lbData.cbData.bestCost < sol->cost)
-        cvtSuccessorsToSolution(lbData.cbData.bestSuccessors, sol);
+        cvtSuccessorsToSolution(lbData.cbData.bestSuccessors, lbData.cbData.bestCost, sol);
     else
         LOG(LOG_LVL_WARN, "LocalBranching: Solution could not be optimized any further");
 
@@ -131,8 +132,6 @@ static void updateK(LocalBranchingData *lbData)
     }
 
     lbData->k += K_INCREMENT;
-
-    //if (lbData->k)
 }
 
 static void addSolSimilarityConstraint(LocalBranchingData *lbData)
@@ -156,7 +155,7 @@ static void addSolSimilarityConstraint(LocalBranchingData *lbData)
     const int izero = 0;
 
     int errCode = CPXaddrows(lbData->cpx.env, lbData->cpx.lp, 0, 1, n, &rhs, &sense, &izero, index, value, NULL, &rname);
-    if (errCode)
+    if (errCode != 0)
         throwError("addSolSimilarityConstraint: CPXaddrows(): error %d", errCode);
 }
 

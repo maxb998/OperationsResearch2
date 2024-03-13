@@ -14,7 +14,7 @@
 // Incremental/Decremental step in fixAmount during computation
 #define FIX_OFFSET 10
 // Number of non-improving iterations before fixAmount is increased
-#define STATIC_COST_THRESHOLD 10LL
+#define STATIC_COST_THRESHOLD 10
 
 typedef struct
 {
@@ -64,7 +64,8 @@ void HardFixing(Solution *sol, double timeLimit)
 
     HardfixAllocatedMem hfAlloc = initHardfixAllocatedMem(sol);
 
-    if ((errCode = CPXcallbacksetfunc(hfAlloc.cpx.env, hfAlloc.cpx.lp, CPX_CALLBACKCONTEXT_CANDIDATE, genericCallbackCandidate, &hfAlloc.cbData)) != 0)
+    errCode = CPXcallbacksetfunc(hfAlloc.cpx.env, hfAlloc.cpx.lp, CPX_CALLBACKCONTEXT_CANDIDATE, genericCallbackCandidate, &hfAlloc.cbData);
+    if (errCode != 0)
         throwError("HardFix: CPXcallbacksetfunc failed with code %d", errCode);
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
@@ -80,11 +81,13 @@ void HardFixing(Solution *sol, double timeLimit)
             switch (sol->instance->params.hardFixPolicy)
             {
             case HARDFIX_POLICY_RANDOM:
-                if ((errCode = randomFix(&hfAlloc)) != 0)
+                errCode = randomFix(&hfAlloc);
+                if (errCode != 0)
                     throwError("HardFix: randomFix failed with code %d", errCode);
                 break;
             case HARDFIX_POLICY_SMALLEST:
-                if ((errCode = smallestFix(&hfAlloc)) != 0)
+                errCode = smallestFix(&hfAlloc);
+                if (errCode != 0)
                     throwError("HardFix: smallestFix failed with code %d", errCode);
                 break;
             }
@@ -96,11 +99,13 @@ void HardFixing(Solution *sol, double timeLimit)
 
         // update time limit
         double remainingTime = startTime + timeLimit - currentTime;
-        if ((errCode = CPXsetdblparam(hfAlloc.cpx.env, CPX_PARAM_TILIM, remainingTime)) != 0)
+        errCode = CPXsetdblparam(hfAlloc.cpx.env, CPX_PARAM_TILIM, remainingTime);
+        if (errCode != 0)
             throwError("HardFix: CPXsetdblparam failed with code %d", errCode);
 
         // update/set warm start solution
-        if ((errCode = WarmStart(&hfAlloc.cpx, hfAlloc.cbData.bestSuccessors)) != 0)
+        errCode = WarmStart(&hfAlloc.cpx, hfAlloc.cbData.bestSuccessors);
+        if (errCode != 0)
             throwError("HardFix: WarmStart failed with code %d", errCode);
 
         #ifdef DEBUG
@@ -109,7 +114,8 @@ void HardFixing(Solution *sol, double timeLimit)
 
         // run cplex
         LOG(LOG_LVL_DEBUG, "HardFix: Iteration %4d, running Branch&Cut method with %lu fixed edges", iterCount, hfAlloc.fixAmount);
-        if ((errCode = CPXmipopt(hfAlloc.cpx.env, hfAlloc.cpx.lp)) != 0)
+        errCode = CPXmipopt(hfAlloc.cpx.env, hfAlloc.cpx.lp);
+        if (errCode != 0)
             throwError("HardFix: CPXmipopt failed with code %d", errCode);
 
         #ifdef DEBUG
@@ -118,13 +124,14 @@ void HardFixing(Solution *sol, double timeLimit)
 
         if (hfAlloc.fixAmount == 0)
         {
-            LOG(LOG_LVL_NOTICE, "HardFix: No edges were fixed. Best solution has been found");
+            LOG(LOG_LVL_NOTICE, "HardFix: No edges were fixed. Optimal solution found if finished before the time limit");
             break;
         }
         
         updateFixAmount(&hfAlloc);
 
-        if ((errCode = resetBounds(&hfAlloc)) != 0)
+        errCode = resetBounds(&hfAlloc);
+        if (errCode != 0)
             throwError("HardFix: resetBounds failed with code %d", errCode);
 
         clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
@@ -133,7 +140,7 @@ void HardFixing(Solution *sol, double timeLimit)
     
     // update sol if necessary(very likely)
     if (hfAlloc.cbData.bestCost < sol->cost)
-        cvtSuccessorsToSolution(hfAlloc.cbData.bestSuccessors, sol);
+        cvtSuccessorsToSolution(hfAlloc.cbData.bestSuccessors, hfAlloc.cbData.bestCost, sol);
     else
         LOG(LOG_LVL_WARN, "HardFixing: Solution could not be optimized any further");
 
@@ -154,10 +161,10 @@ static HardfixAllocatedMem initHardfixAllocatedMem(Solution *sol)
 
     HardfixAllocatedMem hfAlloc = {
         .cpx = initCplexData(sol->instance),
-        .bVal = malloc(n * sizeof(double)),
-        .bType = malloc(n),
-        .indexes = malloc(n * sizeof(int))
+        .bVal = malloc(n * (sizeof(double) + sizeof(int) + sizeof(char)))
     };
+    hfAlloc.bType = (char*)&hfAlloc.bVal[n];
+    hfAlloc.indexes = (int*)&hfAlloc.bType[n];
 
     hfAlloc.cbData = initCallbackData(&hfAlloc.cpx, sol);
 
@@ -180,8 +187,6 @@ static void destroyHardfixAllocatedMem(HardfixAllocatedMem *hfAlloc)
     destroyCplexData(&hfAlloc->cpx);
     destroyCallbackData(&hfAlloc->cbData);
     free(hfAlloc->bVal);
-    free(hfAlloc->bType);
-    free(hfAlloc->indexes);
 
     hfAlloc->bVal = NULL;
     hfAlloc->bType = NULL;

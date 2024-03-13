@@ -11,10 +11,10 @@ CplexData initCplexData(Instance *inst)
 {
 	CplexData cpxData = { .inst = inst };
 
-	int errno = 0;
-	cpxData.env = CPXopenCPLEX(&errno);
-	if (errno)
-		throwError("buildCPXModel: error at CPXopenCPLEX with code %d", errno);
+	int errCode = 0;
+	cpxData.env = CPXopenCPLEX(&errCode);
+	if (errCode)
+		throwError("buildCPXModel: error at CPXopenCPLEX with code %d", errCode);
 
 	// screen output
 	// if (inst->params.logLevel >= LOG_LVL_TRACE)
@@ -26,16 +26,15 @@ CplexData initCplexData(Instance *inst)
 	else
 		CPXsetintparam(cpxData.env, CPX_PARAM_RANDOMSEED, time(NULL));
 
-	cpxData.lp = CPXcreateprob(cpxData.env, &errno, "TSP");
-	if (errno)
-		throwError("buildCPXModel: error at CPXcreateprob with code %d", errno);
+	cpxData.lp = CPXcreateprob(cpxData.env, &errCode, "TSP");
+	if (errCode)
+		throwError("buildCPXModel: error at CPXcreateprob with code %d", errCode);
 
     int n = inst->nNodes;
 
 	char binary = CPX_BINARY; 
-
-	char **cname = (char **) calloc(1, sizeof(char *));		// (char **) required by cplex...
-	cname[0] = (char *) calloc(100, sizeof(char));
+	char cname[30];
+	char *cnamePtr = (char*)&cname;
 
     // add binary var.s x(i,j) for i < j  
 	
@@ -43,44 +42,52 @@ CplexData initCplexData(Instance *inst)
 	{
 		for ( int j = i+1; j < n; j++ )
 		{
-			sprintf(cname[0], "x(%d,%d)", i+1,j+1);  		// ... x(1,2), x(1,3) ....
-			double obj = computeEdgeCost(inst->X[i], inst->Y[i], inst->X[j], inst->Y[j], inst); // cost == distance
+			sprintf((char*)cname, "x(%d,%d)", i+1,j+1);  		// ... x(1,2), x(1,3) ....
+			#if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+				double obj = computeEdgeCost(inst->X[i], inst->Y[i], inst->X[j], inst->Y[j], inst);
+			#elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+				double obj = inst->edgeCostMat[i * n + j];
+			#endif
 			double ub = 1.0;
-			if ( CPXnewcols(cpxData.env, cpxData.lp, 1, &obj, NULL, &ub, &binary, cname) )
-				throwError("initCplexData: wrong CPXnewcols on x var.s");
-    		if ( CPXgetnumcols(cpxData.env, cpxData.lp)-1 != xpos(i,j,n) )
-				throwError("initCplexData: wrong position for x var.s");
+
+			errCode = CPXnewcols(cpxData.env, cpxData.lp, 1, &obj, NULL, &ub, &binary, &cnamePtr);
+			if (errCode != 0)
+				throwError("initCplexData: CPXnewcols failed with code %d", errCode);
+			#ifdef DEBUG
+				int cpxColNumCurrent = CPXgetnumcols(cpxData.env, cpxData.lp);
+				if ( cpxColNumCurrent-1 != xpos(i,j,n) )
+					throwError("initCplexData: number of column of latest added variable(%d) does not match with xpos value(%d)", cpxColNumCurrent, xpos(i,j,n));
+			#endif
 		}
 	} 
 
     // add the degree constraints 
 
-	int *index = (int *) calloc(n, sizeof(int));
-	double *value = (double *) calloc(n, sizeof(double));
-
-	for ( int h = 0; h < n; h++ )  		// add the degree constraint on node h
+	double *value = malloc(n * (sizeof(double) + sizeof(int)));
+	int *index = (int*)&value[n];
+	
+	for (int i = 0; i < n; i++)
+		value[i] = 1.0;
+	
+	for ( int i = 0; i < n; i++ )  		// add the degree constraint on node h
 	{
 		double rhs = 2.0;
 		char sense = 'E';                            // 'E' for equality constraint 
-		sprintf(cname[0], "degree(%d)", h+1);
+		sprintf((char*)cname, "degree(%d)", i+1);
 		int nnz = 0;
-		for ( int i = 0; i < n; i++ )
+		for ( int j = 0; j < n; j++ )
 		{
-			if ( i == h ) continue;
-			index[nnz] = xpos(i,h,n);
-			value[nnz] = 1.0;
+			if ( j == i ) continue;
+			index[nnz] = xpos(i,j,n);
 			nnz++;
 		}
 		int izero = 0;
-		if ( CPXaddrows(cpxData.env, cpxData.lp, 0, 1, nnz, &rhs, &sense, &izero, index, value, NULL, &cname[0]) )
-			throwError("initCplexData: CPXaddrows(): error 1");
+		errCode = CPXaddrows(cpxData.env, cpxData.lp, 0, 1, nnz, &rhs, &sense, &izero, index, value, NULL, &cnamePtr);
+		if (errCode != 0)
+			throwError("initCplexData: CPXaddrows() failed with code %d", errCode);
 	} 
 
 	free(value);
-	free(index);
-
-	free(cname[0]);
-	free(cname);
 
 	return cpxData;
 }
@@ -93,8 +100,10 @@ void destroyCplexData(CplexData * cpxData)
 
 int xpos(int i, int j, int n)
 {
-    if (i == j)
-        throwError("xpos: i == j");
+	#ifdef DEBUG
+		if (i == j)
+			throwError("xpos: i == j");
+	#endif
     if (i > j)
         swapElems(i, j)
 
@@ -102,41 +111,43 @@ int xpos(int i, int j, int n)
     return pos;
 }
 
-void cvtCPXtoSuccessors(double *xstar, int ncols, int nNodes, SubtoursData *subData)
+void cvtCPXtoSuccessors(double *xstar, int ncols, Instance *inst, SubtoursData *sub)
 {
-	// reset arrays
-	for (int i = 0; i < nNodes; i++)
-		subData->successors[i] = -1;
-	for (int i = 0; i < nNodes; i++)
-		subData->subtoursMap[i] = -1;
+	int n = inst->nNodes;
 
-	//LOG(LOG_LVL_TRACE, "###################################################");
+	// reset arrays and counter
+	for (int i = 0; i < (n + AVX_VEC_SIZE) * 2; i++) // exploit memory allocation
+		sub->successors[i] = -1;
+	sub->subtoursCount = 0;
 
-	for (int i = 0; i < nNodes; i++)
+	for (int i = 0; i < n; i++)
 	{
 		int succ = i;
-		for (int j = 0; j < nNodes; j++)
+		for (int j = 0; j < n; j++)
 		{
-			if ((succ != j) && (xstar[xpos(succ, j, nNodes)] > 0.5) && (subData->subtoursMap[j] == -1))
+			if ((succ != j) && (xstar[xpos(succ, j, n)] > 0.5) && (sub->subtoursMap[j] == -1))
 			{
-				subData->successors[succ] = j;
-				subData->subtoursMap[succ] = subData->subtoursCount;
-				//LOG(LOG_LVL_TRACE, "x(%3d,%3d) = 1   subtour n° %d\n", succ, j, subData->subtoursMap[succ] + 1);
+				sub->successors[succ] = j;
+				sub->subtoursMap[succ] = sub->subtoursCount;
 				succ = j;
 				j = 0;
 			}
 		}
 		if (succ != i)
 		{
-			subData->successors[succ] = i;
-			subData->subtoursMap[succ] = subData->subtoursCount;
-			//LOG(LOG_LVL_TRACE, "x(%3d,%3d) = 1   subtour n° %d\n", succ, i, subData->subtoursMap[succ] + 1);
-			(subData->subtoursCount)++;
+			sub->successors[succ] = i;
+			sub->subtoursMap[succ] = sub->subtoursCount;
+			(sub->subtoursCount)++;
 		}
 	}
+
+	#ifdef DEBUG
+		if (!checkSubtoursData(inst, sub))
+			throwError("SubtourData converted from CPLEX is incorrect");
+	#endif
 }
 
-void cvtSuccessorsToSolution(int *successors, Solution *sol)
+void cvtSuccessorsToSolution(int *successors, __uint128_t cost, Solution *sol)
 {
 	Instance *inst = sol->instance;
 	int n = inst->nNodes;
@@ -152,7 +163,12 @@ void cvtSuccessorsToSolution(int *successors, Solution *sol)
 
 	sol->indexPath[n] = 0;
 
-	sol->cost = computeSolutionCost(sol);
+	sol->cost = cost;
+
+	#ifdef DEBUG
+		if (!checkSolution(sol))
+			throwError("cvtSuccessorsToSolution: Converted solution is not correct");
+	#endif
 }
 
 void cvtSolutionToSuccessors(Solution *sol, int* successors)
@@ -162,8 +178,10 @@ void cvtSolutionToSuccessors(Solution *sol, int* successors)
 	for (int i = 0; i < n; i++)
 		successors[sol->indexPath[i]] = sol->indexPath[i+1];
 
-	if ((sol->instance->params.logLevel >= LOG_LVL_TRACE) && (!checkSuccessorSolution(sol->instance, successors) != 0))
-		throwError("cvtSolutionToSuccessors: Converted solution is wrong");	
+	#ifdef DEBUG
+		if (!checkSuccessorSolution(sol->instance, successors) != 0)
+			throwError("cvtSolutionToSuccessors: Converted solution is wrong");	
+	#endif
 }
 
 int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr context, SubtoursData *subData, int iterNum, Instance *inst, int nCols)
@@ -231,7 +249,11 @@ __uint128_t computeSuccessorsSolCost(int *successors, Instance *inst)
 	do
 	{
 		int succ = successors[i];
-		cost += cvtFloat2Cost(computeEdgeCost(inst->X[i], inst->Y[i], inst->X[succ], inst->Y[succ], inst));
+		#if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+			cost += cvtFloat2Cost(computeEdgeCost(inst->X[i], inst->Y[i], inst->X[succ], inst->Y[succ], inst));
+		#elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+			cost += cvtFloat2Cost(inst->edgeCostMat[i * (size_t)n + succ]);
+		#endif
 		i = succ;
 
 		if (counter > n)
@@ -241,6 +263,52 @@ __uint128_t computeSuccessorsSolCost(int *successors, Instance *inst)
 	} while (i != 0);
 	
 	return cost;
+}
+
+bool checkSubtoursData(Instance *inst, SubtoursData *sub)
+{
+	int n = inst->nNodes;
+
+	bool *appearedOnce = malloc(n * sizeof(bool));
+	for (int i = 0; i < n; i++)
+		appearedOnce[i] = false;
+	for (int i = 0; i < n; i++)
+	{
+		int succ = sub->successors[i];
+		if (succ < 0 || succ > n)
+		{
+			LOG(LOG_LVL_ERROR, "checkSubtoursData: successors[%d]=%d is invalid", i, succ);
+			return false;
+		}
+		if (appearedOnce[succ])
+		{
+			LOG(LOG_LVL_ERROR, "checkSubtoursData: successors[%d]=%d is present more than once in the successors array", i, succ);
+			return false;
+		}
+		appearedOnce[succ] = true;
+	}
+	free(appearedOnce);
+
+	for (int i = 0; i < sub->subtoursCount; i++)
+	{
+		// find first element of subtour i
+		int firstElem;
+		for (firstElem = 0; firstElem < n; firstElem++)
+			if (sub->subtoursMap[firstElem] == i)
+				break;
+
+		// check if all members of subtour i are actually mapped as part of subtour i
+		for (int j = sub->successors[firstElem]; j != firstElem; j = sub->successors[j])
+		{
+			if (sub->subtoursMap[j] != i)
+			{
+				LOG(LOG_LVL_ERROR, "checkSubtoursData: element at position %d is not part of the subtour %d as it should(subtoursMap incoherent)", j, i);
+				return false;
+			}
+		}
+	}
+	
+	return true;
 }
 
 bool checkSuccessorSolution(Instance *inst, int *successors)
@@ -305,12 +373,13 @@ SubtoursData initSubtoursData(int n)
 {
 	SubtoursData subData = {
 		.subtoursCount = 0,
-		.successors = malloc((n + AVX_VEC_SIZE) * sizeof(int)),
-		.subtoursMap = malloc((n + AVX_VEC_SIZE) * sizeof(int))
+		.successors = malloc((n + AVX_VEC_SIZE) * sizeof(int) * 2),
 	};
 
-	if ((subData.successors == NULL) || (subData.subtoursMap == NULL))
+	if (subData.successors == NULL)
 		throwError("initSubtoursData: Failed to allocate memory");
+	
+	subData.subtoursMap = &subData.successors[n + AVX_VEC_SIZE];
 
 	return subData;
 }
@@ -319,7 +388,7 @@ SubtoursData initSubtoursData(int n)
 void destroySubtoursData(SubtoursData *subData)
 {
 	free(subData->successors);
-	free(subData->subtoursMap);
+	// free(subData->subtoursMap);
 	subData->successors = NULL;
-	subData->subtoursMap = NULL;
+	// subData->subtoursMap = NULL;
 }

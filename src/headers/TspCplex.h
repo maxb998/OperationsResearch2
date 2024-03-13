@@ -66,10 +66,10 @@ int xpos(int i, int j, int n);
 * @attention subData.successors and subData.subtoursMap must point to allocated memory spaces of size nNodes
 * @param xstar Cplex solution array in cplex format
 * @param ncols Number of elements composing xstar
-* @param nNodes Number of nodes in the instance
+* @param inst Pointer to the instance
 * @param subData Output of conversion is stored here
 */
-void cvtCPXtoSuccessors(double *xstar, int ncols, int nNodes, SubtoursData *subData);
+void cvtCPXtoSuccessors(double *xstar, int ncols, Instance *inst, SubtoursData *subData);
 
 /*!
 * @brief Compute the cost of a solution in "successors" form
@@ -83,9 +83,10 @@ __uint128_t computeSuccessorsSolCost(int *successors, Instance *inst);
 * @brief Convert a successors array in a standard Solution struct
 * @attention Successors must not contain any subtour
 * @param successors Array of successors
+* @param cost Cost of the successor solution
 * @param sol Pointer to already initialized solution that points to the target Instance
 */
-void cvtSuccessorsToSolution(int *successors, Solution *sol);
+void cvtSuccessorsToSolution(int *successors, __uint128_t cost, Solution *sol);
 
 /*!
 * @brief Convert a Solution to a successors array
@@ -118,10 +119,18 @@ int setSEC(double *coeffs, int *indexes, CplexData *cpx, CPXCALLBACKCONTEXTptr c
 __uint128_t PatchingHeuristic(SubtoursData *sub, Instance *inst);
 
 /*!
+* @brief Check correctness of subtoursData
+* @param inst Instance of the problem
+* @param sub subtoursData to check
+* @result true if everything is correct, false otherwise
+*/
+bool checkSubtoursData(Instance *inst, SubtoursData *sub);
+
+/*!
 * @brief Check Solution in the form of an array of successors
 * @param inst Instance of the problem
 * @param successors Successors array
-* @result 0 if everything is correct. 1 if successors is not correct
+* @result true if everything is correct, false otherwise
 */
 bool checkSuccessorSolution(Instance *inst, int *successors);
 
