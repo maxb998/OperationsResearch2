@@ -2,6 +2,14 @@
 \usepackage{url}
 \usepackage{graphicx}
 \usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage[vlined,noresetcount]{algorithm2e}
+
+\makeatletter
+\renewcommand{\@algocf@capt@plain}{above}% formerly {bottom}
+\makeatother
+
+\graphicspath{ {./img/} }
 
 \begin{document}
 
@@ -11,7 +19,7 @@
 	
 	\center % Centre everything on the page
 	
-	\includegraphics[width=7cm]{img/unipd_logo.png}
+	\includegraphics[width=7cm]{unipd_logo.png}
 	\bigskip
 	%------------------------------------------------
 	%	Headings

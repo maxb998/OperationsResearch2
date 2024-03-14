@@ -2,4 +2,42 @@
 
 \section{Nearest Neighbor}
 
+\begin{algorithm}[H]
+	\TitleOfAlgo{\textbf{Nearest Neighbor}}
+    \SetKwInOut{Input}{Input}
+    \SetKwInOut{Output}{Output}
+    \Input{A graph $G(V,E)$, a cost function $c_{ij}$, and a starting vertex $s$}
+    \Output{A tour $T$ of the graph of cost $b$}
+    \BlankLine
+    $T \gets \{s\}$\\
+    $v \gets s$\\
+    $b \gets 0$\\
+    \While{$|T| < |V|$}{
+        identify node $u \in V/T$ such that $c_{vu} \leq c_{vj}$, $\forall$ $j \in V/(T \cup {u})$\\
+        $T \gets T \cup \{u\}$\\
+        $b \gets b + c_{vu}$\\
+        $v \gets u$\\
+    }
+    $b \gets b + c_{vs}$\\
+    \Return $tour$, $b$\\
+\end{algorithm}
+
 \section{Extra Mileage}
+
+\begin{algorithm}[H]
+	\TitleOfAlgo{\textbf{Extra Mileage}}
+    \SetKwInOut{Input}{Input}
+    \SetKwInOut{Output}{Output}
+    \Input{A graph $G(V,E)$, a cost function $c_{ij}$, and a starting subtour $S$}
+    \Output{A complete tour $T$ of the graph of cost $b$}
+    \BlankLine
+    $T \gets S$\\
+    $b \gets$ cost of $S$\\
+    \While{{$|T| < |V|$}}{
+        identify node $w \in V/T$ such that $m^w_{uv} = c_{uw} + c_{wv} - c_{uv}$ is minumum $\forall$ $u,v \in T$, $u \neq v$\\
+        insert $w$ between $u$, $v$ int $T$\\
+        $b \gets b + c_{uw} + c_{wv} - c_{uv}$\\
+    }
+    \Return $tour$, $b$\\
+    
+\end{algorithm}
