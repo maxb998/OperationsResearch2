@@ -35,7 +35,7 @@ def argParser() -> InputParams:
     parser.add_argument('-P', '--prefix', metavar='str', required=True, type=str, help='Prefix present in all the files inside the directory')
     parser.add_argument('-O', '--outputFname', metavar='str', required=True, type=str, help='Output filename for the IterCount csv')
     parser.add_argument('-S', '--separator', choices=[';','space',','], default=';', required=False, type=str, help='Type of separator for csv file')
-    parser.add_argument('-L', '--lineNames', required=True, nargs='+', default=['Final cost = '], type=str, help='String contained in the line/lines that contain the number to extract')
+    parser.add_argument('-L', '--lineNames', required=False, nargs='+', default=['Final cost = '], type=str, help='String contained in the line/lines that contain the number to extract')
     parser.add_argument('--stopLines', required=False, nargs='+', default=[], type=str, help='String contained in the line/lines that will stop the reading of the file')
 
     args = parser.parse_args()
@@ -72,7 +72,7 @@ def getInfoFromFilename(filename:str, params:InputParams) -> FilenameExtractedDa
         tuningVar=fnameSplitted[compsInPrefix + 2]
     )
     
-def getFilesWithSameInstanceAndTimeLimit(filelist:list) -> [str, ...]:
+def getFilesWithSameInstanceAndTimeLimit(filelist:list) -> list[str]:
     basename = os.path.basename(filelist[0])
     prefix = basename[0:basename.rfind('_')]
     prefix = prefix[0:prefix.rfind('_')] + '_'
@@ -84,7 +84,7 @@ def getFilesWithSameInstanceAndTimeLimit(filelist:list) -> [str, ...]:
 
     return retVal
 
-def getFilesWithDifferentSeedRuns(flist:list) -> [str, ...]:
+def getFilesWithDifferentSeedRuns(flist:list) -> list[str]:
     basename = os.path.basename(flist[0])
     prefix = basename[0:basename.rfind('_')] + '_'
 
@@ -160,7 +160,7 @@ def main():
         if fnameParams.tuningVar not in tuningVarsList:
             tuningVarsList.append(fnameParams.tuningVar)
 
-    tuningVarsList.sort(key=lambda i: -float(i))
+    # tuningVarsList.sort(key=lambda i: -float(i))
 
     print('Detected tuning vars:')
     print(tuningVarsList)

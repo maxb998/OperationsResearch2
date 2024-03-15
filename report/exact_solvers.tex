@@ -1,31 +1,38 @@
 \chapter{Exact Solvers}
 
 %We call Exact Solvers those algorithms that allow us to solve the TSP to optimality, namely the Benders method and the famous Branch and Cut method. They are both based on the ILP model described before, both start without any SEC, but they add them as they SEC are violated and both use CPLEX, although in different ways.
-We refer to Exact Solvers as algorithms that enable us to solve the TSP optimally. Specifically, two well-known methods fall into this category: the Benders method and the renowned Branch and Cut method. Both of these approaches are grounded in the ILP model described earlier, so both use CPLEX and the initialization method is the one following.
+We refer to Exact Solvers as algorithms that enable us to solve the TSP optimally.
+Specifically, two well-known methods fall into this category: the Benders method and the renowned Branch and Cut method.
+Both of these approaches are based around CPLEX.
 
 \section{Benders}
 
-\begin{algorithm}[H]
-	\TitleOfAlgo{\textbf{Benders}}
-    \SetKwInOut{Input}{input}
-    \SetKwInOut{Output}{output}
-	\Input{Graph $G(V,E)$ fully connected \newline$c_{ij}=$ cost of $edge(i,j) \in |E|$ }
-	\Output{An optimal solution of the input TSPinstance}
-	\vspace{2mm}
-	Initialize CPLEX environment \\
-	\While{$true$}{
-		$x^* \gets$ CPLEX result of mipopt \\
-		convert $x^*$ into a successor based solution $s$ \\
-		$count \gets$ number of subtours in $s$\\
-		\uIf{$count = 1$}{
-			$s$ is optimal \\
-			break \\
+\begin{figure}[htbp]
+	\textbf{Benders} \\
+	\begin{algorithm}[H]
+		%\TitleOfAlgo{\textbf{Benders}}
+		\SetKwInOut{Input}{input}
+		\SetKwInOut{Output}{output}
+		\Input{Graph $G(V,E)$ fully connected \newline$c_{ij}=$ cost of $edge(i,j) \in |E|$ }
+		\Output{Optimal Solution $t$}
+		\vspace{2mm}
+		Initialize CPLEX\\
+		\While{$true$}{
+			$x^* \gets$ CPLEX result of mipopt \\
+			convert $x^*$ into a successor based solution $t$ \\
+			$count \gets$ number of subtours in $t$\\
+			\uIf{$count = 1$}{
+				$t$ is optimal \\
+				break \\
+			}
+			\uElse{
+				\ForEach{subtour $s \in t$}{ add SEC violated by $s$ to CPLEX }
+			}
 		}
-		\uElse{
-			\ForEach{$subtour \in s$}{ add SEC violated by $subtour$ to CPLEX }
-		}
-	}
-\end{algorithm}
+		\Return{$t$}
+	\end{algorithm}
+	\caption{Basic version of Benders algorithm} \label{fig:benders}
+\end{figure}
 
 \subsection{Patching Heuristic}
 
