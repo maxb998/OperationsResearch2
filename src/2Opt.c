@@ -30,11 +30,11 @@ typedef struct
 
 
 // Decides whether to print LOG_LVL_NOTICE benchmarking information(n° of iterations and iter/sec) at the end of the run -> Used because when a metaheuristic calls 2opt a lot those lines really clutter a lot the console
-static bool printPerformanceLog = false;
+static bool print2OptLog = false;
 // Set global varaible
 void set2OptPerformanceBenchmarkLog(bool val)
 {
-    printPerformanceLog = val;
+    print2OptLog = val;
 }
 
 
@@ -166,7 +166,8 @@ int apply2OptBestFix_fastIteratively(Solution *sol, float *costCache)
             bool result = updateSolution(&data, bestFix);
             if (!result && approxSearch)
             {
-                LOG(LOG_LVL_DEBUG, "apply2OptBestFix_fastIteratively[%d]: Switching from Approximated Search to Exact Search", data.iter);
+                if (print2OptLog)
+                    LOG(LOG_LVL_DEBUG, "apply2OptBestFix_fastIteratively[%d]: Switching from Approximated Search to Exact Search", data.iter);
                 approxSearch = false;
                 continue;
             }
@@ -187,7 +188,7 @@ int apply2OptBestFix_fastIteratively(Solution *sol, float *costCache)
 
         clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
         double currentTime = cvtTimespec2Double(timeStruct);
-        if (printPerformanceLog && (currentTime - printTimeSec > LOG_INTERVAL))
+        if (print2OptLog && (currentTime - printTimeSec > LOG_INTERVAL))
         {   
             LOG(LOG_LVL_INFO, "2Opt running: cost is %lf at iteration %4lu with last optimization of %lf", cvtCost2Double(sol->cost), data.iter, -bestFix.costOffset);
             printTimeSec = currentTime;
@@ -197,7 +198,7 @@ int apply2OptBestFix_fastIteratively(Solution *sol, float *costCache)
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double elapsed = cvtTimespec2Double(timeStruct) - startTime;
-    if (printPerformanceLog)
+    if (print2OptLog)
     {
         LOG(LOG_LVL_NOTICE, "Total number of iterations: %lu", data.iter);
         LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)data.iter/elapsed);
@@ -233,11 +234,13 @@ static inline bool updateSolution(_2optData *data, _2optMoveData bestFix)
     // update cost
     sol->cost += cvtFloat2Cost(altEdge0Cost) + cvtFloat2Cost(altEdge1Cost) - cvtFloat2Cost(data->costCache[bestFix.edge0]) - cvtFloat2Cost(data->costCache[bestFix.edge1]);
 
-
-    LOG(LOG_LVL_TRACE, "2Opt: [%d] Updating solution by switching edge (%d,%d)[%d] with edge (%d,%d)[%d] reducing cost by %f. New Cost = %lf", data->iter,
-        sol->indexPath[bestFix.edge0], sol->indexPath[bestFix.edge0 + 1], bestFix.edge0,
-        sol->indexPath[bestFix.edge1], sol->indexPath[bestFix.edge1 + 1], bestFix.edge1,
-        -bestFix.costOffset, cvtCost2Double(sol->cost));
+    if (print2OptLog)
+    {
+        LOG(LOG_LVL_TRACE, "2Opt: [%d] Updating solution by switching edge (%d,%d)[%d] with edge (%d,%d)[%d] reducing cost by %f. New Cost = %lf", data->iter,
+            sol->indexPath[bestFix.edge0], sol->indexPath[bestFix.edge0 + 1], bestFix.edge0,
+            sol->indexPath[bestFix.edge1], sol->indexPath[bestFix.edge1 + 1], bestFix.edge1,
+            -bestFix.costOffset, cvtCost2Double(sol->cost));
+    }
 
     for (int s = bestFix.edge0+1, b = bestFix.edge1; s < b; s++, b--)
     {
