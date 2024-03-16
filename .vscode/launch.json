@@ -26,7 +26,7 @@
                 //"--tabuTenureSize", "50",
                 //"--vnsKickSize", "5,30",
                 //"--geneticParams", "20,10,100,100",
-                "--annelTemp", "100",
+                //"--annealTemperature", "2",
 
                 //"--cplexInit", "em",
                 //"--cplexDisablePatching",
@@ -68,7 +68,7 @@
                 //"--tabuTenureSize", "50",
                 //"--vnsKickSize", "5,10",
                 //"--geneticParams", "20,10,100,100",
-                "--annelTemp", "1000",
+                //"--annealTemperature", "4",
 
                 //"--cplexInit", "vns",
                 //"--cplexDisablePatching",

@@ -10,7 +10,7 @@
 // temperature at which annealing stops and runs 2opt since we can basically expect mostly improving moves from that point on
 #define STOP_TEMP 0.1 
 // number of simulations of a random move before giving up for this iteration(avoids endless loops)
-#define TRIES_BEFORE_TEMP_REDUCTION 100
+#define TRIES_BEFORE_TEMP_REDUCTION 500
 
 // #define USE_RATIO_ACCEPTANCE // it does not seem to work well
 
@@ -83,6 +83,11 @@ void SimulatedAnnealing(Solution *sol, double timeLimit)
 
     if (!checkSolution(sol))
         throwError("SimulatedAnnealing: Input solution is not valid");
+
+    if (sol->instance->params.annealingTemperature == -1)
+        sol->instance->params.annealingTemperature = pow(sol->instance->nNodes, 1.4); // kind of random for now
+    
+    LOG(LOG_LVL_NOTICE, "Starting temperature = %lf", sol->instance->params.annealingTemperature);
 
     // initialization of threads data
     ThreadSharedData thShared = initThreadSharedData(sol, startTime + timeLimit);
@@ -310,8 +315,6 @@ static inline bool acceptMove(ThreadSpecificData *thSpecific, MoveData s)
 {
     if (s.offset < 0)
         return true; // always accept improving moves
-
-    Instance * inst = thSpecific->sol.instance;
 
     double threshold;
 

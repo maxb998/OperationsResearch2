@@ -156,7 +156,7 @@ void argParse(Instance * inst, int argc, char *argv[])
         { .name="tabuTenureSize", .key=ARGP_TABU_TENURESIZE, .arg="UINT", .flags=0, .doc="Specify how big the tenure should be in Tabu Search\n", .group=3 },
         { .name="vnsKickSize", .key=ARGP_VNS_KICKSIZE, .arg="UINT,UINT", .flags=0, .doc="Specify the size of the random \"kick\" that randomizes the solution in vns. Eg: --vnsKickSize 2,6\n", .group=3 },
         { .name="geneticParams", .key=ARGP_GENETIC_PARAMS, .arg="UINT,UINT,UINT", .flags=0, .doc="Specify the sizes of Population, Crossover, Mutation and Reintroduction in that order in the genetic algorithm. Eg: --geneticParams 50,25,25\n", .group=3 },
-        { .name="annelTemp", .key=ARGP_ANNEAL_TEMP, .arg="UINT", .flags=0, .doc="Specify temperature for Simulated Annealing procedure\n", .group=3 },
+        { .name="annealTemperature", .key=ARGP_ANNEAL_TEMP, .arg="FLOAT", .flags=0, .doc="Specify temperature exponent for Simulated Annealing procedure. Actual temperature is computed by 10^exp where exp is the value given here\n", .group=3 },
 
         { .name="cplexInit", .key=ARGP_CPLEX_INIT_MODE, .arg="STRING", .flags=0, .doc=MATHEUR_INIT_MODE_DOC, .group=4 },
         { .name="cplexDisablePatching", .key=ARGP_CPLEX_PATCHING, .arg=NULL, .flags=0, .doc="Disable the ability to find a way to merge subtours during benders and branch and cut to build a feasible solution", .group=4 },
@@ -256,7 +256,8 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
         break;
     
     case ARGP_ANNEAL_TEMP:
-        inst->params.annealingTemperature = parseUint(arg, 0, "annelTemp");
+        double exponent = parseDouble(arg, "annealTemperature");
+        inst->params.annealingTemperature = pow(10., exponent);
         break;
 
     case ARGP_CPLEX_INIT_MODE:

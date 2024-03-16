@@ -113,7 +113,7 @@ typedef struct
 	int tabuTenureSize;
 	struct VnsKickSize vnsKickSize;
 	struct GeneticParams geneticParams;
-	int annealingTemperature;
+	double annealingTemperature;
 
 	enum Mode matheurInitMode;
 	bool cplexPatching;
