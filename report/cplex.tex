@@ -38,10 +38,10 @@ where equation \eqref{eq:1.1} is the total cost of the circuit, constraints \eqr
 In order to use CPLEX we must initialize the problem first, that means write the TSP according to CPLEX standards. To do this we start with an empty problem and then proceed to add all necessary elements to represent the ILP formulation described previously.
 
 To create the empty problem one must simply call the functions \textbf{CPXopenCPLEX} to initialize CPLEX itself and \textbf{CPXcreateprob} to create the empty problem.
-Once the problem is created, it needs to be populated with variables (columns) and constratints (rows).
-Variables denoted as $x_{ij}$ are added using function \textbf{CPXnewcols}.
-This can be done either in a sequentially (one at a time) or all at the same time by allocating the necessary memory and passing all variables to CPLEX via arrays.
-However this process can be tedious, with the exception of some cases in which it may be easier that way (for example if the data in the instance is saved in a similar way).
+Once the problem is created, it needs to be populated with variables (columns) and constraints (rows).\\
+Variables, denoted as $x_{ij}$, are added using function \textbf{CPXnewcols}.
+This can be done either in a sequentially way (one at a time) or all at the same time by allocating the necessary memory and passing all variables to CPLEX via arrays.
+The latter option can be tedious, with the exception of some particular cases in which it actually may be easier that way (for example if the data in the instance is saved in a similar way).\\
 The next step involves adding constraints. As discussed earlier, it is more efficient to add only the constraints specified by Equation \eqref{eq:1.2} without any SEC constraints (\eqref{eq:1.3}).
 The procedure for adding constraints is similar to that for variables: the function \textbf{CPXaddrows} can add multiple constraints at once or one at a time, similar to \textbf{CPXnewcols}.
 Sequential addition tends to be more straightforward.
@@ -96,7 +96,7 @@ Since CPLEX solves the ILP formulation of the TSP any solution $x^*$ given as ou
 	\caption{CPLEX solution array} \label{fig:CPLEXxstar}
 \end{figure}
 
-Given such an array it can be quite troublesome to find an edge given its connected nodes $(i,j)$.
+Given such an array, it can be quite troublesome to find an edge given its connected nodes $(i,j)$.
 To extract the position of edge $(i,j)$ one must use a function like the \textbf{xpos} function, as shown in \figurename{ \ref{fig:xpos}}.
 
 \begin{figure}[htbp]
