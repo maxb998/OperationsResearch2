@@ -7,12 +7,14 @@
 
 // multiplier to decrease temperature at each iteration. MUST be between 0 and 1, and should be very close to one
 #define TEMPERATURE_MULTIPLIER 0.99
-// temperature at which annealing stops and runs 2opt since we can basically expect mostly improving moves from that point on
-#define STOP_TEMP 0.1 
-// number of simulations of a random move before giving up for this iteration(avoids endless loops)
-#define TRIES_BEFORE_TEMP_REDUCTION 500
+// temperature at which annealing stops and runs 2opt since we can basically expect mostly improving moves from that point on (0 means the only stop is given by MAX_TRIES_FUNC threshold)
+#define STOP_TEMP 0.1
+// number of times a move is "simulated" before giving up and increasing temperature
+#define MAX_TRIES_FUNC(n) pow(n, 1.5)
+// number of times consecutive times no move is found on different temperatures before giving up and running 2opt
+#define MAX_TRIES_CONST 1
 
-// #define USE_RATIO_ACCEPTANCE // it does not seem to work well
+//#define USE_RATIO_ACCEPTANCE // it does not seem to work well
 
 typedef struct
 {
@@ -40,6 +42,7 @@ typedef struct
     int nonImprovingIters;
     double temperature;
     double nNodesSqrt;
+    int maxTries;
 
     float *costCache;
     #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)) // useful for 2opt
@@ -71,6 +74,7 @@ static inline bool updateBestSolution(ThreadSpecificData *thSpecific);
 
 // Set thSpecific internal data to match the best solution
 static inline void restartOnBestSol(ThreadSpecificData *thSpecific);
+
 
 void SimulatedAnnealing(Solution *sol, double timeLimit)
 {
@@ -145,6 +149,7 @@ static inline ThreadSpecificData initThreadSpecificData(Solution *sol, ThreadSha
         .iters = 0,
         .nonImprovingIters = 0,
         .nNodesSqrt = sqrt(n),
+        .maxTries = (int)MAX_TRIES_FUNC(n),
         .rndState = rndState,
         .thShared = thShared
     };
@@ -221,18 +226,18 @@ static void * runSimulatedAnnealing(void * arg)
 
     while (currentTime < thShared->timeLimit)
     {
-
         if (thSpecific->nonImprovingIters > inst->params.metaRestartThreshold)
         {
             restartOnBestSol(thSpecific);
             thSpecific->nonImprovingIters = 0;
         }
 
-        while ((currentTime < thShared->timeLimit) && (thSpecific->temperature > STOP_TEMP))
+        int noMoveCount = 0; // used when no moves are done after MAX_TRIES_CONST loops. In this case is more efficient to exit and run 2opt(event though this is not strictly annealing)
+        while ((currentTime < thShared->timeLimit) && (thSpecific->temperature > STOP_TEMP) && (noMoveCount < MAX_TRIES_CONST))
         {
             MoveData move;
             bool accepted = false;
-            for (int i = 0; (i < TRIES_BEFORE_TEMP_REDUCTION) && !accepted; i++)
+            for (int i = 0; (i < thSpecific->maxTries) && !accepted; i++)
             {
                 move = randomMoveOffsetEstimation(thSpecific);
                 accepted = acceptMove(thSpecific, move);
@@ -240,12 +245,14 @@ static void * runSimulatedAnnealing(void * arg)
             
             if (accepted)
             {
+                noMoveCount = 0;
                 performMove(thSpecific, move);
                 LOG(LOG_LVL_TRACE, "Temp[%lf]: Performed new move using indices (%5d,%5d) with offset %f. New solution cost = %lf", thSpecific->temperature, move.index1, move.index2, move.offset, cvtCost2Double(thSpecific->sol.cost));
+                if (updateBestSolution(thSpecific))
+                    thSpecific->nonImprovingIters = 0;
             }
-
-            if (updateBestSolution(thSpecific))
-                thSpecific->nonImprovingIters = 0;
+            else 
+                noMoveCount++;
 
             thSpecific->temperature *= TEMPERATURE_MULTIPLIER;
 
