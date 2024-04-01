@@ -5,14 +5,14 @@
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 #include <stdio.h>
 
+// number of moves to perform before reducing temperature
+#define SAME_TEMP_MOVES_THRESHOLD 100
 // multiplier to decrease temperature at each iteration. MUST be between 0 and 1, and should be very close to one
 #define TEMPERATURE_MULTIPLIER 0.99
 // temperature at which annealing stops and runs 2opt since we can basically expect mostly improving moves from that point on (0 means the only stop is given by MAX_TRIES_FUNC threshold)
-#define STOP_TEMP 0.1
+#define STOP_TEMP 0
 // number of times a move is "simulated" before giving up and increasing temperature
-#define MAX_TRIES_FUNC(n) pow(n, 1.5)
-// number of times consecutive times no move is found on different temperatures before giving up and running 2opt
-#define MAX_TRIES_CONST 1
+#define MAX_TRIES_FUNC(n) n //pow(n, 1.5)
 
 //#define USE_RATIO_ACCEPTANCE // it does not seem to work well
 
@@ -232,32 +232,34 @@ static void * runSimulatedAnnealing(void * arg)
             thSpecific->nonImprovingIters = 0;
         }
 
-        int noMoveCount = 0; // used when no moves are done after MAX_TRIES_CONST loops. In this case is more efficient to exit and run 2opt(event though this is not strictly annealing)
-        while ((currentTime < thShared->timeLimit) && (thSpecific->temperature > STOP_TEMP) && (noMoveCount < MAX_TRIES_CONST))
+        bool noMove = false;
+        for (int i = 0; (i < SAME_TEMP_MOVES_THRESHOLD) && (currentTime < thShared->timeLimit) && (thSpecific->temperature > STOP_TEMP) && (!noMove); i++)
         {
-            MoveData move;
-            bool accepted = false;
-            for (int i = 0; (i < thSpecific->maxTries) && !accepted; i++)
+            while ((currentTime < thShared->timeLimit) && (thSpecific->temperature > STOP_TEMP) && (!noMove))
             {
-                move = randomMoveOffsetEstimation(thSpecific);
-                accepted = acceptMove(thSpecific, move);
-            }
-            
-            if (accepted)
-            {
-                noMoveCount = 0;
-                performMove(thSpecific, move);
-                LOG(LOG_LVL_TRACE, "Temp[%lf]: Performed new move using indices (%5d,%5d) with offset %f. New solution cost = %lf", thSpecific->temperature, move.index1, move.index2, move.offset, cvtCost2Double(thSpecific->sol.cost));
-                if (updateBestSolution(thSpecific))
-                    thSpecific->nonImprovingIters = 0;
-            }
-            else 
-                noMoveCount++;
+                MoveData move;
+                bool accepted = false;
+                for (int i = 0; (i < thSpecific->maxTries) && !accepted; i++)
+                {
+                    move = randomMoveOffsetEstimation(thSpecific);
+                    accepted = acceptMove(thSpecific, move);
+                }
+                
+                if (accepted)
+                {
+                    performMove(thSpecific, move);
+                    LOG(LOG_LVL_TRACE, "Temp[%lf]: Performed new move using indices (%5d,%5d) with offset %f. New solution cost = %lf", thSpecific->temperature, move.index1, move.index2, move.offset, cvtCost2Double(thSpecific->sol.cost));
+                    if (updateBestSolution(thSpecific))
+                        thSpecific->nonImprovingIters = 0;
+                }
+                else 
+                    noMove = true;
 
-            thSpecific->temperature *= TEMPERATURE_MULTIPLIER;
+                thSpecific->temperature *= TEMPERATURE_MULTIPLIER;
 
-            clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
-            currentTime = cvtTimespec2Double(timeStruct);
+                clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+                currentTime = cvtTimespec2Double(timeStruct);
+            }
         }
         
         // "fake" remaining annealing move with very low temperature (only improving moves) using 2opt, way less time than just waiting for improving moves to come up at random

@@ -8,3 +8,4 @@ run
 report/report.*
 !report/report.tex
 !runs/*.tar.xz
+!runs/*.sh
