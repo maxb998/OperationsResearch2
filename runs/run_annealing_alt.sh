@@ -6,8 +6,8 @@ inputDir="data"
 nRuns=3
 
 solverFixedArgs="-m annealing --metaInit nn --graspType almostbest --round"
-outDir="runs/annealing"
-outFname="annealing"
+outDir="runs/annealing_alt"
+outFname="annealing_alt"
 
 param2Tune="annealTemperature"
 declare -a tuningVars=( "3" "6" "9" )

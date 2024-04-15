@@ -14,7 +14,7 @@
 // number of times a move is "simulated" before giving up and increasing temperature
 #define MAX_TRIES_FUNC(n) n //pow(n, 1.5)
 
-//#define USE_RATIO_ACCEPTANCE // it does not seem to work well
+#define USE_RATIO_ACCEPTANCE // it does not seem to work well
 
 typedef struct
 {
