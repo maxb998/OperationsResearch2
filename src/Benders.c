@@ -47,7 +47,9 @@ void benders(Solution *sol, double tlim)
 		// set time limit as remainig time from starting time
 		clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     	currentTime = cvtTimespec2Double(timeStruct);
-		CPXsetdblparam(cpx.env, CPX_PARAM_TILIM, tlim + startTime - currentTime);
+		errCode = CPXsetdblparam(cpx.env, CPX_PARAM_TILIM, tlim + startTime - currentTime);
+		if (errCode != 0)
+			throwError("Benders: CPXsetdblparam failed with code %d", errCode);
 
 		LOG (LOG_LVL_TRACE, "Benders[%d]: Running CPXmipopt", iterNum);
 		errCode = CPXmipopt(cpx.env, cpx.lp);

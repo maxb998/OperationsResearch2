@@ -75,8 +75,8 @@ int main (int argc, char *argv[])
         else if ((inst.params.cplexWarmStart && (inst.params.matheurInitMode & (MODE_TABU | MODE_VNS | MODE_ANNEALING))) || (m & (MODE_HARDFIX | MODE_LOCAL_BRANCHING)))
         {
             sol = runHeuristic(&inst, inst.params.metaheurInitMode, (tlim * MATHEUR_INIT_RATIO) * METAHEUR_INIT_RATIO);
-            runMetaheuristic(&sol, inst.params.matheurInitMode, (tlim * MATHEUR_INIT_RATIO) * (1 - METAHEUR_INIT_RATIO));
             run2Opt(&sol);
+            runMetaheuristic(&sol, inst.params.matheurInitMode, (tlim * MATHEUR_INIT_RATIO) * (1 - METAHEUR_INIT_RATIO));
         }
         else if (inst.params.cplexWarmStart && (inst.params.matheurInitMode & MODE_GENETIC))
             runMetaheuristic(&sol, MODE_GENETIC, tlim * MATHEUR_INIT_RATIO);

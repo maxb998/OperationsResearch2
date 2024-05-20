@@ -32,11 +32,11 @@ class FilenameExtractedData:
 def argParser() -> InputParams:
     parser = argparse.ArgumentParser(prog='Log2csv', epilog='Log 2 Csv', description='Read data from multiple log files and outputs a csv file ready for performance profile')
     parser.add_argument('-I', '--inputDir', metavar='str', required=True, type=str, help='Directory containing all the log files to read')
-    parser.add_argument('-P', '--prefix', metavar='str', required=True, type=str, help='Prefix present in all the files inside the directory')
-    parser.add_argument('-O', '--outputFname', metavar='str', required=True, type=str, help='Output filename for the IterCount csv')
-    parser.add_argument('-S', '--separator', choices=[';','space',','], default=';', required=False, type=str, help='Type of separator for csv file')
-    parser.add_argument('-L', '--lineNames', required=False, nargs='+', default=['Final cost = '], type=str, help='String contained in the line/lines that contain the number to extract')
-    parser.add_argument('--stopLines', required=False, nargs='+', default=[], type=str, help='String contained in the line/lines that will stop the reading of the file')
+    parser.add_argument('-P', '--prefix', metavar='str', required=True, type=str, help='Prefix present in all the name of the files in the directory. Example: for \"nnTwoOpt_a280_3.5s_0_2495156482.log\" use \"nnTwoOpt\"')
+    parser.add_argument('-O', '--outputFname', metavar='str', required=True, type=str, help='Output filename for the csv')
+    parser.add_argument('-S', '--separator', choices=[';','space',','], default=';', required=False, type=str, help='Type of separator for csv file (not required unless you are doing wierd things)')
+    parser.add_argument('-L', '--lineNames', required=False, nargs='+', default=['Final cost = '], type=str, help='String contained in the line/lines that contain the number to extract. Example: to extract the iterations-per-second use \"Iterations-per-second:\". If nothing is specified uses \"Final cost = \"')
+    parser.add_argument('--stopLines', required=False, nargs='+', default=[], type=str, help='String contained in the line/lines that will stop the reading of the file. Useful when there are multiple target lines in the file, but you are intereset only in one that is not the last')
 
     args = parser.parse_args()
 

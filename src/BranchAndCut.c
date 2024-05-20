@@ -22,8 +22,6 @@ static inline int PostSolution(CPXCALLBACKCONTEXTptr context, CallbackData *cbDa
 static inline void candidatePartCallback(CPXCALLBACKCONTEXTptr context, CallbackData *cbData);
 // Function called during lp relaxation. Finds possible subtours using concorde library and add suitable constrains
 static inline void relaxationPartCallback(CPXCALLBACKCONTEXTptr context, CallbackData *cbData);
-// Function called in global progress to check whether optimal solution has been found or not
-static inline void globalProgressCallback(CPXCALLBACKCONTEXTptr context, CallbackData *cbData);
 // Function used to add user cuts to cplex environment
 int applyCplexUsercut(double cutValue, int cutNcount, int *cutMembers, void *arg);
 
@@ -55,7 +53,7 @@ void BranchAndCut(Solution *sol, double timeLimit)
 	if (errCode != 0)
 		throwError("Branch&Cut: CPXsetinitparam(CPX_PARAM_MIPCBREDLP) failed with code %d", errCode);
 
-	CPXLONG contextMask = CPX_CALLBACKCONTEXT_CANDIDATE | CPX_CALLBACKCONTEXT_GLOBAL_PROGRESS;
+	CPXLONG contextMask = CPX_CALLBACKCONTEXT_CANDIDATE;
 	if (inst->params.cplexUsercuts) contextMask = contextMask | CPX_CALLBACKCONTEXT_RELAXATION;
 
 	errCode = CPXcallbacksetfunc(cpx.env, cpx.lp, contextMask, genericCallbackCandidate, &cbData);
@@ -73,6 +71,10 @@ void BranchAndCut(Solution *sol, double timeLimit)
 	errCode = CPXmipopt(cpx.env, cpx.lp);
 	if (errCode != 0)
 		throwError("Branch&Cut: CPXmipopt failed with code %d", errCode);
+
+	int solStatus = CPXgetstat(cpx.env, cpx.lp);
+	if (((solStatus == CPXMIP_OPTIMAL) || (solStatus == CPXMIP_OPTIMAL_TOL)) && inst->params.mode == MODE_BRANCH_CUT)
+		LOG(LOG_LVL_NOTICE, "Optimal solution found");
 
 	// asses if the best solution has been found based on whether there is time remainig from the time limit or not(probably not good method)
 	clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
@@ -94,8 +96,6 @@ int CPXPUBLIC genericCallbackCandidate(CPXCALLBACKCONTEXTptr context, CPXLONG co
 		relaxationPartCallback(context, cbData);
 	else if (contextid & CPX_CALLBACKCONTEXT_CANDIDATE)
 		candidatePartCallback(context, cbData);
-	else if (contextid & CPX_CALLBACKCONTEXT_GLOBAL_PROGRESS)
-		globalProgressCallback(context, cbData);
 
 	return 0;
 }
@@ -290,22 +290,6 @@ static inline void relaxationPartCallback(CPXCALLBACKCONTEXTptr context, Callbac
 	free(xstar);
 	free(compsCount);
 	free(comps);
-}
-
-static inline void globalProgressCallback(CPXCALLBACKCONTEXTptr context, CallbackData *cbData)
-{
-	double objVal = 0;
-	int errCode = 0;
-	if ((errCode = CPXcallbackgetinfodbl(context, CPXCALLBACKINFO_BEST_BND, &objVal)) != 0)
-		throwError("Branch&Cut - globalProgressCallback: CPXcallbackgetincumbent returned error code %d", errCode);
-	
-	double bestCost = cvtCost2Double(cbData->bestCost);
-	if (objVal == bestCost)
-	{
-		if (cbData->inst->params.mode == MODE_BRANCH_CUT)
-			LOG(LOG_LVL_NOTICE, "Optimal solution found with cost %lf", bestCost);
-		CPXcallbackabort(context);
-	}
 }
 
 int applyCplexUsercut(double cutValue, int cutNcount, int *cutMembers, void *arg)
