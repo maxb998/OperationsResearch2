@@ -72,6 +72,7 @@ void benders(Solution *sol, double tlim)
 			LOG(LOG_LVL_NOTICE, "Optimal Solution found at iteration %d with cost %lf", iterNum, cvtCost2Double(computeSuccessorsSolCost(sub.successors, inst)));
 			swapElems(bestSuccessorsSol, sub.successors)
 			sub.subtoursMap = &sub.successors[n + AVX_VEC_SIZE];
+			bestCost = computeSuccessorsSolCost(bestSuccessorsSol, inst);
 			break;
 		}
 
@@ -86,7 +87,7 @@ void benders(Solution *sol, double tlim)
 			// generate a solution using Repair Heuristic and check if it is better than the previous solutions
 			__uint128_t cost = PatchingHeuristic(&sub, inst);
 
-			LOG(LOG_LVL_DEBUG, "Subtours at iteration %d is %d. ObjValue = %lf Cost of Repaired Solution: %lf", iterNum, sub.subtoursCount, objVal, cvtCost2Double(cost));
+			LOG(LOG_LVL_INFO, "Subtours at iteration %d is %d. ObjValue = %lf Cost of patched Solution: %lf", iterNum, sub.subtoursCount, objVal, cvtCost2Double(cost));
 
 			if (cost < bestCost)
 			{
@@ -102,7 +103,8 @@ void benders(Solution *sol, double tlim)
 		iterNum++;
 	}
 
-	cvtSuccessorsToSolution(bestSuccessorsSol, bestCost, sol);
+	if (bestCost != -1LL) // if a solution has been found
+		cvtSuccessorsToSolution(bestSuccessorsSol, bestCost, sol);
 
 	free(xstar);
 	destroyCplexData(&cpx);

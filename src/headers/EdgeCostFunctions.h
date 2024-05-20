@@ -41,7 +41,7 @@ static inline float computeEdgeCost (float x1, float y1, float x2, float y2, Ins
 	register float cost = noSquaredRootEdgeCost(x1, y1, x2, y2, inst);
 
 	if (inst->params.edgeWeightType == ATT)
-		cost /= 10.F;
+		cost *= 0.1F;
 
 	#ifdef USE_REDUCED_DISTANCE_SET
 		cost = sqrtf(cost);
