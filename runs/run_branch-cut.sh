@@ -10,7 +10,7 @@ outFname="branch-cut"
 
 declare -a subDirs=("0-80" "100-200" "220-320" "400-500" "500-800")
 
-declare -a tlims=( 5 30 120 300 400 )
+declare -a tlims=( 5 30 120 300 500 )
 
 
 solverFixedArgs="-m branch-cut --metaInit nn --cplexInit vns --graspType almostbest --round --cplexDisableSolPosting --cplexDisableUsercuts"
