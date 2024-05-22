@@ -91,11 +91,6 @@ struct GeneticParams
 	int reintroductionAmount;
 };
 
-enum HardFixPolicy {
-	HARDFIX_POLICY_RANDOM,
-	HARDFIX_POLICY_SMALLEST
-};
-
 // data structures
 typedef struct
 {
@@ -120,7 +115,6 @@ typedef struct
 	bool cplexWarmStart;
 	bool cplexSolPosting;
 	bool cplexUsercuts;
-	enum HardFixPolicy hardFixPolicy;
     
 	bool use2Opt;
 	bool use3Opt;

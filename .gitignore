@@ -6,6 +6,7 @@ obj/exec/*.o
 runs/*
 run
 report/report.*
+report/*.fls
 !report/report.tex
 !runs/*.tar.xz
 !runs/*.sh

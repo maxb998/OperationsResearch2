@@ -75,10 +75,6 @@ void BranchAndCut(Solution *sol, double timeLimit)
 	int solStatus = CPXgetstat(cpx.env, cpx.lp);
 	if (((solStatus == CPXMIP_OPTIMAL) || (solStatus == CPXMIP_OPTIMAL_TOL)) && inst->params.mode == MODE_BRANCH_CUT)
 		LOG(LOG_LVL_NOTICE, "Optimal solution found");
-
-	// asses if the best solution has been found based on whether there is time remainig from the time limit or not(probably not good method)
-	clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
-    double currentTime = cvtTimespec2Double(timeStruct);
 	
 	cvtSuccessorsToSolution(cbData.bestSuccessors, cbData.bestCost, sol);
 

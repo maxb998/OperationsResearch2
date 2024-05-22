@@ -113,7 +113,6 @@ enum argpKeys{
     ARGP_CPLEX_WARMSTART,
     ARGP_CPLEX_POSTING,
     ARGP_CPLEX_USERCUTS,
-    ARGP_HARDFIX_SMALLEST,
 
     ARGP_2OPT='2',
     ARGP_3OPT='3',
@@ -163,7 +162,6 @@ void argParse(Instance * inst, int argc, char *argv[])
         { .name="cplexEnableWarmStart", .key=ARGP_CPLEX_WARMSTART, .arg=NULL, .flags=0, .doc="Enable the ability to find a solution by means of heuristic and metaheuristics and use it to \"warm start\" cplex when using benders of branch and cut methods", .group=4 },
         { .name="cplexDisableSolPosting", .key=ARGP_CPLEX_POSTING, .arg=NULL, .flags=0, .doc="Disable the ability of cplex of posting the best feasible solution found at any point during the branch and cut method", .group=4 },
         { .name="cplexDisableUsercuts", .key=ARGP_CPLEX_USERCUTS, .arg=NULL, .flags=0, .doc="Disable the ability of using concorde's functions to find connected components during cplex relaxation and add cuts that violate such components as usercuts", .group=4 },
-        { .name="hardfixSmallest", .key=ARGP_HARDFIX_SMALLEST, .arg=NULL, .flags=0, .doc="Specify to make Hard Fixing fix only edges with smallest cost instead of fixing random edges\n", .group=4 },
 
         { .name="2opt", .key=ARGP_2OPT, .arg=NULL, .flags=0, .doc="Specify to use 2-opt at the end of the selected heuristic\n", .group=5 },
         { .name="3opt", .key=ARGP_3OPT, .arg=NULL, .flags=0, .doc="Specify to use 3-opt at the end of the selected heuristic\n", .group=5 },
@@ -278,10 +276,6 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
 
     case ARGP_CPLEX_USERCUTS:
         inst->params.cplexUsercuts = false;
-        break;
-
-    case ARGP_HARDFIX_SMALLEST:
-        inst->params.hardFixPolicy = HARDFIX_POLICY_SMALLEST;
         break;
 
     case ARGP_2OPT:
@@ -477,9 +471,6 @@ void printInfo(Instance *inst)
         if (!p->cplexWarmStart)
             printf("\tCplex usercuts are disabled\n");
     }
-    // hardfix options
-    if (p->mode == MODE_HARDFIX)
-        printf("\tHard Fixing policy set to: %s\n", inst->params.hardFixPolicy == HARDFIX_POLICY_RANDOM ? "random" : "smallest");
 
     // seed
     if (p->randomSeed != -1)

@@ -48,7 +48,6 @@ Instance newInstance ()
             .cplexWarmStart = false,
             .cplexSolPosting = true,
             .cplexUsercuts = true,
-            .hardFixPolicy = HARDFIX_POLICY_RANDOM,
 
             .use2Opt=false,
 

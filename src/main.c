@@ -7,7 +7,8 @@
 #define SEPARATOR_STR "##############################################################################################################################\n"
 
 #define METAHEUR_INIT_RATIO 0.05
-#define MATHEUR_INIT_RATIO 0.05
+#define MATHEUR_METAHEUR_INIT_RATIO 0.1
+#define MATHEUR_INIT_RATIO 0.01
 
 static Solution runHeuristic(Instance *inst, enum Mode mode, double tlim);
 static void runMetaheuristic(Solution *sol, enum Mode mode, double tlim);
@@ -67,16 +68,16 @@ int main (int argc, char *argv[])
     }
     else
     {
-        if ((inst.params.cplexWarmStart && (inst.params.matheurInitMode & (MODE_NN | MODE_EM))) || (m & (MODE_HARDFIX | MODE_LOCAL_BRANCHING)))
+        if ((inst.params.cplexWarmStart || (m & (MODE_HARDFIX | MODE_LOCAL_BRANCHING))) && (inst.params.matheurInitMode & (MODE_NN | MODE_EM)))
         {
             sol = runHeuristic(&inst, inst.params.matheurInitMode, tlim * MATHEUR_INIT_RATIO);
             run2Opt(&sol);
         }
-        else if ((inst.params.cplexWarmStart && (inst.params.matheurInitMode & (MODE_TABU | MODE_VNS | MODE_ANNEALING))) || (m & (MODE_HARDFIX | MODE_LOCAL_BRANCHING)))
+        else if ((inst.params.cplexWarmStart || (m & (MODE_HARDFIX | MODE_LOCAL_BRANCHING))) && (inst.params.matheurInitMode & (MODE_TABU | MODE_VNS | MODE_ANNEALING)))
         {
-            sol = runHeuristic(&inst, inst.params.metaheurInitMode, (tlim * MATHEUR_INIT_RATIO) * METAHEUR_INIT_RATIO);
+            sol = runHeuristic(&inst, inst.params.metaheurInitMode, (tlim * MATHEUR_INIT_RATIO) * MATHEUR_METAHEUR_INIT_RATIO);
             run2Opt(&sol);
-            runMetaheuristic(&sol, inst.params.matheurInitMode, (tlim * MATHEUR_INIT_RATIO) * (1 - METAHEUR_INIT_RATIO));
+            runMetaheuristic(&sol, inst.params.matheurInitMode, (tlim * MATHEUR_INIT_RATIO) * (1 - MATHEUR_METAHEUR_INIT_RATIO));
         }
         else if (inst.params.cplexWarmStart && (inst.params.matheurInitMode & MODE_GENETIC))
             runMetaheuristic(&sol, MODE_GENETIC, tlim * MATHEUR_INIT_RATIO);

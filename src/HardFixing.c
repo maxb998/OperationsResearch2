@@ -8,11 +8,11 @@
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
 // Amount of nodes of the instance below which no nodes will be fixed, effectively running branch&cut. Also in any point the algorithm fixAmount won't be going any lower than this
-#define MIN_UNFIX 150
+#define MIN_UNFIX 250
 // Minimum amount of edges of the solution to fix(it doesn't make much sense fixing only 1 node, if nNodes = 151 then 50 nodes will be fixed and 101 will be free)
 #define MIN_FIX 50
 // Incremental/Decremental step in fixAmount during computation
-#define FIX_OFFSET 10
+#define FIX_OFFSET 25
 // Number of non-improving iterations before fixAmount is increased
 #define STATIC_COST_THRESHOLD 10
 
@@ -50,6 +50,9 @@ static int randomFix(HardfixAllocatedMem *hfAlloc);
 // Fix smallest edges up to the fixAmount
 static int smallestFix(HardfixAllocatedMem *hfAlloc);
 
+// Fix a random consecutive sequence of lenght fixAmount
+static int sequenceFix(HardfixAllocatedMem *hfAlloc);
+
 
 void HardFixing(Solution *sol, double timeLimit)
 {
@@ -78,17 +81,26 @@ void HardFixing(Solution *sol, double timeLimit)
 
         if (hfAlloc.fixAmount > 0)
         {
-            switch (sol->instance->params.hardFixPolicy)
+            int rndNum = (long)rand() * 3 / RAND_MAX;
+            switch (rndNum)
             {
-            case HARDFIX_POLICY_RANDOM:
+            case 0:
+                LOG(LOG_LVL_DEBUG, "Using randomFix at iteration %d", iterCount);
                 errCode = randomFix(&hfAlloc);
                 if (errCode != 0)
                     throwError("HardFix: randomFix failed with code %d", errCode);
                 break;
-            case HARDFIX_POLICY_SMALLEST:
+            case 1:
+                LOG(LOG_LVL_DEBUG, "Using smallestFix at iteration %d", iterCount);
                 errCode = smallestFix(&hfAlloc);
                 if (errCode != 0)
                     throwError("HardFix: smallestFix failed with code %d", errCode);
+                break;
+            default: // or case 2
+                LOG(LOG_LVL_DEBUG, "Using sequenceFix at iteration %d", iterCount);
+                errCode = sequenceFix(&hfAlloc);
+                if (errCode != 0)
+                    throwError("HardFix: sequenceFix failed with code %d", errCode);
                 break;
             }
         }
@@ -200,7 +212,7 @@ static void updateFixAmount(HardfixAllocatedMem *hfAlloc)
     // keeps track of the previous iteration cost
     static __uint128_t oldCost = -1LL;
 
-    if (oldCost <= hfAlloc->cbData.bestCost)
+    if (oldCost > hfAlloc->cbData.bestCost)
     {
         staticCostCount = 0;
         oldCost = hfAlloc->cbData.bestCost;
@@ -208,7 +220,7 @@ static void updateFixAmount(HardfixAllocatedMem *hfAlloc)
     else
         staticCostCount++;
     
-    if ((staticCostCount >= STATIC_COST_THRESHOLD) || ((staticCostCount > 0) && (hfAlloc->cpx.inst->params.hardFixPolicy == HARDFIX_POLICY_SMALLEST)))
+    if (staticCostCount >= STATIC_COST_THRESHOLD)
     {
         hfAlloc->fixAmount -= FIX_OFFSET;
 
@@ -248,8 +260,8 @@ static int randomFix(HardfixAllocatedMem *hfAlloc)
     // n random permutations
     for (int i = 0; i < n; i++)
     {
-        int pos1 = (int)((long)rand() * (long)hfAlloc->fixAmount / (long)RAND_MAX), pos2 = (int)((long)rand() * (long)hfAlloc->fixAmount / (long)RAND_MAX);
-        while (pos2 == pos1) pos2 = (int)((long)rand() * (long)hfAlloc->fixAmount / (long)RAND_MAX);
+        int pos1 = (int)((long)rand() * n / RAND_MAX), pos2 = (int)((long)rand() * n / RAND_MAX);
+        while (pos2 == pos1) pos2 = (int)((long)rand() * n / RAND_MAX);
 
         swapElems(hfAlloc->indexes[pos1], hfAlloc->indexes[pos2])
     }
@@ -275,7 +287,7 @@ static int smallestFix(HardfixAllocatedMem *hfAlloc)
     float *tourEdgesCost = (float*)hfAlloc->bVal;
     int *successors = hfAlloc->cbData.bestSuccessors;
 
-    for (int i = n; i < n + AVX_VEC_SIZE; i++)
+    for (int i = n; i < 2*n + AVX_VEC_SIZE; i++)
         successors[i] = 0;
 
     for (int i = 0; i < n; i++)
@@ -317,3 +329,20 @@ static int smallestFix(HardfixAllocatedMem *hfAlloc)
     return retVal;
 }
 
+static int sequenceFix(HardfixAllocatedMem *hfAlloc)
+{
+    int n = hfAlloc->cpx.inst->nNodes;
+
+    int seqStartPt = (int)((long)rand() * n / RAND_MAX);
+    
+    // setup arrays to fix bounds
+    for (int i = 0, j = seqStartPt; i < hfAlloc->fixAmount; i++, j=hfAlloc->cbData.bestSuccessors[j])
+    {   
+        hfAlloc->bType[i] = 'B';
+        hfAlloc->indexes[i] = xpos(j, hfAlloc->cbData.bestSuccessors[j], n);
+        hfAlloc->bVal[i] = 1.0;
+    }
+    int retVal = CPXchgbds(hfAlloc->cpx.env, hfAlloc->cpx.lp, hfAlloc->fixAmount, hfAlloc->indexes, hfAlloc->bType, hfAlloc->bVal);
+
+    return retVal;
+}
