@@ -136,7 +136,9 @@ void HardFixing(Solution *sol, double timeLimit)
 
         if (hfAlloc.fixAmount == 0)
         {
-            LOG(LOG_LVL_NOTICE, "HardFix: No edges were fixed. Optimal solution found if finished before the time limit");
+            int solStatus = CPXgetstat(hfAlloc.cpx.env, hfAlloc.cpx.lp);
+            if (((solStatus == CPXMIP_OPTIMAL) || (solStatus == CPXMIP_OPTIMAL_TOL)))
+                LOG(LOG_LVL_NOTICE, "Optimal solution found");
             break;
         }
         
