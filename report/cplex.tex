@@ -1,13 +1,14 @@
 \chapter{Cplex}
 
-CPLEX is a high-performance optimization software developed by IBM that specializes in solving mathematical programming problems, including linear programming, mixed-integer programming, and quadratic programming, among others. It is one of the most widely used commercial solvers for solving complex optimization problems in various industries and academic research.
-
-CPLEX provides a comprehensive suite of algorithms and techniques to efficiently solve optimization problems of varying sizes and complexities. It employs state-of-the-art optimization algorithms, such as the primal-dual interior point method for linear programming and branch-and-bound algorithms for mixed-integer programming, to find high-quality solutions within reasonable timeframes. 
-
-One of the key features of CPLEX is its ability to handle large-scale optimization problems efficiently. It incorporates advanced preprocessing techniques, presolve routines, and cutting-plane algorithms to reduce problem size and improve solution quality. Additionally, CPLEX offers parallel computing capabilities, leveraging multiple CPU cores and distributed computing environments to accelerate the solution process for large-scale problems.
-
-Overall, CPLEX is a powerful optimization tool that enables users to model, solve, and analyze complex optimization problems across diverse domains, including operations research, logistics, supply chain management, finance, and engineering. Its robust performance, scalability, and versatility make it a valuable asset for researchers, practitioners, and organizations seeking to optimize their decision-making processes.
-
+CPLEX is a high-performance optimization software developed by IBM that specializes in solving mathematical programming problems, including linear programming, mixed-integer programming, and quadratic programming, among others.
+It is one of the most widely used commercial solvers for solving complex optimization problems in various industries and academic research.
+CPLEX provides a comprehensive suite of algorithms and techniques to efficiently solve optimization problems of varying sizes and complexities.
+It employs state-of-the-art optimization algorithms, such as the primal-dual interior point method for linear programming and branch-and-bound algorithms for mixed-integer programming, to find high-quality solutions within reasonable timeframes. 
+One of the key features of CPLEX is its ability to handle large-scale optimization problems efficiently.
+It incorporates advanced preprocessing techniques, presolve routines, and cutting-plane algorithms to reduce problem size and improve solution quality. 
+Additionally, CPLEX offers parallel computing capabilities, leveraging multiple CPU cores and distributed computing environments to accelerate the solution process for large-scale problems.
+Overall, CPLEX is a powerful optimization tool that enables users to model, solve, and analyze complex optimization problems across diverse domains, including operations research, logistics, supply chain management, finance, and engineering.
+Its robust performance, scalability, and versatility make it a valuable asset for researchers, practitioners, and organizations seeking to optimize their decision-making processes.
 CPLEX is useful for solving the TSP due to its efficient solver, scalability for large instances, support for Mixed-Integer Programming formulations commonly used for TSP, integration with programming languages like Python, and parallel computing capabilities, enabling faster solution times for complex TSP instances.
 
 
@@ -35,8 +36,8 @@ where equation \eqref{eq:1.1} is the total cost of the circuit, constraints \eqr
 
 \section{Initialization of CPLEX}
 
-In order to use CPLEX we must initialize the problem first, that means write the TSP according to CPLEX standards. To do this we start with an empty problem and then proceed to add all necessary elements to represent the ILP formulation described previously.
-
+In order to use CPLEX we must initialize the problem first, that means write the TSP according to CPLEX standards.
+To do this we start with an empty problem and then proceed to add all necessary elements to represent the ILP formulation described previously.
 To create the empty problem one must simply call the functions \textbf{CPXopenCPLEX} to initialize CPLEX itself and \textbf{CPXcreateprob} to create the empty problem.
 Once the problem is created, it needs to be populated with variables (columns) and constraints (rows).\\
 Variables, denoted as $x_{ij}$, are added using function \textbf{CPXnewcols}.
