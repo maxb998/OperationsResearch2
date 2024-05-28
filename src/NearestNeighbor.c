@@ -87,7 +87,7 @@ Solution NearestNeighbor(Instance *inst, double timeLimit)
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double startTime = cvtTimespec2Double(timeStruct);
 
-    if (inst->params.graspChance == -1)
+    if ((inst->params.graspChance == -1) && (inst->params.graspType != GRASP_NONE))
     {
         if (inst->params.graspType == GRASP_ALMOSTBEST)
         {

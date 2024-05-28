@@ -100,6 +100,7 @@ static inline __m256 noSquaredRootEdgeCost_VEC (__m256 x1, __m256 y1, __m256 x2,
 			register __m256 xDiff = _mm256_sub_ps(x1, x2);
 			register __m256 yDiff = _mm256_sub_ps(y1, y2);
 			costSquared = _mm256_add_ps( _mm256_mul_ps(xDiff, xDiff), _mm256_mul_ps(yDiff, yDiff));
+		}
 	#endif
 
 	return costSquared;

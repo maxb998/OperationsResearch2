@@ -62,9 +62,9 @@ enum Mode{
 };
 
 enum GraspOption{
-	GRASP_NONE=0,
-	GRASP_ALMOSTBEST=1,
-	GRASP_RANDOM=2
+	GRASP_NONE=-1,
+	GRASP_ALMOSTBEST=0,
+	GRASP_RANDOM=1
 };
 
 enum NNFirstNodeOptions{

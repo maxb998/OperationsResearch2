@@ -7,12 +7,10 @@
 #include <time.h>
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
-// Amount of nodes of the instance below which no nodes will be fixed, effectively running branch&cut. Also in any point the algorithm fixAmount won't be going any lower than this
-#define MIN_UNFIX 250
-// Minimum amount of edges of the solution to fix(it doesn't make much sense fixing only 1 node, if nNodes = 151 then 50 nodes will be fixed and 101 will be free)
-#define MIN_FIX 50
-// Incremental/Decremental step in fixAmount during computation
-#define FIX_OFFSET 25
+
+#define START_FIX_AMOUNT 0.9
+// Percentage of
+#define OFFSET_FIX_AMOUNT 0.1
 // Number of non-improving iterations before fixAmount is increased
 #define STATIC_COST_THRESHOLD 10
 
@@ -77,8 +75,6 @@ void HardFixing(Solution *sol, double timeLimit)
     int iterCount = 0;
     while (currentTime < startTime + timeLimit)
     {
-        iterCount++;
-
         if (hfAlloc.fixAmount > 0)
         {
             int rndNum = (long)rand() * 3 / RAND_MAX;
@@ -148,6 +144,8 @@ void HardFixing(Solution *sol, double timeLimit)
         if (errCode != 0)
             throwError("HardFix: resetBounds failed with code %d", errCode);
 
+        iterCount++;
+
         clock_gettime(_POSIX_MONOTONIC_CLOCK, &currT);
         currentTime = cvtTimespec2Double(currT);
     }
@@ -183,15 +181,7 @@ static HardfixAllocatedMem initHardfixAllocatedMem(Solution *sol)
     hfAlloc.cbData = initCallbackData(&hfAlloc.cpx, sol);
 
     // init fixAmount
-    if(n < MIN_UNFIX)
-    {
-        LOG(LOG_LVL_WARN, "HardFix: Solution is small, so no edge will be fixed, resulting in a computation that is the same as branch-cut");
-        hfAlloc.fixAmount = 0;
-    }
-    else if (n < MIN_UNFIX + MIN_FIX)
-        hfAlloc.fixAmount = MIN_FIX;
-    else
-        hfAlloc.fixAmount = n - MIN_UNFIX;
+    hfAlloc.fixAmount = (int)((float)n * START_FIX_AMOUNT);
 
     return hfAlloc;
 }
@@ -224,7 +214,7 @@ static void updateFixAmount(HardfixAllocatedMem *hfAlloc)
     
     if (staticCostCount >= STATIC_COST_THRESHOLD)
     {
-        hfAlloc->fixAmount -= FIX_OFFSET;
+        hfAlloc->fixAmount = hfAlloc->fixAmount - (int)ceilf(((float)hfAlloc->cbData.inst->nNodes * OFFSET_FIX_AMOUNT));
 
         if (hfAlloc->fixAmount < 0) // overflow of unsigned operation (fixAmount is way too big) -> set fixAmount to 0
             hfAlloc->fixAmount = 0;
