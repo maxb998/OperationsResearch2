@@ -265,9 +265,9 @@ static void run2Opt(Solution *sol)
     printf("2Opt starting...\n");
 
     double startTime = sol->execTime;
-    set2OptPerformanceBenchmarkLog(true);
-    apply2OptBestFix(sol);
-    set2OptPerformanceBenchmarkLog(false);
+    set2OptPerformanceBenchmarkLogMT(true);
+    apply2OptBestFixMT(sol);
+    set2OptPerformanceBenchmarkLogMT(false);
 
     printf("2Opt finished in %lf seconds\n", sol->execTime - startTime);
     printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));
@@ -280,9 +280,9 @@ static void run3Opt(Solution *sol)
     printf("3Opt starting...\n");
 
     double startTime = sol->execTime;
-    set3OptPerformanceBenchmarkLog(true);
-    apply3OptBestFix(sol);
-    set3OptPerformanceBenchmarkLog(false);
+    set3OptPerformanceBenchmarkLogMT(true);
+    apply3OptBestFixMT(sol);
+    set3OptPerformanceBenchmarkLogMT(false);
 
     printf("3Opt finished in %lf seconds\n", sol->execTime - startTime);
     printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));

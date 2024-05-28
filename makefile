@@ -22,7 +22,7 @@ CFLAGS = -O3 -mavx2 -march=native -mtune=native -Isrc/headers
 endif
 
 # separate files into the ones that use cplex and will need the extra compiler flag to find cplex headers and the ones which don't use it
-SOURCE_NAMES_NO_CPLEX = TspUtilities.c ArgParser.c TspIOUtils.c CostMatrix.c NearestNeighbor.c ExtraMileage.c 2Opt.c 3Opt.c Tabu.c VariableNeighborhood.c Genetic.c SimulatedAnnealing.c
+SOURCE_NAMES_NO_CPLEX = TspUtilities.c ArgParser.c TspIOUtils.c CostMatrix.c NearestNeighbor.c ExtraMileage.c 2Opt.c 2OptMultithread.c 3Opt.c 3OptMultithread.c Tabu.c VariableNeighborhood.c Genetic.c SimulatedAnnealing.c
 SOURCE_NAMES_CPLEX = main.c TspCplex.c Benders.c PatchingHeuristic.c BranchAndCut.c HardFixing.c LocalBranching.c
 
 HEADER_NAMES_NO_CPLEX = TspBase.h Tsp.h EdgeCostFunctions.h

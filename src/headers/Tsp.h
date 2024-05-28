@@ -208,10 +208,22 @@ Solution ExtraMileage(Instance *inst, double timeLimit);
 void set2OptPerformanceBenchmarkLog(bool val);
 
 /*!
+* @brief Set the option to view performance related statistics on 2opt runs for MT version
+# @param val True to enable, false to disable
+*/
+void set2OptPerformanceBenchmarkLogMT(bool val);
+
+/*!
 * @brief  Applies 2Opt solution optimizer to sol.
 * @param sol Solution to optimize.
 */
 void apply2OptBestFix(Solution *sol);
+
+/*!
+* @brief  Applies 2Opt solution optimizer to sol using multiple threads.
+* @param sol Solution to optimize.
+*/
+void apply2OptBestFixMT(Solution *sol);
 
 
 #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
@@ -230,6 +242,11 @@ int apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *c
 int apply2OptBestFix_fastIteratively(Solution *sol, float *costCache);
 #endif
 
+#if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+int apply2OptBestFix_fastIterativelyMT(Solution *sol, float *X, float *Y, float *costCache);
+#elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+int apply2OptBestFix_fastIterativelyMT(Solution *sol, float *costCache);
+#endif
 
 //###################################################################################################################################
 // 3OPT
@@ -240,11 +257,15 @@ int apply2OptBestFix_fastIteratively(Solution *sol, float *costCache);
 */
 void set3OptPerformanceBenchmarkLog(bool val);
 
+void set3OptPerformanceBenchmarkLogMT(bool val);
+
 /*!
 * @brief  Applies 2Opt solution optimizer to sol.
 * @param sol Solution to optimize.
 */
 void apply3OptBestFix(Solution *sol);
+
+void apply3OptBestFixMT(Solution *sol);
 
 
 #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
@@ -259,7 +280,14 @@ void apply3OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *
 * @param sol Solution to optimize.
 */
 void apply3OptBestFix_fastIteratively(Solution *sol, float *costCache, int *sectionCopy);
+
 #endif
+#if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+void apply3OptBestFix_fastIterativelyMT(Solution *sol, float *X, float *Y, float *costCache, int *sectionCopy);
+#elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+void apply3OptBestFix_fastIterativelyMT(Solution *sol, float *costCache, int *sectionCopy);
+#endif
+
 
 //###################################################################################################################################
 // TABU_SEARCH
