@@ -17,7 +17,7 @@ Nowadays most modern computer architectures include an hardware dedicated square
 The second category of methods eliminates this problem, since allowing to compute all cost at the start completely removes the need to use any kind of cost function down the line.
 On paper this method is indeed the one which allows for the greatest speedup, but, unfortunatly that is not always the case.
 Since the graphs under consideration are all fully connected, the number of edges increases in a quadratic relationship to the number of nodes.
-Because of this the amount of memory needed to cache the cost of all edges is in the order of $O(n^2)$, as an example 137MB of memory is needed to store the edge costsof an instance with 6000 nodes.
+Because of this the amount of memory needed to cache the cost of all edges is in the order of $O(n^2)$, as an example 137MB of memory is needed to store the edge costs of an instance with 6000 nodes.
 Although it is still a small amount of memory compared to the amount of memory modern computers are equipped with, it is too much to fit a normal personal computer CPU cache.
 It's well known that CPU cache is significantly faster than regular system memory, so being unable to fit the cost matrix inside the cache can negatively impact performance.
 Cache misses occur when the data the CPU needs is not found in the fast-access cache memory and must be retrieved from the slower main memory.
@@ -30,16 +30,118 @@ To address this, the approach utilized SIMD instructions known as AVX.
 AVX (Advanced Vector Extensions) are a set of CPU instructions designed to perform parallel operations on multiple data elements simultaneously.
 They enable faster processing by allowing a single instruction to operate on multiple data points, enhancing the efficiency of tasks such as mathematical computations and data manipulation.
 Supporting operations between vectors of the size of 256 bits, AVX allows computing eight distance values, in floating-point 32-bit precision, simultaneously, enhancing computational efficiency.
-Having said that, the process of coding an algorithm to make use of AVX is a bit more complicated, as well as the fact that not all algorithms can be optimized because they cannot be executed in a vectorized manner (for example Simulated Annealing).
+Another advantage is that with this approach an easy and quick approximation of the square root becomes available.
+By combining the instructions for reverse square root (rsqrt) and reciprocal (rpc), it is possible to achieve an approximation with a relative error smaller than $8 \times 10^{-4}$ in less than half the time required for a precise result.
+This can be leveraged by performing the initial iterations of an algorithm like 2-Opt using the approximation, then switching to exact computation once the approximation can no longer identify optimizing moves.
+However, coding an algorithm to utilize AVX is more complex, and not all algorithms can be optimized this way, as they may not be suitable for vectorized execution (e.g., Simulated Annealing).
 
 \subsection{Performance Comparison}
 
-This section will put to light the difference in execution speed between the above mentioned methods.
+Comparing these three approaches is complex due to numerous factors, including the number of iterations the AVX approximated method performs before switching to the exact method, and the manner in which the cost matrix is accessed.
+To minimize as much as possible these external factors, the data was gathered using multiple instances sizes as well as different cost functions.
+\figurename{ \ref{fig:avxShowcase}} compares all approaches, scaling the to the basic one.
+As expected, using the cost matrix method is faster than the basic method for small instances but loses its advantage as instance size increases.
+Throughout the entire testing, the AVX approach consistently proved to be the fastest by a significant margin in every scenario.
+However, it should be noted that the AVX method yielded unstable results on smaller instances, occasionally performing slower than the matrix method.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}
+        \begin{axis}[
+            width=11cm, height=8cm,
+            ymajorgrids=true,
+            grid style={dashed,gray!30},
+            xlabel=Instance size,
+            ylabel=Relative iterations/s,
+            legend style={at={(0.25,0.969)},anchor=north,legend columns=-1},
+            symbolic x coords={100,500,1000,5000,10000},
+            log ticks with fixed point,
+            xtick=data,
+            ybar, 
+                    ]
+            \addplot[Blue,fill] table[x=i,y=a, col sep=comma] {csv/2opt_avx-showcase_scaled.csv};
+            \addplot[Red,fill] table[x=i,y=b, col sep=comma] {csv/2opt_avx-showcase_scaled.csv};
+            \addplot[Green,fill] table[x=i,y=c, col sep=comma] {csv/2opt_avx-showcase_scaled.csv};
+            \legend{Basic,Matrix,AVX}
+        \end{axis}
+    \end{tikzpicture}
+    \caption{Comparison of all three approaches in 2-Opt} \label{fig:avxShowcase}
+\end{figure}
+
 
 \section{Multithreading}
 
 Multithreading is a programming technique that allows a computer program to perform multiple tasks concurrently, by dividing its execution into smaller threads of execution that can run independently.
-In this project, multithreading is exploited by running the same code on different threads while using at random different data.
+In most of the algorithms implemented, multithreading consists in running the same code on different threads while using at random different data.
 This is done by means of random seed, which means, giving to each thread running a different seed value so that it may find different solutions from the other running threads.
 During this process the threads share between them the globally best solution found up to that point, so that, at the end of the execution, that solution will be given as output.
+This type of implementation allows to have minimal interaction between threads, allowing a great benefit in term of iterations each second as shown in \figurename{ \ref{fig:multithreadNN}}.
 
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}
+        \begin{axis}[
+            % title={Multithreading speedup of 2-Opt parallel implementation},
+            xlabel={Number of Threads},
+            ylabel={Iterations/s Ratio},
+            xmin=1, xmax=20,
+            ymin=1, ymax=16,
+            xtick={1,2,4,6,8,10,12,14,16,18,20},
+            ytick={1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16},
+            legend style={at={(0.84,0.23)},anchor=north,legend columns=1},
+            ymajorgrids=true,
+            xmajorgrids=true,
+            grid style=dashed,
+        ]
+        
+        \addplot[Blue,mark=square] table[x=t,y=100, col sep=comma] {csv/nn_MT_adapt.csv};
+        \addplot[Red,mark=o] table[x=t,y=1000, col sep=comma] {csv/nn_MT_adapt.csv};
+        \addplot[Green,mark=triangle] table[x=t,y=10000, col sep=comma] {csv/nn_MT_adapt.csv};
+        \addlegendentry{n=100}
+        \addlegendentry{n=1000}
+        \addlegendentry{n=10000}
+            
+        \end{axis}
+    \end{tikzpicture}
+	\caption{Multithreading speedup of Nearest Neighbor parallel implementation} \label{fig:multithreadNN}
+\end{figure}
+
+Although this parallel design frequently appears in algorithm implementations, it is not always feasible to use this method.
+For instance, algorithms that utilize CPLEX, which is inherently designed to run on multiple threads, present such a case.
+Another example is the parallelization of the 2-Opt and the 3-Opt algorithms.
+As the instance size increases, both methods require progressively more time to complete their computations.
+Consequently, a straightforward parallel approach was developed.
+The algorithm's scalability varies based on the instance size and the number of threads used, as shown in \figurename{ \ref{fig:multithread2opt}}.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}
+        \begin{axis}[
+            % title={Multithreading speedup of 2-Opt parallel implementation},
+            xlabel={Number of Threads},
+            ylabel={Iterations/s Ratio},
+            xmin=1, xmax=20,
+            ymin=0, ymax=8,
+            xtick={1,2,4,6,8,10,12,14,16,18,20},
+            ytick={0,1,2,3,4,5,6,7},
+            legend style={at={(0.265,0.99)},anchor=north,legend columns=2},
+            ymajorgrids=true,
+            xmajorgrids=true,
+            grid style=dashed,
+        ]
+        
+        % \addplot[SkyBlue,mark=square] table[x=t,y=100, col sep=comma] {csv/2opt_MT_adapt.csv};
+        \addplot[Red,mark=o] table[x=t,y=500, col sep=comma] {csv/2opt_MT_adapt.csv};
+        \addplot[Purple,mark=triangle] table[x=t,y=1000, col sep=comma] {csv/2opt_MT_adapt.csv};
+        \addplot[Blue,mark=square] table[x=t,y=5000, col sep=comma] {csv/2opt_MT_adapt.csv};
+        \addplot[Green,mark=star] table[x=t,y=10000, col sep=comma] {csv/2opt_MT_adapt.csv};
+        % \addlegendentry{n=100}
+        \addlegendentry{n=500}
+        \addlegendentry{n=1000}
+        \addlegendentry{n=5000}
+        \addlegendentry{n=10000}
+            
+        \end{axis}
+    \end{tikzpicture}
+	\caption{Multithreading speedup of 2-Opt parallel implementation} \label{fig:multithread2opt}
+\end{figure}

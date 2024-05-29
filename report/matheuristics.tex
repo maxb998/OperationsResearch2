@@ -22,20 +22,20 @@ There are multiple ways to choose which edges to fix and which edges to keep "fr
             \coordinate (A) at (0, 0);\coordinate (B) at (2, 3);\coordinate (C) at (4, 0);\coordinate (D) at (1, -3);\coordinate (E) at (3, -2);\coordinate (F) at (5, 1);\coordinate (G) at (6, -2);\coordinate (H) at (8, 0);\coordinate (I) at (7, 3);\coordinate (J) at (9, 3);\coordinate (K) at (11, 0);\coordinate (L) at (10, -3);\coordinate (M) at (12, -2);\coordinate (N) at (14, 0);\coordinate (O) at (13, 3);
 
             \draw[-,very thick] (A) -- node[above,yshift=1,xshift=-6] {12} (B) -- node[above,yshift=1,xshift=4] {8} (C) --node[above,xshift=-5] {15} (F) -- node[above] {10} (H) -- node[above,xshift=5] {7} (I) -- node[above] {14} (J) -- node[above,xshift=7] {11} (K) -- node[above,xshift=-5] {9} (O) -- node[above,xshift=7] {13} (N) -- node[above,yshift=2,xshift=-2] {6} (M) -- node[above,xshift=-2] {16} (L) -- node[above] {5} (G) -- node[above] {3} (E) -- node[above,yshift=1,xshift=-1] {18} (D) -- node[above,xshift=5] {4} (A);
-            \draw[-,very thick, red] (A) -- (B);
-            \draw[-,very thick, red] (H) -- (I);
-            \draw[-,very thick, red] (K) -- (O);
-            \draw[-,very thick, red] (O) -- (N);
-            \draw[-,very thick, red] (E) -- (D);
-            \draw[-,very thick, red] (M) -- (L);
-            \draw[-,very thick, red] (L) -- (G);
-            \draw[-,very thick, red] (D) -- (A);
+            \draw[-,very thick, Red] (A) -- (B);
+            \draw[-,very thick, Red] (H) -- (I);
+            \draw[-,very thick, Red] (K) -- (O);
+            \draw[-,very thick, Red] (O) -- (N);
+            \draw[-,very thick, Red] (E) -- (D);
+            \draw[-,very thick, Red] (M) -- (L);
+            \draw[-,very thick, Red] (L) -- (G);
+            \draw[-,very thick, Red] (D) -- (A);
 
             \foreach \point in {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O} {
                 \fill (\point) circle (4pt);
             }
 
-            \draw [-,very thick,red] (11.2,-3.1) --  (12,-3.1) node[anchor=west, black] {Fixed Edge};
+            \draw [-,very thick,Red] (11.2,-3.1) --  (12,-3.1) node[anchor=west, black] {Fixed Edge};
         
         \end{tikzpicture}
 	    \caption{Example of a random fix of 8 edges} \label{fig:exampleRndFix}
@@ -51,20 +51,20 @@ There are multiple ways to choose which edges to fix and which edges to keep "fr
             \coordinate (A) at (0, 0);\coordinate (B) at (2, 3);\coordinate (C) at (4, 0);\coordinate (D) at (1, -3);\coordinate (E) at (3, -2);\coordinate (F) at (5, 1);\coordinate (G) at (6, -2);\coordinate (H) at (8, 0);\coordinate (I) at (7, 3);\coordinate (J) at (9, 3);\coordinate (K) at (11, 0);\coordinate (L) at (10, -3);\coordinate (M) at (12, -2);\coordinate (N) at (14, 0);\coordinate (O) at (13, 3);
 
             \draw[-,very thick] (A) -- node[above,yshift=1,xshift=-6] {12} (B) -- node[above,yshift=1,xshift=4] {8} (C) --node[above,xshift=-5] {15} (F) -- node[above] {10} (H) -- node[above,xshift=5] {7} (I) -- node[above] {14} (J) -- node[above,xshift=7] {11} (K) -- node[above,xshift=-5] {9} (O) -- node[above,xshift=7] {13} (N) -- node[above,yshift=2,xshift=-2] {6} (M) -- node[above,xshift=-2] {16} (L) -- node[above] {5} (G) -- node[above] {3} (E) -- node[above,yshift=1,xshift=-1] {18} (D) -- node[above,xshift=5] {4} (A);
-            \draw[-,very thick, red] (G) -- (E);
-            \draw[-,very thick, red] (D) -- (A);
-            \draw[-,very thick, red] (L) -- (G);
-            \draw[-,very thick, red] (N) -- (M);
-            \draw[-,very thick, red] (B) -- (C);
-            \draw[-,very thick, red] (H) -- (I);
-            \draw[-,very thick, red] (K) -- (O);
-            \draw[-,very thick, red] (F) -- (H);
+            \draw[-,very thick, Red] (G) -- (E);
+            \draw[-,very thick, Red] (D) -- (A);
+            \draw[-,very thick, Red] (L) -- (G);
+            \draw[-,very thick, Red] (N) -- (M);
+            \draw[-,very thick, Red] (B) -- (C);
+            \draw[-,very thick, Red] (H) -- (I);
+            \draw[-,very thick, Red] (K) -- (O);
+            \draw[-,very thick, Red] (F) -- (H);
 
             \foreach \point in {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O} {
                 \fill (\point) circle (4pt);
             }
 
-            \draw [-,very thick,red] (11.2,-3.1) --  (12,-3.1) node[anchor=west, black] {Fixed Edge};
+            \draw [-,very thick,Red] (11.2,-3.1) --  (12,-3.1) node[anchor=west, black] {Fixed Edge};
         \end{tikzpicture}
 	    \caption{Example of a smallest edges fix of 8 edges} \label{fig:exampleSmallFix}
     \end{figure}
@@ -78,13 +78,13 @@ There are multiple ways to choose which edges to fix and which edges to keep "fr
             \coordinate (A) at (0, 0);\coordinate (B) at (2, 3);\coordinate (C) at (4, 0);\coordinate (D) at (1, -3);\coordinate (E) at (3, -2);\coordinate (F) at (5, 1);\coordinate (G) at (6, -2);\coordinate (H) at (8, 0);\coordinate (I) at (7, 3);\coordinate (J) at (9, 3);\coordinate (K) at (11, 0);\coordinate (L) at (10, -3);\coordinate (M) at (12, -2);\coordinate (N) at (14, 0);\coordinate (O) at (13, 3);
 
             \draw[-,very thick] (A) -- node[above,yshift=1,xshift=-6] {12} (B) -- node[above,yshift=1,xshift=4] {8} (C) --node[above,xshift=-5] {15} (F) -- node[above] {10} (H) -- node[above,xshift=5] {7} (I) -- node[above] {14} (J) -- node[above,xshift=7] {11} (K) -- node[above,xshift=-5] {9} (O) -- node[above,xshift=7] {13} (N) -- node[above,yshift=2,xshift=-2] {6} (M) -- node[above,xshift=-2] {16} (L) -- node[above] {5} (G) -- node[above] {3} (E) -- node[above,yshift=1,xshift=-1] {18} (D) -- node[above,xshift=5] {4} (A);
-            \draw[-,very thick, red] (G) -- (E) -- (D) -- (A) -- (B) -- (C) -- (F) -- (H) -- (I);
+            \draw[-,very thick, Red] (G) -- (E) -- (D) -- (A) -- (B) -- (C) -- (F) -- (H) -- (I);
 
             \foreach \point in {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O} {
                 \fill (\point) circle (4pt);
             }
 
-            \draw [-,very thick,red] (11.2,-3.1) --  (12,-3.1) node[anchor=west, black] {Fixed Edge};
+            \draw [-,very thick,Red] (11.2,-3.1) --  (12,-3.1) node[anchor=west, black] {Fixed Edge};
         \end{tikzpicture}
 	    \caption{Example of a sequence fix of 8 edges} \label{fig:exampleSeqFix}
     \end{figure}
@@ -94,6 +94,7 @@ Even by using all of these procedure together there is the risk of becoming stuc
 There surely exist a lot of ways to escape a local minimum point, the simplest one is just to reduce the amount of fixed edges once the solution stops improving.
 To roughly detect the local minima one can simply check how many iterations from the last improving iteration have been performed.
 Then, after a threshold value of not-improving iterations has been crossed just decrease the number of fixed edges.
+In this implementation, the starting number of fixed edges is 10\% the number of nodes and it is decreased with steps of equal size.
 \begin{figure}[htbp]
 	\textbf{Hard Fixing} \\
 	\begin{algorithm}[H]
@@ -144,7 +145,8 @@ Therefore it makes sense for algorithms like Hard Fixing to be analyzed on the q
 	\includegraphics[scale=0.73]{hardfix_cost.pdf}
 	\caption{Performance profile graph of Hard Fixing\label{fig:hardfixCost}}
 \end{figure}
-Like with the other algorithms using CPLEX shown before, the time limit set to find the initial solution was set to 1\% of the full time limit, while the algorithm used to find such solution was the Nearest Neighbor heuristic.
+Like with the other algorithms using CPLEX shown before, the time limit set to find the initial solution was set to 1\% of the full time limit.
+The initial solution was obtained using Nearest Neighbor and 2-Opt.
 % Time limits are set as follows:
 % \begin{itemize}
 %     \item from 0 to 80 nodes, 1 second
@@ -159,11 +161,11 @@ Like with the other algorithms using CPLEX shown before, the time limit set to f
 	\centering
 	\begin{tabular}{c|c|c|}
         & \textbf{Optimization Amount} & \textbf{Distance from Optimal} \\
-		\hline \textbf{mean} & 1.31\% & 0.60\% \\
-		\hline \textbf{std dev} & 1.14\% & 0.91\% \\
-        \hline \textbf{Q(25\%)} & 0.27\% & 0.00\% \\
-        \hline \textbf{Q(50\%)} & 1.03\% & 0.04\% \\
-        \hline \textbf{Q(75\%)} & 2.27\% & 0.91\% \\
+		\hline \textbf{mean} & 3.34\% & 0.96\% \\
+		\hline \textbf{std dev} & 1.70\% & 1.08\% \\
+        \hline \textbf{Q(25\%)} & 2.23\% & 0.14\% \\
+        \hline \textbf{Q(50\%)} & 3.39\% & 0.47\% \\
+        \hline \textbf{Q(75\%)} & 4.25\% & 1.42\% \\
 	\end{tabular}
     \vspace{2mm}
 	\caption{Statistics on results from Hard Fixing} \label{tab:hardfixStats}
@@ -238,6 +240,7 @@ Of course, as it was the case with all 2-Opt, there is the risk in becoming stuc
 When that happens, metaheuristics like Variable Neighborhood Search and Tabu Search used the techniques of performing some kind of non-improving moves so to escape the local minimum point.
 In Local Branching it's not necessary to use such a technique since it's possible to increase $k$ without any efforts, allowing to escape the local minima at the cost of a harder problem for Branch and Cut to solve.
 After the algorithm escapes the critical point it's possible to reduce again the value of $k$, to return to the original problem complexity.
+In this implementation $k$ starts out with the value of 10 and it is increased, when necessary, by 5.
 
 \begin{figure}[htbp]
 	\textbf{Local Branching} \\
@@ -280,7 +283,7 @@ The data shown by \figurename{ \ref{fig:localBranchingCost}} and \tablename{ \re
 
 \begin{figure}[htbp]
 	\centering
-	\includegraphics[scale=0.73]{local-branching-costs.pdf}
+	\includegraphics[scale=0.73]{local-branching_cost.pdf}
 	\caption{Performance profile graph of Local Branching\label{fig:localBranchingCost}}
 \end{figure}
 
@@ -288,14 +291,34 @@ The data shown by \figurename{ \ref{fig:localBranchingCost}} and \tablename{ \re
 	\centering
 	\begin{tabular}{c|c|c|}
         & \textbf{Optimization Amount} & \textbf{Distance from Optimal} \\
-		\hline \textbf{mean} & 0.93\% & 0.99\% \\
-		\hline \textbf{std dev} & 0.92\% & 1.25\% \\
-        \hline \textbf{Q(25\%)} & 0.13\% & 0.00\% \\
-        \hline \textbf{Q(50\%)} & 0.70\% & 0.33\% \\
-        \hline \textbf{Q(75\%)} & 1.52\% & 1.75\% \\
+		\hline \textbf{mean} & 2.70\% & 1.55\% \\
+		\hline \textbf{std dev} & 1.81\% & 1.80\% \\
+        \hline \textbf{Q(25\%)} & 1.24\% & 0.00\% \\
+        \hline \textbf{Q(50\%)} & 2.56\% & 0.76\% \\
+        \hline \textbf{Q(75\%)} & 3.84\% & 2.79\% \\
 	\end{tabular}
     \vspace{2mm}
 	\caption{Statistics on results from Local Branching} \label{tab:localBranchingStats}
 \end{table}
 
 \section{Comparison}
+To conclude this chapter, \figurename{ \ref{fig:hardFixLocBranchCMP}} provides graphical means to compare the quality of the solutions of Hard Fixing and Local Branching.
+It is clear that Hard Fixing holds is a superior algorithm given the same time limit, but there is more to it than that.
+\figurename{ \ref{fig:hardFixLocBranchIterCMP}} shows the percentage difference in the number of iterations per second recored in every test.
+The significantly higher number of iterations performed by Hard Fixing questions the autenticity of the results and poses another question: would local branching perform better or worse if enough time is given to match Hard Fixing speed?
+To answer this question a significant amount of data would need to be gathered and studied.
+The proposed experiment, while valuable, is beyond the current scope of this project.
+Considering the limited resources available, it can be concluded that this implementation of Hard Fixing is generally superior to the Local Branching method.
+However, it remains unclear whether Hard Fixing is both more effective and faster, or if its faster execution simply allows it to achieve better results within the same timeframe.
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[scale=0.73]{cmp_hardfix_local-branching.pdf}
+	\caption{Comparison between Hard Fixing and Local Branching solution quality \label{fig:hardFixLocBranchCMP}}
+\end{figure}
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[scale=0.73]{cmp_iter-s_hardfix_local-branching.pdf}
+	\caption{Comparison between Hard Fixing and Local Branching iterations/s \label{fig:hardFixLocBranchIterCMP}}
+\end{figure}
