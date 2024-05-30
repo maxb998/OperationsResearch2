@@ -1,12 +1,30 @@
 \chapter{Introduction}
 
-The Traveling Salesman Problem (TSP) stands as an iconic challenge in the field of combinatorial optimization, captivating researchers for its practical significance and theoretical complexity. Originating in the early 20th century, the TSP involves determining the most efficient route for a salesman to visit a set of cities exactly once before returning to the starting point. Despite its seemingly straightforward premise, the exponential growth in potential routes as cities increase presents a formidable computational challenge.
+The Traveling Salesman Problem (TSP) stands as an iconic challenge in the field of combinatorial optimization,
+captivating researchers for its practical significance and theoretical complexity. Originating in the early 20th century,
+the TSP consists in determining the most efficient route for a salesman to visit a set of cities exactly once before returning 
+to the starting point. Despite its seemingly straightforward premise, the exponential growth in potential routes as cities 
+increase presents a formidable computational challenge.\\
+Formally the problem is defined by an undirected graph $G = (V,E)$, where $V$ is the set of vertices representing the cities and
+$E$ is the set of edges representing the connections between pairs of cities. Each edge $e$ in $E$ 
+has an associated non-negatice cost (distance) $c(e)$, that represent the distance or cost of travelling from one
+city to another. The objective is to find the shortest (or the minimum cost) possible route that visits each node exactly
+once and returns to the starting node, i.e. the Hamiltonian cycle of minimum cost in the graph.\\
 
 \begin{figure}[htbp]
 	\centering
 	\includegraphics[scale=0.15]{tsp_example}
 	\caption{A solution of instance kroA150}
 \end{figure}
+
+Therefore, the function to minimize is:
+
+\begin{equation}
+    cost(\pi) = \sum_{i=1}^{n-1} c(v_i, v_{i+1}) + c(v_n,v_1)
+\end{equation}
+
+where $\pi = (v_1,v_2,\ldots,v_n)$ represents the order in which the nodes (cities) are visited, and $c(v_i,v_j)$ 
+represents the cost of traveling from node $v_i$ to node $v_j$.
 
 \section{Complexity of TSP}
 

@@ -2,6 +2,25 @@
 
 \section{Nearest Neighbor}
 
+Nearest Neighbor (NN) is a greedy algorithm that very simple and intuive yet relatively effective, used to find a feasible solution to the Traveling Salesman Problem.
+In order to build the Hamiltonian circuit the algorithm indicates to move iteratively to the closest unvisited neighbor.\\
+The procedure is:
+
+\begin{enumerate}
+    \item select a node as starting node,
+    \item find the closes unvisited neighbor of the current node (greedy move),
+    \item move to the selected node and mark it as visited,
+    \item repeat from step 2 until all the nodes are marked as visited
+\end{enumerate}
+
+As for the initialization \textit{NN} returns a feasible solution no matter what is the starting node, but the cost of the solution will 
+depend on it, therefore it is a good idea to set up a time limit and restarting the algorithm from different nodes, while keeping the
+best solution found so far.
+While this method provides a solution that is a good starting point from then implementing some metaheuristic to refine it, this solution
+is usually far from the optimal one. This is due to the fact that by choosing always the closest node as the next one, it's creating a
+lot of crossing between edges, reducing the efficiency of the solution.
+\\
+
 \begin{algorithm}[H]
 	\TitleOfAlgo{\textbf{Nearest Neighbor}}
     \SetKwInOut{Input}{Input}
@@ -22,7 +41,52 @@
     \Return $tour$, $b$\\
 \end{algorithm}
 
+\subsection{Implementation}
+We have some options on how we want to run NN. First off we can decide whether to use GRASP or not, but we can also configure 
+how many threads we want to use, if we want to compute the distances between points every time needed or use a matrix to store 
+them, or use AVX functions when possible to improve the performances. We can also choose to use 2-opt or 3-opt after finding a 
+solution to improve its cost, or we can just leave it as is.
+
+By using the cost matrix to store the weight of all the edges we can speed up the computation, but this will require a tradeoff 
+in memory, O(n²) more specifically, where n is the number of nodes in the instance. Considering that we are storing nodes in a 
+matrix of float variables, this is still good for many applications, e.g. an instance of 10000 nodes will require 0.37 GB of 
+memory. This changes when we take into consideration larger instances, like the largest one in TSPlib, which includes 85900 
+nodes and would require just short of 27.5 GB of memory.
+This is why we implemented the computation of the edge weight on the fly both normally and with AVX instructions, which allows 
+us to find the solution of more complex instances.
+
+The function that handles the application of the heuristic is NearestNeighbor, to which we pass both the instance of the 
+problem and the time limit. The application of GRASP and the creation of the required number of threads is handled here.
+We launch each thread with the function loopNearestNeighbor, which loops the application of applyNearestNeighbor selecting 
+a different starting node every time until all nodes have been used or the time limit is reached.
+At all time we keep track of the best solution found so far, which is then the one returned by NearestNeighbor. When the 
+solution is return 2-opt and 3-opt will be applied as desired.
+
+This heuristic presents two main problems: the first is that, been a greedy algorithm, at each iteration we always visit 
+the next closest point and this leads to the creation of many intersection between the edges of the solution, which are 
+clearly inefficient (we deal with this problem using 2-opt or 3-opt). The second one is that is a deterministic algorithm, 
+which means that if we run it from the same starting node multiple times the solution will never change, so the number 
+of total solutions obtainable is limited to the number of nodes.
+
+
 \section{Extra Mileage}
+
+The \textit{Extra Mileage} heuristic is another approach used to find approximate solutions to the Traveling Salesman Problem (TSP).
+While similar to the Nearest Neighbor Heuristic, it comes with a slight variation in the selection process. 
+In the Extra Mileage Heuristic, the algorithm tries to minimize the additional mileage (or distance) traveled in each step, 
+rather than always selecting the nearest unvisited city.\\
+The method starts from an existing subtour, which can be created arbitrarily, a 3-node subtour is enough to start the method.
+At each iteration, we take into consideration every unvisited node in every possible position of the current subtour, and compute the
+increase in cost.\\
+Let $c : V \times V \rightarrow \mathbb{R}$ be the function that, given two nodes, returns the cost of the edge between them.\\
+Then $\forall$ covered node $i$ and uncovered node $h$: $\Delta(i,h) := $ cost of visiting $h$ right after $i$:\\
+
+\begin{equation}
+    \Delta(i,h) = c(i,h) + c(h, succ[i]) - c(i, succ[i])
+\end{equation}\\
+
+We will then procede to pick the most cost-efficient option, hence, the one that increases the cost the least: $min_{i,h}\{\Delta(i,h)\}$.
+The node is inserted into the correct position in the subtour, and this process continues until all nodes are marked as visited, i.e. until the tour is completed.\\ 
 
 \begin{algorithm}[H]
 	\TitleOfAlgo{\textbf{Extra Mileage}}
@@ -41,3 +105,15 @@
     \Return $tour$, $b$\\
     
 \end{algorithm}
+
+\subsection{Implementation}
+Extra mileage, like nearest neighbor, is a "solution builder", it generates a feasible solution starting from just the 
+instance of the problem. Hence, we structured the implementation of this heuristic in a similar concept, maintaining the 
+same configuration options, which are the application of GRASP, the number of threads to use, the computation of the edges' 
+weights on the fly or store them in a matrix, and the application of 2-opt or 3-opt.
+
+A similar structure is also implemented for the way we apply extra mileage to the instance. The main function that handles 
+all the processes is ExtraMileage, which receives the instance and the time limit, sets GRASP if needed and creates the 
+required number of threads.
+The threads will run the function runExtraMileage until the time limit, launching in loop the function applyExtraMileage, 
+which is the actual function that computes the heuristic.
