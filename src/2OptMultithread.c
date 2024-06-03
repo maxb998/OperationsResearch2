@@ -213,60 +213,65 @@ static void *run2OptThread(void* arg)
 
     while (data->notFinished) // runs 2opt until no more moves are made in one iteration of 2opt
     {
-        pthread_mutex_lock(&data->mutex);
         int edge0 = data->nextEdge;
         if (edge0 == data->sol->instance->nNodes)
         {
-            if (data->threadsWaiting == data->nThreads-1)
+            pthread_mutex_lock(&data->mutex);
+            if (edge0 == data->sol->instance->nNodes)
             {
-                _2optMoveData bestFix = data->bestFixes[0];
-                for (int i = 1; i < data->nThreads; i++)
-                    if (data->bestFixes[i].costOffset < bestFix.costOffset)
-                        bestFix = data->bestFixes[i];
-                
-                bool result = updateSolution(data, bestFix);
-                #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-                    if (!result && data->approxSearch)
-                    {
-                        if (print2OptLog)
-                            LOG(LOG_LVL_DEBUG, "apply2OptBestFix_fastIterativelyMT[%d]: Switching from Approximated Search to Exact Search", data->iter);
-                        data->approxSearch = false;
+                if (data->threadsWaiting == data->nThreads-1)
+                {
+                    _2optMoveData bestFix = data->bestFixes[0];
+                    for (int i = 1; i < data->nThreads; i++)
+                        if (data->bestFixes[i].costOffset < bestFix.costOffset)
+                            bestFix = data->bestFixes[i];
+                    
+                    bool result = updateSolution(data, bestFix);
+                    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+                        if (!result && data->approxSearch)
+                        {
+                            if (print2OptLog)
+                                LOG(LOG_LVL_DEBUG, "apply2OptBestFix_fastIterativelyMT[%d]: Switching from Approximated Search to Exact Search", data->iter);
+                            data->approxSearch = false;
+                        }
+                        else if (!result)
+                            data->notFinished = false;
+                    #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
+                        if (!result)
+                            data->notFinished = false;
+                    #endif
+
+                    #ifdef DEBUG
+                        if (!checkSolution(data->sol))
+                            throwError("apply2OptBestFix_fastIterativelyMT: [%d] Solution is not correct", data->iter);
+                    #endif
+                    data->threadsWaiting = 0;
+                    data->nextEdge = 0;
+
+                    clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
+                    double currentTime = cvtTimespec2Double(timeStruct);
+                    if (print2OptLog && (currentTime - data->printTimeSec > LOG_INTERVAL))
+                    {   
+                        LOG(LOG_LVL_INFO, "2Opt running: cost is %lf at iteration %4lu with last optimization of %lf", cvtCost2Double(data->sol->cost), data->iter, -bestFix.costOffset);
+                        data->printTimeSec = currentTime;
                     }
-                    else if (!result)
-                        data->notFinished = false;
-                #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
-                    if (!result)
-                        data->notFinished = false;
-                #endif
+                    data->iter++;
 
-                #ifdef DEBUG
-                    if (!checkSolution(data->sol))
-                        throwError("apply2OptBestFix_fastIterativelyMT: [%d] Solution is not correct", data->iter);
-                #endif
-                data->threadsWaiting = 0;
-                data->nextEdge = 0;
-
-                clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
-                double currentTime = cvtTimespec2Double(timeStruct);
-                if (print2OptLog && (currentTime - data->printTimeSec > LOG_INTERVAL))
-                {   
-                    LOG(LOG_LVL_INFO, "2Opt running: cost is %lf at iteration %4lu with last optimization of %lf", cvtCost2Double(data->sol->cost), data->iter, -bestFix.costOffset);
-                    data->printTimeSec = currentTime;
+                    pthread_cond_broadcast(&data->waitUpdate);
                 }
-                data->iter++;
-
-                pthread_cond_broadcast(&data->waitUpdate);
+                else
+                {
+                    data->threadsWaiting++;
+                    pthread_cond_wait(&data->waitUpdate, &data->mutex);
+                }
+                data->bestFixes[w->threadID].costOffset = 0;
             }
             else
-            {
-                data->threadsWaiting++;
-                pthread_cond_wait(&data->waitUpdate, &data->mutex);
-            }
-            data->bestFixes[w->threadID].costOffset = 0;
+                data->nextEdge++;
+            pthread_mutex_unlock(&data->mutex);
         }
         else
             data->nextEdge++;
-        pthread_mutex_unlock(&data->mutex);
         if (!data->notFinished)
             break;
 
