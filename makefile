@@ -18,7 +18,7 @@ LDFLAGS2 = -lcplex -lm -l:concorde.a
 ifeq ($(MODE),exec)
 OBJ_DIR = obj/exec/
 BIN_DIR = bin/exec/
-CFLAGS = -O3 -ftree-loop-im -mavx2 -march=native -mtune=native -Isrc/headers
+CFLAGS = -O3 -ftree-loop-im -ffast-math -mavx2 -march=native -mtune=native -Isrc/headers
 endif
 
 # separate files into the ones that use cplex and will need the extra compiler flag to find cplex headers and the ones which don't use it

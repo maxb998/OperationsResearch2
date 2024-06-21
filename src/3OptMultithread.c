@@ -5,7 +5,7 @@
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
 
 // in seconds
-#define LOG_INTERVAL 10
+#define LOG_INTERVAL 30
 //#define USE_MOVE_14_52_36
 
 typedef struct

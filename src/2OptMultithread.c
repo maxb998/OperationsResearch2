@@ -481,7 +481,7 @@ static inline void _2OptBestFix(wrapper *w, int edge0)
                             computeEdgeCost(data->X[currFix.edge0 + 1], data->Y[currFix.edge0 + 1], data->X[currFix.edge1 + 1], data->Y[currFix.edge1 + 1], inst);
         #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
             altEdgeWgt = inst->edgeCostMat[(size_t)sol->indexPath[currFix.edge0] * (size_t)n + (size_t)sol->indexPath[currFix.edge1]] + 
-                            inst->edgeCostMat[(size_t)sol->indexPath[currFix.edge1 + 1] * (size_t)n + (size_t)sol->indexPath[currFix.edge0 + 1]];
+                            inst->edgeCostMat[(size_t)sol->indexPath[currFix.edge0 + 1] * (size_t)n + (size_t)sol->indexPath[currFix.edge1 + 1]];
         #endif
 
         currFix.costOffset = altEdgeWgt - solEdgeWgt;

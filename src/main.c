@@ -268,6 +268,9 @@ static void run2Opt(Solution *sol)
     set2OptPerformanceBenchmarkLogMT(true);
     apply2OptBestFixMT(sol);
     set2OptPerformanceBenchmarkLogMT(false);
+    // set2OptPerformanceBenchmarkLog(true);
+    // apply2OptBestFix(sol);
+    // set2OptPerformanceBenchmarkLog(false);
 
     printf("2Opt finished in %lf seconds\n", sol->execTime - startTime);
     printf("Solution Cost = %lf\n", cvtCost2Double(sol->cost));

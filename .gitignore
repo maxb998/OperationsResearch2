@@ -9,4 +9,4 @@ report/report.*
 report/*.fls
 !report/report.tex
 !runs/*.tar.xz
-!runs/*.sh
+!runs/scripts

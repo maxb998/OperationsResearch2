@@ -152,7 +152,7 @@ int apply2OptBestFix_fastIteratively(Solution *sol, float *costCache)
 
     bool notFinishedFlag = true;
     #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        bool approxSearch = true;
+        bool approxSearch = false;
     #endif
     while (notFinishedFlag) // runs 2opt until no more moves are made in one iteration of 2opt
     {
@@ -415,7 +415,7 @@ static inline _2optMoveData _2OptBestFix(_2optData *data)
                              computeEdgeCost(data->X[currFix.edge0 + 1], data->Y[currFix.edge0 + 1], data->X[currFix.edge1 + 1], data->Y[currFix.edge1 + 1], inst);
             #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
                 altEdgeWgt = inst->edgeCostMat[(size_t)sol->indexPath[currFix.edge0] * (size_t)n + (size_t)sol->indexPath[currFix.edge1]] + 
-                             inst->edgeCostMat[(size_t)sol->indexPath[currFix.edge1 + 1] * (size_t)n + (size_t)sol->indexPath[currFix.edge0 + 1]];
+                             inst->edgeCostMat[(size_t)sol->indexPath[currFix.edge0 + 1] * (size_t)n + (size_t)sol->indexPath[currFix.edge1 + 1]];
             #endif
 
             currFix.costOffset = altEdgeWgt - solEdgeWgt;
