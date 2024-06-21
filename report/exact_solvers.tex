@@ -81,82 +81,70 @@ The final outcome is a feasible TSP solution where a single tour visits each nod
 
 \begin{figure}[htbp]
 	\begin{center}
-		\begin{tikzpicture}[thick,scale=.6]
+		\begin{tikzpicture}[scale=0.9]
 
-			\draw [-latex, gray] (1,0.5) -- (1.5,2);
-			\draw [-latex, gray] (1.5,2) -- (3,1.5);
-			\draw [-latex, gray] (3,1.5) -- (2.75,0);
-			\draw [-latex, gray] (2.75,0) -- (1,0.5);
-			
-			\draw [-latex, gray] (6,0.5) -- (6.5,2);
-			\draw [-latex, gray] (6.5,2) -- (8,2.5);
-			\draw [-latex, gray] (8,2.5) -- (7.5,1);
-			\draw [-latex, gray] (7.5,1) -- (6,0.5);
-			
+			\begin{scope}[shift={(0, 0)}]
+	            \node[circle, draw, fill=white] (A) at (0,0) {A};
+	            \node[circle, draw, fill=white] (B) at (1,2) {B};
+	            \node[circle, draw, fill=white] (C) at (-2,1.5) {C};
+	            \node[circle, draw, fill=white] (D) at (-2.5,-0.5) {D};
+	            \node[circle, draw, fill=white] (E) at (3,-0.5) {E};
+	            \node[circle, draw, fill=white] (F) at (4,1.8) {F};
+	            \node[circle, draw, fill=white] (G) at (6,0.5) {G};
+	        
+	            \draw[-latex] (A) to[bend right=15] (B);
+	            \draw[-latex] (B) to[bend right=15] (C);
+	            \draw[-latex] (C) to[bend right=15] (D);
+	            \draw[-latex] (D) to[bend right=15] (A);
+	            \draw[-latex] (E) to[bend left=15] (F);
+	            \draw[-latex] (F) to[bend left=15] (G);
+	            \draw[-latex] (G) to[bend left=15] (E);
 
-			\foreach \p [count=\i] in {(1,0.5), (1.5,2), (3,1.5), (2.75,0)} {
-				\filldraw [black] \p circle (2pt);
-			}
+				\draw[-latex,ultra thick] (1.75,-1.25) -- (1.75,-2);
+	        \end{scope}
 
-			\foreach \p [count=\i] in {(6,0.5), (6.5,2), (8,2.5), (7.5,1)} {
-				\filldraw [black] \p circle (2pt);
-			}
-		\end{tikzpicture}
-		\\
-		$\Downarrow$
-		\\
-		\begin{tikzpicture}[thick,scale=.6]
+			\begin{scope}[shift={(0, -5)}]
+	            \node[circle, draw, fill=white] (A) at (0,0) {A};
+	            \node[circle, draw, fill=white] (B) at (1,2) {B};
+	            \node[circle, draw, fill=white] (C) at (-2,1.5) {C};
+	            \node[circle, draw, fill=white] (D) at (-2.5,-0.5) {D};
+	            \node[circle, draw, fill=white] (E) at (3,-0.5) {E};
+	            \node[circle, draw, fill=white] (F) at (4,1.8) {F};
+	            \node[circle, draw, fill=white] (G) at (6,0.5) {G};
+	        
+	            \draw[-latex,dashed,Red] (A) to[bend right=15] (B);
+	            \draw[-latex,dashed,Green] (A) to[bend right=15] (E);
+	            \draw[-latex] (B) to[bend right=15] (C);
+	            \draw[-latex] (C) to[bend right=15] (D);
+	            \draw[-latex] (D) to[bend right=15] (A);
+	            \draw[-latex,dashed,Red] (E) to[bend left=15] (F);
+	            \draw[-latex,dashed,Green] (F) to[bend right=15] (B);
+	            \draw[-latex,Red] (F) to[bend left=15] (G);
+	            \draw[-latex,Red] (G) to[bend left=15] (E);
+	            \draw[-,shorten >=4pt,] (F) to[bend left=15] (G);
+	            \draw[-,shorten >=4pt,] (G) to[bend left=15] (E);
 
-			\draw [-latex, gray] (1,0.5) -- (1.5,2);
-			\draw [-latex, gray] (1.5,2) -- (3,1.5);
-			\draw [-latex, Red] (3,1.5) -- (2.75,0);
-			\draw [-latex, gray] (2.75,0) -- (1,0.5);
-			
-			\draw [-latex, Red] (6,0.5) -- (6.5,2);
-			\draw [-latex, gray] (6.5,2) -- (8,2.5);
-			\draw [-latex, gray] (8,2.5) -- (7.5,1);
-			\draw [-latex, gray] (7.5,1) -- (6,0.5);
+				\draw[-latex,ultra thick] (1.75,-1.25) -- (1.75,-2);
+	        \end{scope}
 
-			\draw [-latex, Green] (3,1.5) -- (6.5,2);
-			\draw [-latex, Green] (6,0.5) -- (2.75,0);
-			
+			\begin{scope}[shift={(0, -10)}]
+	            \node[circle, draw, fill=white] (A) at (0,0) {A};
+	            \node[circle, draw, fill=white] (B) at (1,2) {B};
+	            \node[circle, draw, fill=white] (C) at (-2,1.5) {C};
+	            \node[circle, draw, fill=white] (D) at (-2.5,-0.5) {D};
+	            \node[circle, draw, fill=white] (E) at (3,-0.5) {E};
+	            \node[circle, draw, fill=white] (F) at (4,1.8) {F};
+	            \node[circle, draw, fill=white] (G) at (6,0.5) {G};
+	        
+	            \draw[-latex] (A) to[bend right=15] (E);
+	            \draw[-latex] (B) to[bend right=15] (C);
+	            \draw[-latex] (C) to[bend right=15] (D);
+	            \draw[-latex] (D) to[bend right=15] (A);
+	            \draw[-latex] (F) to[bend right=15] (B);
+	            \draw[-latex] (G) to[bend right=15] (F);
+	            \draw[-latex] (E) to[bend right=15] (G);
 
-			\foreach \p [count=\i] in {(1,0.5), (1.5,2), (3,1.5), (2.75,0)} {
-				\filldraw [black] \p circle (2pt);
-			}
-
-			\foreach \p [count=\i] in {(6,0.5), (6.5,2), (8,2.5), (7.5,1)} {
-				\filldraw [black] \p circle (2pt);
-			}
-		\end{tikzpicture}
-		\\
-		$\Downarrow$
-		\\
-		\begin{tikzpicture}[thick,scale=.6]
-
-			\draw [-latex, gray] (1,0.5) -- (1.5,2);
-			\draw [-latex, gray] (1.5,2) -- (3,1.5);
-			% \draw [-latex, red] (3,1.5) -- (2.75,0);
-			\draw [-latex, gray] (2.75,0) -- (1,0.5);
-			
-			% \draw [-latex, red] (6,0.5) -- (6.5,2);
-			\draw [-latex, gray] (6.5,2) -- (8,2.5);
-			\draw [-latex, gray] (8,2.5) -- (7.5,1);
-			\draw [-latex, gray] (7.5,1) -- (6,0.5);
-
-			\draw [-latex, gray] (3,1.5) -- (6.5,2);
-			\draw [-latex, gray] (6,0.5) -- (2.75,0);
-			
-
-			\foreach \p [count=\i] in {(1,0.5), (1.5,2), (3,1.5), (2.75,0)} {
-				\filldraw [black] \p circle (2pt);
-				% \draw \p+(0,0.5) node {\i};	
-			}
-
-			\foreach \p [count=\i] in {(6,0.5), (6.5,2), (8,2.5), (7.5,1)} {
-				\filldraw [black] \p circle (2pt);
-				% \draw \p+(0,0.5) node {\i};	
-			}
+	        \end{scope}
 		\end{tikzpicture}
 	\end{center}
 	\caption{Example of merging two subtours} \label{fig:examplePatching}
@@ -199,7 +187,7 @@ Specifying the time limit is mandatory since some of the tests use warm start wh
 % \tablename{ \ref{tab:bendersSimple}} contains the average runtime of Benders of five runs on each instance with different seeds, however it must be noted that time used to find the warm starting solution is not included.
 The time limits used to gather data as set according to \tablename{ \ref{tab:bendersTlims}}.
 
-\begin{table}[h]
+\begin{table}[htbp]
 	\centering
 	\caption{Time limits used to run benders while gathering data} \label{tab:bendersTlims}	\vspace{2mm}
 	\begin{tabular}{|C{22mm}|C{21mm}|C{28mm}|C{28mm}|}
@@ -229,7 +217,36 @@ The time limits used to gather data as set according to \tablename{ \ref{tab:ben
 
 \begin{figure}[htbp]
 	\centering 
-	\includegraphics[scale=0.73]{benders_simple.pdf}
+	\begin{tikzpicture}
+        \begin{axis}[
+            xlabel={Time Ratio},     % AXIS NAME
+            %ylabel={Iterations/s Ratio},   % AXIS NAME
+            xmin=1, xmax=1.8,       % AXIS LIMITS
+            ymin=0, ymax=47,        % AXIS LIMITS
+            xtick={},
+            ytick=\empty,
+            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1}, %MOVE LEGEND HERE
+			legend cell align={left},
+            %ymajorgrids=true,
+            xmajorgrids=true,
+            grid style=dashed,
+        ]
+        
+        \addplot[Blue,mark=square,mark size=1.5] table[x=simple_base,y=idx, col sep=semicolon] {csv/benders_runtimes.csv}; 
+        \addplot[Red,mark=o,mark size=1.5] table[x=simple_ws1,y=idx, col sep=semicolon] {csv/benders_runtimes.csv};
+        \addplot[Green,mark=triangle,mark size=1.5] table[x=simple_ws5,y=idx, col sep=semicolon] {csv/benders_runtimes.csv}; 
+        \addplot[Purple,mark=star,mark size=1.5] table[x=simple_patch,y=idx, col sep=semicolon] {csv/benders_runtimes.csv}; 
+        \addplot[Dandelion,mark=otimes,mark size=1.5] table[x=simple_patch+ws1,y=idx, col sep=semicolon] {csv/benders_runtimes.csv}; 
+        \addplot[Black,mark=diamond,mark size=1.5] table[x=simple_patch+ws5,y=idx, col sep=semicolon] {csv/benders_runtimes.csv}; 
+        \addlegendentry{Basic} 
+        \addlegendentry{Warm start 1\%}
+        \addlegendentry{Warm start 5\%}
+        \addlegendentry{Patching}
+        \addlegendentry{Patching + Warm start 1\%}
+        \addlegendentry{Patching + Warm start 5\%}
+            
+        \end{axis}
+    \end{tikzpicture}
 	\caption{Performance profile graph on runtimes of benders \label{fig:bendersSimplePerfProf}}
 \end{figure}
 
@@ -240,7 +257,36 @@ However the time taken to find that first solution must also be taken into accou
 
 \begin{figure}[htbp]
 	\centering
-	\includegraphics[scale=0.73]{benders_full.pdf}
+	\begin{tikzpicture}
+        \begin{axis}[
+            xlabel={Time Ratio},     % AXIS NAME
+            %ylabel={Iterations/s Ratio},   % AXIS NAME
+            xmin=1, xmax=3,       % AXIS LIMITS
+            ymin=0, ymax=47,        % AXIS LIMITS
+            xtick={},
+            ytick=\empty,
+            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1}, %MOVE LEGEND HERE
+			legend cell align={left},
+            %ymajorgrids=true,
+            xmajorgrids=true,
+            grid style=dashed,
+        ]
+        
+        \addplot[Blue,mark=square,mark size=1.5] table[x=full_base, y=idx, col sep=semicolon] {csv/benders_runtimes.csv}; 
+        \addplot[Red,mark=o,mark size=1.5] table[x=full_ws1, y=idx, col sep=semicolon] {csv/benders_runtimes.csv};
+        \addplot[Green,mark=triangle,mark size=1.5] table[x=full_ws5, y=idx, col sep=semicolon] {csv/benders_runtimes.csv}; 
+        \addplot[Purple,mark=star,mark size=1.5] table[x=full_patch, y=idx, col sep=semicolon] {csv/benders_runtimes.csv}; 
+        \addplot[Dandelion,mark=otimes,mark size=1.5] table[x=full_patch+ws1, y=idx, col sep=semicolon] {csv/benders_runtimes.csv}; 
+        \addplot[Black,mark=diamond,mark size=1.5] table[x=full_patch+ws5, y=idx, col sep=semicolon] {csv/benders_runtimes.csv}; 
+        \addlegendentry{Basic} 
+        \addlegendentry{Warm start 1\%}
+        \addlegendentry{Warm start 5\%}
+        \addlegendentry{Patching}
+        \addlegendentry{Patching + Warm start 1\%}
+        \addlegendentry{Patching + Warm start 5\%}
+            
+        \end{axis}
+    \end{tikzpicture}
 	\caption{Performance profile graph on runtimes of benders including warm start time \label{fig:bendersFullPerfProf}}
 \end{figure}
 
@@ -389,7 +435,34 @@ That said the candidate callback remains the same while the relaxation callback,
 For the same reason explained with Benders, this section will discuss the effectiveness of each of the strategies described above using the execution time as the main metric.
 \begin{figure}[htbp]
 	\centering
-	\includegraphics[scale=0.73]{branch-cut_full_MOD.pdf}
+	\begin{tikzpicture}
+        \begin{axis}[
+            xlabel={Time Ratio},     % AXIS NAME
+            %ylabel={Iterations/s Ratio},   % AXIS NAME
+            xmin=1, xmax=3,       % AXIS LIMITS
+            ymin=0, ymax=47,        % AXIS LIMITS
+            xtick={},
+            ytick=\empty,
+            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1,cells={align=left}}, %MOVE LEGEND HERE
+			legend cell align={left},
+            %ymajorgrids=true,
+            xmajorgrids=true,
+            grid style=dashed,
+        ]
+        
+        \addplot[Blue,mark=square,mark size=1.5] table[x=full_base, y=idx, col sep=semicolon] {csv/branch-cut_runtimes.csv}; 
+        \addplot[Red,mark=o,mark size=1.5] table[x=full_post, y=idx, col sep=semicolon] {csv/branch-cut_runtimes.csv};
+        \addplot[Green,mark=triangle,mark size=1.5] table[x=full_usercut, y=idx, col sep=semicolon] {csv/branch-cut_runtimes.csv}; 
+        \addplot[Purple,mark=star,mark size=1.5] table[x=full_post+usercut, y=idx, col sep=semicolon] {csv/branch-cut_runtimes.csv}; 
+        \addplot[Dandelion,mark=otimes,mark size=1.5] table[x=full_post+usercut+ws1, y=idx, col sep=semicolon] {csv/branch-cut_runtimes.csv};
+        \addlegendentry{Basic} 
+        \addlegendentry{Posting}
+        \addlegendentry{Usercuts}
+        \addlegendentry{Posting + Usercuts}
+        \addlegendentry{Posting + Usercuts\\ + Warm start 1\%}
+            
+        \end{axis}
+    \end{tikzpicture}
 	\caption{Performance profile graph on the execution time of the whole program using Branch and Cut algorithm \label{fig:branchCutFull}}
 \end{figure}
 By inspecting \figurename{ \ref{fig:branchCutFull}} it's possible to see that the best possible configuration of the Branch and Cut method is a cobination of both Posting and Usercuts, with what it seems to be a more impactful improvement given by the latter.
@@ -397,7 +470,34 @@ Posting alone is still able to outperform the basic version of the algorithm, wh
 The tables turn completely when not taking into consideration the warm start time.
 \begin{figure}[htbp]
 	\centering
-	\includegraphics[scale=0.73]{branch-cut_simple_MOD.pdf}
+	\begin{tikzpicture}
+        \begin{axis}[
+            xlabel={Time Ratio},     % AXIS NAME
+            %ylabel={Iterations/s Ratio},   % AXIS NAME
+            xmin=1, xmax=3,       % AXIS LIMITS
+            ymin=0, ymax=47,        % AXIS LIMITS
+            xtick={},
+            ytick=\empty,
+            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1,cells={align=left}}, %MOVE LEGEND HERE
+			legend cell align={left},
+            %ymajorgrids=true,
+            xmajorgrids=true,
+            grid style=dashed,
+        ]
+        
+        \addplot[Blue,mark=square,mark size=1.5] table[x=simple_base, y=idx, col sep=semicolon] {csv/branch-cut_runtimes.csv}; 
+        \addplot[Red,mark=o,mark size=1.5] table[x=simple_post, y=idx, col sep=semicolon] {csv/branch-cut_runtimes.csv};
+        \addplot[Green,mark=triangle,mark size=1.5] table[x=simple_usercut, y=idx, col sep=semicolon] {csv/branch-cut_runtimes.csv}; 
+        \addplot[Purple,mark=star,mark size=1.5] table[x=simple_post+usercut, y=idx, col sep=semicolon] {csv/branch-cut_runtimes.csv}; 
+        \addplot[Dandelion,mark=otimes,mark size=1.5] table[x=simple_post+usercut+ws1,y=idx, col sep=semicolon] {csv/branch-cut_runtimes.csv};
+        \addlegendentry{Basic} 
+        \addlegendentry{Posting}
+        \addlegendentry{Usercuts}
+        \addlegendentry{Posting + Usercuts}
+        \addlegendentry{Posting + Usercuts\\ + Warm start 1\%}
+            
+        \end{axis}
+    \end{tikzpicture}
 	\caption{Performance profile graph on the execution time of the Branch and Cut algorithm (excluding warm start time) \label{fig:branchCutSimple}}
 \end{figure}
 As \figurename{ \ref{fig:branchCutSimple}} clearly shows, the time took by Branch and Cut to solve an instance using the warm start technique in combination with both Posting and Usercuts, is undoubtely the best.
@@ -413,6 +513,31 @@ On average Branch and Cut runs three times faster compared to Benders, however, 
 
 \begin{figure}[htbp]
 	\centering
-	\includegraphics[scale=0.73]{benders-branch-cut.pdf}
+	\begin{tikzpicture}
+        \begin{axis}[
+            xlabel={Time Ratio},     % AXIS NAME
+            %ylabel={Iterations/s Ratio},   % AXIS NAME
+            xmin=1, xmax=10,       % AXIS LIMITS
+            ymin=0, ymax=47,        % AXIS LIMITS
+            xtick={},
+            ytick=\empty,
+            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1,cells={align=left}}, %MOVE LEGEND HERE
+			legend cell align={left},
+            %ymajorgrids=true,
+            xmajorgrids=true,
+            grid style=dashed,
+        ]
+        
+        \addplot[Blue,mark=square,mark size=1.5] table[x=ben, y=idx, col sep=semicolon] {csv/cmp_benders-branch-cut_full.csv}; 
+        \addplot[Red,mark=o,mark size=1.5] table[x=bran, y=idx, col sep=semicolon] {csv/cmp_benders-branch-cut_full.csv};
+        \addplot[Green,mark=triangle,mark size=1.5] table[x=ben+ws1, y=idx, col sep=semicolon] {csv/cmp_benders-branch-cut_full.csv}; 
+        \addplot[Purple,mark=star,mark size=1.5] table[x=bran+ws1, y=idx, col sep=semicolon] {csv/cmp_benders-branch-cut_full.csv};
+        \addlegendentry{Benders} 
+        \addlegendentry{Branch \& Cut}
+        \addlegendentry{Benders + Warm start 1\%}
+        \addlegendentry{Branch \& Cut + Warm start 1\%}
+            
+        \end{axis}
+    \end{tikzpicture}
 	\caption{Comparison between Benders and Branch and Cut\label{fig:bendersBranchCut}}
 \end{figure}

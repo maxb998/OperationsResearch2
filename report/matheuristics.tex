@@ -142,7 +142,30 @@ Therefore it makes sense for algorithms like Hard Fixing to be analyzed on the q
 \figurename{ \ref{fig:hardfixCost}} does exactly that, showing the difference between the cost of the solution used as input, the output solution as well as the optimal solution, in order to derive meaningful conclusion on the performance of the algorithm.
 \begin{figure}[htbp]
 	\centering
-	\includegraphics[scale=0.73]{hardfix_cost.pdf}
+    \begin{tikzpicture}
+        \begin{axis}[
+            xlabel={Cost Ratio},     % AXIS NAME
+            %ylabel={Iterations/s Ratio},   % AXIS NAME
+            xmin=1, xmax=1.1,       % AXIS LIMITS
+            ymin=0, ymax=67,        % AXIS LIMITS
+            xtick={},
+            ytick=\empty,
+            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1}, %MOVE LEGEND HERE
+			legend cell align={left},
+            %ymajorgrids=true,
+            xmajorgrids=true,
+            grid style=dashed,
+        ]
+        
+        \addplot[Blue,mark=square,mark size=1.5] table[x=startcost,y=idx, col sep=semicolon] {csv/hardfix_cost.csv}; 
+        \addplot[Red,mark=o,mark size=1.5] table[x=finalcost,y=idx, col sep=semicolon] {csv/hardfix_cost.csv};
+        \addplot[Green,mark=triangle,mark size=1.5] table[x=optimalcost,y=idx, col sep=semicolon] {csv/hardfix_cost.csv}; 
+        \addlegendentry{Starting Cost} 
+        \addlegendentry{Final Cost}
+        \addlegendentry{Optimal Cost}
+            
+        \end{axis}
+    \end{tikzpicture}
 	\caption{Performance profile graph of Hard Fixing\label{fig:hardfixCost}}
 \end{figure}
 Like with the other algorithms using CPLEX shown before, the time limit set to find the initial solution was set to 1\% of the full time limit.
@@ -207,10 +230,10 @@ This iterative process of defining local neighborhoods and optimizing within the
         \fill (final) circle (3pt) node[above right] {x4};
         
         % Draw arrows to show the progression
-        \draw[-latex,thick] (init) -- (int1);
-        \draw[-latex,thick] (int1) -- (int2);
-        \draw[-latex,thick] (int2) -- (int3);
-        \draw[-latex,thick] (int3) -- (final);
+        \draw[-latex,thick,shorten <=2pt,shorten >=2pt] (init) -- (int1);
+        \draw[-latex,thick,shorten <=2pt,shorten >=2pt] (int1) -- (int2);
+        \draw[-latex,thick,shorten <=2pt,shorten >=2pt] (int2) -- (int3);
+        \draw[-latex,thick,shorten <=2pt,shorten >=2pt] (int3) -- (final);
         \draw[thick,dotted] (final) -- (beyond);
         
         % Draw a few example neighborhoods
@@ -283,7 +306,30 @@ The data shown by \figurename{ \ref{fig:localBranchingCost}} and \tablename{ \re
 
 \begin{figure}[htbp]
 	\centering
-	\includegraphics[scale=0.73]{local-branching_cost.pdf}
+	\begin{tikzpicture}
+        \begin{axis}[
+            xlabel={Cost Ratio},     % AXIS NAME
+            %ylabel={Iterations/s Ratio},   % AXIS NAME
+            xmin=1, xmax=1.1,       % AXIS LIMITS
+            ymin=0, ymax=67,        % AXIS LIMITS
+            xtick={},
+            ytick=\empty,
+            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1}, %MOVE LEGEND HERE
+			legend cell align={left},
+            %ymajorgrids=true,
+            xmajorgrids=true,
+            grid style=dashed,
+        ]
+        
+        \addplot[Blue,mark=square,mark size=1.5] table[x=startcost,y=idx, col sep=semicolon] {csv/local-branching_cost.csv}; 
+        \addplot[Red,mark=o,mark size=1.5] table[x=finalcost,y=idx, col sep=semicolon] {csv/local-branching_cost.csv};
+        \addplot[Green,mark=triangle,mark size=1.5] table[x=optimalcost,y=idx, col sep=semicolon] {csv/local-branching_cost.csv}; 
+        \addlegendentry{Starting Cost} 
+        \addlegendentry{Final Cost}
+        \addlegendentry{Optimal Cost}
+            
+        \end{axis}
+    \end{tikzpicture}
 	\caption{Performance profile graph of Local Branching\label{fig:localBranchingCost}}
 \end{figure}
 
@@ -313,12 +359,54 @@ However, it remains unclear whether Hard Fixing is both more effective and faste
 
 \begin{figure}[htbp]
 	\centering
-	\includegraphics[scale=0.73]{cmp_hardfix_local-branching.pdf}
+	\begin{tikzpicture}
+        \begin{axis}[
+            xlabel={Cost Ratio},     % AXIS NAME
+            %ylabel={Iterations/s Ratio},   % AXIS NAME
+            xmin=1, xmax=1.06,       % AXIS LIMITS
+            ymin=0, ymax=67,        % AXIS LIMITS
+            xtick={},
+            ytick=\empty,
+            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1}, %MOVE LEGEND HERE
+			legend cell align={left},
+            %ymajorgrids=true,
+            xmajorgrids=true,
+            grid style=dashed,
+        ]
+        
+        \addplot[Blue,mark=square,mark size=1.5] table[x=hardfix_cost, y=idx, col sep=semicolon] {csv/cmp_hardfix_local-branching.csv}; 
+        \addplot[Red,mark=o,mark size=1.5] table[x=localbranch_cost, y=idx, col sep=semicolon] {csv/cmp_hardfix_local-branching.csv};
+        \addlegendentry{Hard Fixing} 
+        \addlegendentry{Local Branching}
+            
+        \end{axis}
+    \end{tikzpicture}
 	\caption{Comparison between Hard Fixing and Local Branching solution quality \label{fig:hardFixLocBranchCMP}}
 \end{figure}
 
 \begin{figure}[htbp]
 	\centering
-	\includegraphics[scale=0.73]{cmp_iter-s_hardfix_local-branching.pdf}
+	\begin{tikzpicture}
+        \begin{axis}[
+            ylabel={Iterations/s Ratio},     % AXIS NAME
+            xlabel={Sorted instances},   % AXIS NAME
+            xmin=0, xmax=67,       % AXIS LIMITS
+            ymin=1, ymax=57,        % AXIS LIMITS
+            ytick={1,10,20,30,40,50},
+            xtick=\empty,
+            legend style={at={(0.02,0.98)},anchor=north west,,legend columns=1}, %MOVE LEGEND HERE
+			legend cell align={left},
+            ymajorgrids=true,
+            %xmajorgrids=true,
+            grid style=dashed,
+        ]
+        
+        \addplot[Blue,mark=square,mark size=1.5] table[y=hardfix_iter, x=idx, col sep=semicolon] {csv/cmp_hardfix_local-branching.csv}; 
+        \addplot[Red,mark=o,mark size=1.5] table[y=localbranch_iter, x=idx, col sep=semicolon] {csv/cmp_hardfix_local-branching.csv};
+        \addlegendentry{Hard Fixing} 
+        \addlegendentry{Local Branching}
+            
+        \end{axis}
+    \end{tikzpicture}
 	\caption{Comparison between Hard Fixing and Local Branching iterations/s \label{fig:hardFixLocBranchIterCMP}}
 \end{figure}

@@ -123,7 +123,7 @@ This is because the output of CPLEX, as described in the following chapters, mig
 Unfortunately, the solution format used until now cannot efficiently handle solutions containing subtours, necessitating the introduction of a different format.
 The Successors format enables efficient storage of subtours without requiring additional structures or the use of the \textbf{xpos} function.
 The format consists of an array of size $|V|$, where each position $i$ contains the index of the successor of node $i$ itself.
-A comparison between all solution formats used in this project is illustrated in \figurename{ \ref{fig:cpxsuccEx}}.
+%A comparison between all solution formats used in this project is illustrated in \figurename{ \ref{fig:cpxsuccEx}}.
 
 \begin{figure}[htbp]
 	\begin{center}
@@ -157,15 +157,17 @@ A comparison between all solution formats used in this project is illustrated in
 			\path (.5,.5) (0.5,1.5) node{$3$} ++(1,0) node{$5$} ++(1,0) node{$2$} ++(1,0) node{$4$} ++(1,0) node{$1$};
 
 
-			\foreach \p [count=\i] in {(9,1), (14,5), (14,2), (10,4), (16,4)} {
-				\filldraw [black] \p circle (2pt);
-				\draw \p+(0,0.5) node {\i};
-			}
-			\draw [-latex] (9,1) -- (14,2);
-			\draw [-latex] (14,2) -- (16,4);
-			\draw [-latex] (16,4) -- (14,5);
-			\draw [-latex] (14,5) -- (10,4);
-			\draw [-latex] (10,4) -- (9,1);
+			\node[circle, draw, fill=white] (A) at (9,1) {1};
+	        \node[circle, draw, fill=white] (B) at (14,5) {2};
+	        \node[circle, draw, fill=white] (C) at (14,2) {3};
+			\node[circle, draw, fill=white] (D) at (10,4) {4};
+	        \node[circle, draw, fill=white] (E) at (16,4) {5};
+
+			\draw [-latex] (A) -- (C);
+			\draw [-latex] (C) -- (E);
+			\draw [-latex] (E) -- (B);
+			\draw [-latex] (B) -- (D);
+			\draw [-latex] (D) -- (A);
 		\end{tikzpicture}
 	\end{center}
 	\caption{Cplex and Successors solution notations} \label{fig:cpxsuccEx}
