@@ -51,6 +51,7 @@ int main (int argc, char *argv[])
 
     double tlim = inst.params.tlim;
     enum Mode m = inst.params.mode;
+    bool _2optimized = false;
 
     if (m & (MODE_NN | MODE_EM))
     {
@@ -59,7 +60,7 @@ int main (int argc, char *argv[])
     else if (m & (MODE_TABU | MODE_VNS | MODE_ANNEALING))
     {
         sol = runHeuristic(&inst, inst.params.metaheurInitMode, tlim * METAHEUR_INIT_RATIO);
-        run2Opt(&sol);
+        run2Opt(&sol); _2optimized = true;
         runMetaheuristic(&sol, m, tlim - sol.execTime);
     }
     else if (m & MODE_GENETIC)
@@ -71,12 +72,12 @@ int main (int argc, char *argv[])
         if ((inst.params.cplexWarmStart || (m & (MODE_HARDFIX | MODE_LOCAL_BRANCHING))) && (inst.params.matheurInitMode & (MODE_NN | MODE_EM)))
         {
             sol = runHeuristic(&inst, inst.params.matheurInitMode, tlim * MATHEUR_INIT_RATIO);
-            run2Opt(&sol);
+            run2Opt(&sol); _2optimized = true;
         }
         else if ((inst.params.cplexWarmStart || (m & (MODE_HARDFIX | MODE_LOCAL_BRANCHING))) && (inst.params.matheurInitMode & (MODE_TABU | MODE_VNS | MODE_ANNEALING)))
         {
             sol = runHeuristic(&inst, inst.params.metaheurInitMode, (tlim * MATHEUR_INIT_RATIO) * MATHEUR_METAHEUR_INIT_RATIO);
-            run2Opt(&sol);
+            run2Opt(&sol); _2optimized = true;
             runMetaheuristic(&sol, inst.params.matheurInitMode, (tlim * MATHEUR_INIT_RATIO) * (1 - MATHEUR_METAHEUR_INIT_RATIO));
         }
         else if (inst.params.cplexWarmStart && (inst.params.matheurInitMode & MODE_GENETIC))
@@ -90,7 +91,7 @@ int main (int argc, char *argv[])
             runMatheuristic(&sol, m, tlim - sol.execTime);
     }
 
-    if (inst.params.use2Opt)
+    if (inst.params.use2Opt && !_2optimized)
         run2Opt(&sol);
     
     if (inst.params.use3Opt)
