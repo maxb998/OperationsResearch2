@@ -322,18 +322,20 @@ static void initialization(ThreadSpecificData *thSpecific)
         break;
 
     case EM_INIT_FARTHEST_POINTS:
-        int initIndexes[2];
-        if (thSpecific->initIndexes[0] == -1)
-            farthestPointsInit(thSpecific);
-        for (int i = 0; i < inst->nNodes; i++)
         {
-            if (thSpecific->path[i] == thSpecific->initIndexes[0])
-                initIndexes[0] = i;
-            if (thSpecific->path[i] == thSpecific->initIndexes[1])
-                initIndexes[1] = i;
+            int initIndexes[2];
+            if (thSpecific->initIndexes[0] == -1)
+                farthestPointsInit(thSpecific);
+            for (int i = 0; i < inst->nNodes; i++)
+            {
+                if (thSpecific->path[i] == thSpecific->initIndexes[0])
+                    initIndexes[0] = i;
+                if (thSpecific->path[i] == thSpecific->initIndexes[1])
+                    initIndexes[1] = i;
+            }
+            swapElemsInThSpecific(thSpecific, 0, initIndexes[0]);
+            swapElemsInThSpecific(thSpecific, 1, initIndexes[1]);
         }
-        swapElemsInThSpecific(thSpecific, 0, initIndexes[0]);
-        swapElemsInThSpecific(thSpecific, 1, initIndexes[1]);
         break;
     }
 

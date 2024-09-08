@@ -254,8 +254,7 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
         break;
     
     case ARGP_ANNEAL_TEMP:
-        double exponent = parseDouble(arg, "annealTemperature");
-        inst->params.annealingTemperature = pow(10., exponent);
+        inst->params.annealingTemperature = pow(10., parseDouble(arg, "annealTemperature"));
         break;
 
     case ARGP_CPLEX_INIT_MODE:

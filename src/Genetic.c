@@ -607,7 +607,7 @@ static inline void naturalSelection(ThreadSpecificData *thSpecific)
     {
         float fpRejectionProb = (*(float*)&thSpecific->population[i].cost - min) / (max - min);
 
-        thSpecific->rejectionProbability[i] = (int)(fpRejectionProb * RAND_MAX);
+        thSpecific->rejectionProbability[i] = (int)(fpRejectionProb * (float)RAND_MAX);
 
         for (int k = 0; k < i; k++)
             if (isSolDuplicate(&thSpecific->population[k], &thSpecific->population[i]))

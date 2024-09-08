@@ -329,7 +329,7 @@ static inline bool updateSolution(_3optData *data, _3optMoveData bestFix)
     #endif
 
     // (check and) update cost
-    float altE0, altE1, altE2;
+    float altE0=0, altE1=0, altE2=0;
     switch (bestMoveType)
     {
     case _3OPT_MOVE_NONE:
