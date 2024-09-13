@@ -5,11 +5,14 @@ inputDir="data/generated"
 nRuns=10
 
 solverFixedArgs="-m nn --round --2opt -j 1"
-outDir="runs/nn2opt_3cmp"
+outDir="runs/perf/nn2opt_3cmp"
 outFname="nn2opt"
 
-declare -a execPaths=("bin/exec/main_avx_nocc_noapprox" "bin/exec/main_avx_nocc" "bin/exec/main_avx_noapprox" "bin/exec/main_avx" "bin/exec/main_base_nocc" "bin/exec/main_base" "bin/exec/main_matrix_nocc" "bin/exec/main_matrix_nocc_badindex" "bin/exec/main_matrix")
-declare -a mode=("avx-nocc-noapprox" "avx-nocc" "avx-noapprox" "avx" "base-nocc" "base" "matrix-nocc" "matrix-nocc-badindex" "matrix")
+# declare -a execPaths=("bin/exec/main_avx_nocc_noapprox" "bin/exec/main_avx_nocc" "bin/exec/main_avx_noapprox" "bin/exec/main_avx" "bin/exec/main_base_nocc" "bin/exec/main_base" "bin/exec/main_matrix_nocc" "bin/exec/main_matrix_nocc_badindex" "bin/exec/main_matrix")
+# declare -a mode=("avx-nocc-noapprox" "avx-nocc" "avx-noapprox" "avx" "base-nocc" "base" "matrix-nocc" "matrix-nocc-badindex" "matrix")
+
+declare -a execPaths=("bin/exec/main")
+declare -a mode=("base-nocc-slow")
 
 declare -a subDirs=("100" "500" "1000" "5000" "10000")
 declare -a tlims=( 1 2 4 8 16 )
