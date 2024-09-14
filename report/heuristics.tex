@@ -3,28 +3,16 @@
 \section{Nearest Neighbor}
 
 Nearest Neighbor (NN) is a simple, intuive and yet relatively effective greedy algorithm designed to find a feasible solution to the Traveling Salesman Problem.
-This heuristic involves starting at a given point (often chosen arbitrarily or based on a specific starting condition) and then repeatedly visiting the nearest unvisited point until all points have been visited.
-% In order to build the Hamiltonian circuit the algorithm indicates to move iteratively to the closest unvisited neighbor.
+As its name suggests, NN consists of building a solution to a TSP instance by selecting the nearest node to the last visited one.
 The key steps of the algorithm are:
-
 \begin{enumerate}
-    \item \textbf{Starting Point}: Choose an initial point (or node) as the starting location.
-    \item \textbf{Nearest Neighbor Selection}: From the current point, identify the nearest unvisited point.
-    \item \textbf{Move to the Nearest Point}: Travel to this nearest unvisited point.
-    \item \textbf{Repeat}: Update the current point to the newly visited point and repeat the process of finding the nearest unvisited point.
-    \item \textbf{Completion}: Continue until all points have been visited. In some cases, the algorithm returns to the starting point to form a complete tour (as in TSP).
-    % \item select a node as starting node,
-    % \item find the closes unvisited neighbor of the current node (greedy move),
-    % \item move to the selected node and mark it as visited,
-    % \item repeat from step 2 until all the nodes are marked as visited
+    \item choose an initial node as the starting location.
+    \item from the current point, identify the nearest unvisited point.
+    \item move to the selected node and mark it as visited.
+    \item repeat from step 2 until all the nodes are marked as visited.
 \end{enumerate}
 
-As for the initialization \textit{NN} returns a feasible solution no matter what is the starting node, but the cost of the solution will depend on it.
-Therefore it is a good practice to set up a time limit and restarting the algorithm from different nodes, while keeping the best solution found so far.
-While this method provides a good starting point, further refinement using a metaheuristic is usually necessary, as the initial solution is often far from optimal.
-% This is due to the fact that by choosing always the closest node as the next one, it's creating a lot of crossing between edges, reducing the efficiency of the solution.
-
-\begin{algorithm}[H]
+\begin{algorithm}[htbp]
 	\TitleOfAlgo{\textbf{Nearest Neighbor}}
     \SetKwInOut{Input}{Input}
     \SetKwInOut{Output}{Output}
@@ -48,25 +36,33 @@ While this method provides a good starting point, further refinement using a met
     \Return $tour$, $b$\\
 \end{algorithm}
 
+NN returns a feasible solution regardless of its starting position; however, the resulting solution usually depends on the starting point.
+Therefore, it's good practice to set a time limit and restart the algorithm each time with a different starting point, while keeping track of the best solution found so far.
+While NN is a good starting option, further refinement using a metaheuristic is usually necessary, as the initial solution is often far from optimal.
+
 \subsection{GRASP}
-The above implementation of NN produces a solution which depend only on the starting node from which the algorithm starts, which means that after starting NN on all the nodes of the instance no more new solution will be found.
+The above implementation limits itself in producing solutions only depending on the starting node.
+This means that after starting NN on all the nodes of the instance no more new solution will be found.
 The \textbf{greedy randomized adaptive search procedure} (also known as \textbf{GRASP}) is a technique that allows to introduce a degree of randomization into greedy algorithms like this one.
-The ways we implemented GRASP into the NN algorithm are two:
+We implemented the GRASP technique in our algorithm with two different settings:
 \begin{enumerate}
     \item \textit{almostbest}: 
-    while searching for the nearest node, the algorithm keeps track of the $k$ nearest nodes, than using some probability one of the nodes in this list is selected.
-    A simple selection method is to sort the nodes in the list from nearest to farthest and then starting from the first select it according to a probability value $p$ which is decided at the beginning.
+    while searching for the nearest node, the algorithm keeps track of the $k$ nearest nodes, and then one of the nodes from this list is selected according to a probability rule.
+    A simple selection method consists in sorting the list elements from nearest to farthest, and then, starting with the first element, rejecting it based on a probability $p$.
+    If an element in the list is rejected, the next element is considered as a candidate, and the rejection process continues until either an element is accepted or the end of the list is reached, in which case the last element is chosen.
     \item \textit{random}:
-    this implementation simply adds a completely random node as successor in the solution according at any point, all according to the same probability value $p$.
+    in this implementation we simply add a completely random node as successor in the solution.
+    The probability at which a random successor is chosen over the optimal one is set during the initilization phase.
 \end{enumerate}
-Both these enhancements have allow to run NN indefinitevly while still computing new solutions.
+Both these enhancements allow NN to run indefinitevly while still finding different solutions.
+In this setting, the use of a time limit is necessary.
 
-\subsection{Implementation}
+% \subsection{Implementation}
 %% ????
-We have some options on how we want to run NN. First off we can decide whether to use GRASP or not, but we can also configure 
-how many threads we want to use, if we want to compute the distances between points every time needed or use a matrix to store 
-them, or use AVX functions when possible to improve the performances. We can also choose to use 2-opt or 3-opt after finding a 
-solution to improve its cost, or we can just leave it as is.
+% We have some options on how we want to run NN. First off we can decide whether to use GRASP or not, but we can also configure 
+% how many threads we want to use, if we want to compute the distances between points every time needed or use a matrix to store 
+% them, or use AVX functions when possible to improve the performances. We can also choose to use 2-opt or 3-opt after finding a 
+% solution to improve its cost, or we can just leave it as is.
 
 % ######## Already in coding approaches
 % By using the cost matrix to store the weight of all the edges we can speed up the computation, but this will require a tradeoff 
@@ -78,38 +74,36 @@ solution to improve its cost, or we can just leave it as is.
 % us to find the solution of more complex instances.
 
 % ????
-The function that handles the application of the heuristic is NearestNeighbor, to which we pass both the instance of the 
-problem and the time limit. The application of GRASP and the creation of the required number of threads is handled here.
-We launch each thread with the function loopNearestNeighbor, which loops the application of applyNearestNeighbor selecting 
-a different starting node every time until all nodes have been used or the time limit is reached.
-At all time we keep track of the best solution found so far, which is then the one returned by NearestNeighbor. When the 
-solution is return 2-opt and 3-opt will be applied as desired.
+% The function that handles the application of the heuristic is NearestNeighbor, to which we pass both the instance of the 
+% problem and the time limit. The application of GRASP and the creation of the required number of threads is handled here.
+% We launch each thread with the function loopNearestNeighbor, which loops the application of applyNearestNeighbor selecting 
+% a different starting node every time until all nodes have been used or the time limit is reached.
+% At all time we keep track of the best solution found so far, which is then the one returned by NearestNeighbor. When the 
+% solution is return 2-opt and 3-opt will be applied as desired.
 
-This heuristic presents two main problems: the first is that, been a greedy algorithm, at each iteration we always visit 
-the next closest point and this leads to the creation of many intersection between the edges of the solution, which are 
-clearly inefficient (we deal with this problem using 2-opt or 3-opt). The second one is that is a deterministic algorithm, 
-which means that if we run it from the same starting node multiple times the solution will never change, so the number 
-of total solutions obtainable is limited to the number of nodes.
+% This heuristic presents two main problems: the first is that, been a greedy algorithm, at each iteration we always visit 
+% the next closest point and this leads to the creation of many intersection between the edges of the solution, which are 
+% clearly inefficient (we deal with this problem using 2-opt or 3-opt). The second one is that is a deterministic algorithm, 
+% which means that if we run it from the same starting node multiple times the solution will never change, so the number 
+% of total solutions obtainable is limited to the number of nodes.
 
 \subsection{Performance}
 
-Before checking how NN performs against the optimal solution it is interesting to check if there are some values of GRASP that yield a higher quality solution and which type of GRASP performs better.
+Before checking how NN performs against the optimal solution it is interesting to check if some values of probability for GRASP yield a higher quality solution and if a GRASP setting works better than the other.
 
 \subsubsection{GRASP \textit{almostbest}}
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 	\centering
 	\begin{tikzpicture}
         \begin{axis}[
-            xlabel={Cost Ratio},     % AXIS NAME
-            %ylabel={Iterations/s Ratio},   % AXIS NAME
-            xmin=1, xmax=1.1,       % AXIS LIMITS
-            ymin=0, ymax=82,        % AXIS LIMITS
+            xlabel={Cost Ratio},
+            xmin=1, xmax=1.1,
+            ymin=0, ymax=82,
             xtick={},
             ytick=\empty,
-            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1}, %MOVE LEGEND HERE
+            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1},
 			legend cell align={left},
-            %ymajorgrids=true,
             xmajorgrids=true,
             grid style=dashed,
         ]
@@ -117,34 +111,34 @@ Before checking how NN performs against the optimal solution it is interesting t
         \addplot[Blue,mark=square,mark size=1.5] table[x=cmp0_0.1,y=idx, col sep=semicolon] {csv/nn_almostbest.csv}; 
         \addplot[Red,mark=o,mark size=1.5] table[x=cmp0_0.05,y=idx, col sep=semicolon] {csv/nn_almostbest.csv};
         \addplot[Green,mark=triangle,mark size=1.5] table[x=cmp0_0.01,y=idx, col sep=semicolon] {csv/nn_almostbest.csv}; 
-        \addlegendentry{GRASP Chance = 0.1} 
-        \addlegendentry{GRASP Chance = 0.05}
-        \addlegendentry{GRASP Chance = 0.01}
+        \addlegendentry{0.1} 
+        \addlegendentry{0.05}
+        \addlegendentry{0.01}
             
         \end{axis}
     \end{tikzpicture}
-	\caption{Comparison between different grasp chances in NN with grasp type \textit{almostbest}}
+	\caption{Comparison between different probabilities in NN with GRASP set to \textit{almostbest}}
     \label{fig:nnAlmostbestCmp0}
 \end{figure}
 
-From \figurename{ \ref{fig:nnAlmostbestCmp0}} it is clear that the best probability value is $0.05$.
-However, by gathering more data and drawing a plot showing the relation between the best GRASP value for each instance and the size of the instances themselves, this results does not seem to be accurate.
-There might be various reasons to explain these results, but lacking both the tools and the time, we did not investigate this phenomenon further.
+From \figurename{ \ref{fig:nnAlmostbestCmp0}} it's clear that the best probability value is $0.05$.
+However, by gathering more data and studying the relation between the best GRASP value for each instance and the size of the instance, we found that this conclusion is not exactly accurate.
+There might be various reasons to explain these results, but lacking both the tools and the time, we did not investigate further.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 	\centering
 	\begin{tikzpicture}
         \begin{axis}[
-            ylabel={GRASP Chance},     % AXIS NAME
-            xlabel={Number of Nodes},   % AXIS NAME
+            ylabel={Probability value},
+            xlabel={Number of Nodes},
             domain=48:85901,
-            ymin=0, ymax=0.15,       % AXIS LIMITS
-            xmin=48, xmax=85900,        % AXIS LIMITS
+            ymin=0, ymax=0.15,
+            xmin=48, xmax=85900,
             xtick={},
             ytick={0.12, 0.1, 0.085, 0.075, 0.065, 0.05, 0.03, 0.01, 0},
             yticklabel style={/pgf/number format/fixed, /pgf/number format/precision=3},
             xmode=log,
-            legend style={at={(0.98,0.98)},anchor=north east,legend columns=1}, %MOVE LEGEND HERE
+            legend style={at={(0.98,0.98)},anchor=north east,legend columns=1},
 			legend cell align={left},
             ymajorgrids=true,
             xmajorgrids=true,
@@ -158,23 +152,21 @@ There might be various reasons to explain these results, but lacking both the to
             
         \end{axis}
     \end{tikzpicture}
-	\caption{Best chance for NN GRASP type \textit{almostbest} w.r.t. the size of the instance}
+	\caption{Best probability value for NN GRASP set to \textit{almostbest} w.r.t. the size of the instance}
     \label{fig:nnAlmostbestFunction}
 \end{figure}
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 	\centering
 	\begin{tikzpicture}
         \begin{axis}[
-            xlabel={Cost Ratio},     % AXIS NAME
-            %ylabel={Iterations/s Ratio},   % AXIS NAME
-            xmin=1, xmax=1.05,       % AXIS LIMITS
-            ymin=0, ymax=82,        % AXIS LIMITS
+            xlabel={Cost Ratio},
+            xmin=1, xmax=1.05,
+            ymin=0, ymax=82,
             xtick={},
             ytick=\empty,
-            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1}, %MOVE LEGEND HERE
+            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1},
 			legend cell align={left},
-            %ymajorgrids=true,
             xmajorgrids=true,
             grid style=dashed,
         ]
@@ -183,39 +175,40 @@ There might be various reasons to explain these results, but lacking both the to
         \addplot[Red,mark=o,mark size=1.5] table[x=cmp1_0.05,y=idx, col sep=semicolon] {csv/nn_almostbest.csv};
         \addplot[Green,mark=triangle,mark size=1.5] table[x=cmp1_0.01,y=idx, col sep=semicolon] {csv/nn_almostbest.csv}; 
         \addplot[Purple,mark=star,mark size=1.5] table[x=cmp1_best,y=idx, col sep=semicolon] {csv/nn_almostbest.csv}; 
-        \addlegendentry{GRASP Chance = 0.1} 
-        \addlegendentry{GRASP Chance = 0.05}
-        \addlegendentry{GRASP Chance = 0.01}
-        \addlegendentry{Dynamic GRASP Chance}
+        \addlegendentry{0.1} 
+        \addlegendentry{0.05}
+        \addlegendentry{0.01}
+        \addlegendentry{dynamic}
             
         \end{axis}
     \end{tikzpicture}
-	\caption{Performance of the automatic chance with NN GRASP type \textit{almostbest}}
+	\caption{Comparison between different probabilities, including dynamic probability mode, in NN with GRASP set to \textit{almostbest}}
     \label{fig:nnAlmostbestCmp1}
 \end{figure}
 
-However, since we already noticed such behavior, using machine learning we fitted an exponential curve to those points obtaining the function shown in \figurename{ \ref{fig:nnAlmostbestFunction}}.
-This exponential curve should actually represent the best value to use with NN and GRASP set to \textit{almostbest}, working as a \textbf{dynamic GRASP chance} w.r.t. each instance size.
-After implementing this function into the code, more data was recorded and the results are displayed in \figurename{ \ref{fig:nnAlmostbestCmp1}}.
+However, since we noticed this behavior, with the use of machine learning tools, we found an exponential curve to approximate the best probability value of GRASP \textit{almostbest}, as shown in \figurename{ \ref{fig:nnAlmostbestFunction}}.
+We called this method of selecting the GRASP probability as \textbf{dynamic probability mode}.
+We then proceeded to gather more data using the dynamic probability mode.
+The results, shown in \figurename{ \ref{fig:nnAlmostbestCmp1}}, present a slight advantage of the dynamic probability mode over the $0.5$ fixed probability, which was the best value in previous testing.
 
 \subsubsection{GRASP \textit{random}}
 
-Following the same idea above we discovered a similar situation.
-\figurename{ \ref{fig:nnRandomFunction}} shows the best value of GRASP in \textit{random} mode, with respect to the size of each instance on which the tests were run.
+Following the same procedure as above we discovered a similar situation.
+\figurename{ \ref{fig:nnRandomFunction}} shows the best probability value of GRASP in \textit{random} mode.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 	\centering
 	\begin{tikzpicture}
         \begin{axis}[
-            ylabel={GRASP Chance},     % AXIS NAME
-            xlabel={Number of Nodes},   % AXIS NAME
+            ylabel={Probability value},
+            xlabel={Number of Nodes},
             domain=48:85901,
-            ymin=0, ymax=0.06,       % AXIS LIMITS
-            xmin=48, xmax=85900,        % AXIS LIMITS
+            ymin=0, ymax=0.06,
+            xmin=48, xmax=85900,
             xtick={},
             ytick={0.05,0.03,0.02,0.01,0.005,0.001},
             xmode=log,
-            legend style={at={(0.98,0.98)},anchor=north east,legend columns=1}, %MOVE LEGEND HERE
+            legend style={at={(0.98,0.98)},anchor=north east,legend columns=1},
 			legend cell align={left},
             ymajorgrids=true,
             xmajorgrids=true,
@@ -229,26 +222,24 @@ Following the same idea above we discovered a similar situation.
             
         \end{axis}
     \end{tikzpicture}
-	\caption{Best chance for NN GRASP type \textit{random} w.r.t. the size of the instance}
+	\caption{Best probability value for NN GRASP set to \textit{random} w.r.t. the size of the instance}
     \label{fig:nnRandomFunction}
 \end{figure}
 
-Again by using machine learning algorithms another exponential function was extracted from the points, this time with an overall lower value.
-By gathering the necessary data using the dynamic GRASP chance we can obtrain the comparison in \figurename{ \ref{fig:nnRandomCmp1}}, which shows better performance towards the latter.
+Again, with the use of machine learning algorithms we extracted another exponential function from the best records.
+By gathering the necessary data using the dynamic probability mode, we obtained the comparison in \figurename{ \ref{fig:nnRandomCmp1}}, which shows better performance towards the dynamic mode.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 	\centering
 	\begin{tikzpicture}
         \begin{axis}[
-            xlabel={Cost Ratio},     % AXIS NAME
-            %ylabel={Iterations/s Ratio},   % AXIS NAME
-            xmin=1, xmax=1.2,       % AXIS LIMITS
-            ymin=0, ymax=82,        % AXIS LIMITS
+            xlabel={Cost Ratio},
+            xmin=1, xmax=1.2,
+            ymin=0, ymax=82,
             xtick={},
             ytick=\empty,
-            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1}, %MOVE LEGEND HERE
+            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1},
 			legend cell align={left},
-            %ymajorgrids=true,
             xmajorgrids=true,
             grid style=dashed,
         ]
@@ -257,34 +248,32 @@ By gathering the necessary data using the dynamic GRASP chance we can obtrain th
         \addplot[Red,mark=o,mark size=1.5] table[x=cmp_0.01,y=idx, col sep=semicolon] {csv/nn_random.csv};
         \addplot[Green,mark=triangle,mark size=1.5] table[x=cmp_0.001,y=idx, col sep=semicolon] {csv/nn_random.csv}; 
         \addplot[Purple,mark=star,mark size=1.5] table[x=cmp_best,y=idx, col sep=semicolon] {csv/nn_random.csv}; 
-        \addlegendentry{GRASP Chance = 0.1} 
-        \addlegendentry{GRASP Chance = 0.05}
-        \addlegendentry{GRASP Chance = 0.01}
-        \addlegendentry{Dynamic GRASP Chance}
+        \addlegendentry{0.1} 
+        \addlegendentry{0.05}
+        \addlegendentry{0.01}
+        \addlegendentry{dynamic}
             
         \end{axis}
     \end{tikzpicture}
-	\caption{Performance of the automatic chance with NN GRASP type \textit{random}}
+	\caption{Comparison between different probabilities, including dynamic probability mode, in NN with GRASP set to \textit{random}}
     \label{fig:nnRandomCmp1}
 \end{figure}
 
-\subsubsection{NN GRASP modes comparison}
+\subsubsection{NN GRASP settings comparison}
 
-Now that the best performing parameters for each mode have been esablished, it is possible to compare all the different implementations of NN between each other. 
+Now that the best performing parameters for each mode have been esablished, it is possible to compare all the different implementations of NN between each other.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 	\centering
 	\begin{tikzpicture}
         \begin{axis}[
-            xlabel={Cost Ratio},     % AXIS NAME
-            %ylabel={Iterations/s Ratio},   % AXIS NAME
-            xmin=1, xmax=1.12,       % AXIS LIMITS
-            ymin=0, ymax=82,        % AXIS LIMITS
+            xlabel={Cost Ratio},
+            xmin=1, xmax=1.12,
+            ymin=0, ymax=82,
             xtick={},
             ytick=\empty,
-            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1}, %MOVE LEGEND HERE
+            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1},
 			legend cell align={left},
-            %ymajorgrids=true,
             xmajorgrids=true,
             grid style=dashed,
         ]
@@ -302,24 +291,20 @@ Now that the best performing parameters for each mode have been esablished, it i
     \label{fig:nnCmp}
 \end{figure}
 
-\figurename{ \ref{fig:nnCmp}} clearly shows the GRASP implementations outperforming the canonical implementation of NN by a significant amount.
-While I DON'T KNOW IF I SHOULD WRITE MORE OBVIOUS STUFF ABOUT THIS.
+% \figurename{ \ref{fig:nnCmp}} clearly shows the GRASP implementations outperforming the canonical implementation of NN by a significant amount.
+% While I DON'T KNOW IF I SHOULD WRITE MORE OBVIOUS STUFF ABOUT THIS.
+
+\newpage
 
 \section{Extra Mileage}
 
-The \textit{Extra Mileage} (EM) heuristic is another approach used to find approximate solutions to the Traveling Salesman Problem (TSP).
-While similar to the Nearest Neighbor Heuristic, it comes with a slight variation in the selection process. 
-In EM the idea is to minimize the additional mileage (or distance) traveled at each iteration, rather than always selecting the nearest unvisited city.
-The procedure starts by creating a subtour from the instance, which can be done arbitrarily.
-A subtour with just two nodes is sufficient to initiate the method.
-At each iteration, we take into consideration every unvisited node in every possible position of the current subtour, and compute the increase in cost.
-Let $c : V \times V \rightarrow \mathbb{R}$ be the function that, given two nodes, returns the cost of the edge between them.
-Then $\forall$ covered node $i$ and uncovered node $h$: $\Delta(i,h) := $ cost of visiting $h$ right after $i$:
-\[
-    \Delta(i,h) = c(i,h) + c(h, succ[i]) - c(i, succ[i])
-\]
-We will then procede to pick the most cost-efficient option, hence, the one that increases the cost the least: $min_{i,h}\{\Delta(i,h)\}$.
-The node is inserted into the correct position in the subtour, and this process continues until all nodes are marked as visited, i.e. until the tour is completed.
+The Extra Mileage (EM) heuristic is another greedy algorithm able to find solutions to the TSP, with no guarantees on optimality.
+While similar to NN, it comes with a slight variation in the selection process. 
+In EM the idea is to minimize the additional \textit{mileage} (or cost) traveled at each iteration, rather than always selecting the nearest unvisited node.
+The procedure starts by creating an arbitrary cycle inside the input instance.
+A cycle with just two nodes is sufficient to initiate the method.
+At each iteration, we consider adding every unvisited node at every possible position of the current cycle, and compute the increase in cost, or the \textit{extra mileage}.
+The algorithm continues to add nodes to the solution until there are no nodes left to add.
 
 \begin{algorithm}[H]
 	\TitleOfAlgo{\textbf{Extra Mileage}}
@@ -343,36 +328,44 @@ The node is inserted into the correct position in the subtour, and this process 
     
 \end{algorithm}
 
-\subsection{Implementation}
-Extra mileage, like nearest neighbor, is a "solution builder", it generates a feasible solution starting from just the 
-instance of the problem. Hence, we structured the implementation of this heuristic in a similar concept, maintaining the 
-same configuration options, which are the application of GRASP, the number of threads to use, the computation of the edges' 
-weights on the fly or store them in a matrix, and the application of 2-opt or 3-opt.
+As it was the case with NN, in EM the final solution on a single instance depends on the initialization of the algorithm.
+Since we chose to use a cycle composed of only two nodes as initialization of the algorithm, the number of possible initialization is finite.
+Therefore, after all the possible initialization have been used, no new solution will appear.
+As before, GRASP can be implemented in EM the same exact way we implemented it in NN, with both the settings \textit{almostbest} and \textit{random}.
 
-A similar structure is also implemented for the way we apply extra mileage to the instance. The main function that handles 
-all the processes is ExtraMileage, which receives the instance and the time limit, sets GRASP if needed and creates the 
-required number of threads.
-The threads will run the function runExtraMileage until the time limit, launching in loop the function applyExtraMileage, 
-which is the actual function that computes the heuristic.
+% \subsection{Implementation}
+% Extra mileage, like nearest neighbor, is a "solution builder", it generates a feasible solution starting from just the 
+% instance of the problem. Hence, we structured the implementation of this heuristic in a similar concept, maintaining the 
+% same configuration options, which are the application of GRASP, the number of threads to use, the computation of the edges' 
+% weights on the fly or store them in a matrix, and the application of 2-opt or 3-opt.
+
+% A similar structure is also implemented for the way we apply extra mileage to the instance. The main function that handles 
+% all the processes is ExtraMileage, which receives the instance and the time limit, sets GRASP if needed and creates the 
+% required number of threads.
+% The threads will run the function runExtraMileage until the time limit, launching in loop the function applyExtraMileage, 
+% which is the actual function that computes the heuristic.
 
 \subsection{Performance}
 
-\textbf{almostbest}
+\textbf{GRASP \textit{almostbest}}
+
+Suspecting the same behavior observed while gathering data for NN we directly proceded to the study of the best records in the probaility value of GRASP.
+In this case there doesn't seem to be any correlation between the probability value and the number of nodes inside an instance, as shown by \figurename{ \ref{fig:emAlmostbestFunction}}.
+Since there doesn't seem to be any correlation between the best records and the size of the instances we limited ourselves to simply compare probability values between each other.
 
 \begin{figure}[htbp]
 	\centering
 	\begin{tikzpicture}
         \begin{axis}[
-            ylabel={GRASP Chance},     % AXIS NAME
-            xlabel={Number of Nodes},   % AXIS NAME
-            % domain=48:85901,
-            ymin=0, ymax=0.6,       % AXIS LIMITS
-            xmin=48, xmax=2393,        % AXIS LIMITS
+            ylabel={Probability value},
+            xlabel={Number of Nodes},
+            ymin=0, ymax=0.6,
+            xmin=48, xmax=2393,
             xtick={},
             ytick={0.5,0.4,0.3,0.2,0.15,0.1,0.05,0},
             yticklabel style={/pgf/number format/fixed, /pgf/number format/precision=4},
             xmode=log,
-            legend style={at={(0.98,0.98)},anchor=north east,legend columns=1}, %MOVE LEGEND HERE
+            legend style={at={(0.98,0.98)},anchor=north east,legend columns=1},
 			legend cell align={left},
             ymajorgrids=true,
             xmajorgrids=true,
@@ -380,13 +373,11 @@ which is the actual function that computes the heuristic.
         ]
         
         \addplot[Red,mark=*,mark size=1, only marks] table[y=bestParam, x=n, col sep=semicolon] {csv/em_almostbest.csv};
-        %\addplot[Blue,thick] plot (\x,{\x^(-0.87173)});
-        \addlegendentry{Best records}
-        %\addlegendentry{Learned function}
+        % \addlegendentry{Best records}
             
         \end{axis}
     \end{tikzpicture}
-	\caption{Best chance for EM GRASP type \textit{almostbest} w.r.t. the size of the instance}
+	\caption{Best probability value for EM GRASP set to \textit{almostbest} w.r.t. the size of the instance}
     \label{fig:emAlmostbestFunction}
 \end{figure}
 
@@ -394,15 +385,13 @@ which is the actual function that computes the heuristic.
 	\centering
 	\begin{tikzpicture}
         \begin{axis}[
-            xlabel={Cost Ratio},     % AXIS NAME
-            %ylabel={Iterations/s Ratio},   % AXIS NAME
-            xmin=1, xmax=1.04,       % AXIS LIMITS
-            ymin=0, ymax=69,        % AXIS LIMITS
+            xlabel={Cost Ratio},
+            xmin=1, xmax=1.04,
+            ymin=0, ymax=69,
             xtick={},
             ytick=\empty,
-            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1}, %MOVE LEGEND HERE
+            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1},
 			legend cell align={left},
-            %ymajorgrids=true,
             xmajorgrids=true,
             grid style=dashed,
         ]
@@ -411,10 +400,10 @@ which is the actual function that computes the heuristic.
         \addplot[Red,mark=o,mark size=1.5] table[x=cmp_0.3,y=idx, col sep=semicolon] {csv/em_almostbest.csv};
         \addplot[Green,mark=triangle,mark size=1.5] table[x=cmp_0.1,y=idx, col sep=semicolon] {csv/em_almostbest.csv}; 
         \addplot[Purple,mark=star,mark size=1.5] table[x=cmp_0.01,y=idx, col sep=semicolon] {csv/em_almostbest.csv}; 
-        \addlegendentry{GRASP Chance = 0.5} 
-        \addlegendentry{GRASP Chance = 0.3}
-        \addlegendentry{GRASP Chance = 0.1}
-        \addlegendentry{GRASP Chance = 0.01}
+        \addlegendentry{0.5} 
+        \addlegendentry{0.3}
+        \addlegendentry{0.1}
+        \addlegendentry{0.01}
             
         \end{axis}
     \end{tikzpicture}
@@ -422,22 +411,26 @@ which is the actual function that computes the heuristic.
     \label{fig:emAlmostbestCmp1}
 \end{figure}
 
-\textbf{random}
+\textbf{GRASP \textit{random}}
+
+In the case of the GRASP \textit{random} setting, the linear correlation between probability value and instance size appeared once again.
+Then we completed the testing the exact same way as before and found the exponential function that outputs the "optimal" probability value based on the instance size.
+The results are shown in \figurename{ \ref{fig:emRandomCmp1}} where it's clear that the dynamic probability mode outperformns the fixed one.
 
 \begin{figure}[htbp]
 	\centering
 	\begin{tikzpicture}
         \begin{axis}[
-            ylabel={GRASP Chance},     % AXIS NAME
-            xlabel={Number of Nodes},   % AXIS NAME
+            ylabel={Probability value},
+            xlabel={Number of Nodes},
             domain=48:2393,
-            ymin=0, ymax=0.11,       % AXIS LIMITS
-            xmin=48, xmax=2393,        % AXIS LIMITS
+            ymin=0, ymax=0.11,
+            xmin=48, xmax=2393,
             xtick={},
             ytick={0.1,0.05,0.03,0.02,0.01,0.001},
             yticklabel style={/pgf/number format/fixed, /pgf/number format/precision=3},
             xmode=log,
-            legend style={at={(0.98,0.98)},anchor=north east,legend columns=1}, %MOVE LEGEND HERE
+            legend style={at={(0.98,0.98)},anchor=north east,legend columns=1},
 			legend cell align={left},
             ymajorgrids=true,
             xmajorgrids=true,
@@ -459,15 +452,13 @@ which is the actual function that computes the heuristic.
 	\centering
 	\begin{tikzpicture}
         \begin{axis}[
-            xlabel={Cost Ratio},     % AXIS NAME
-            %ylabel={Iterations/s Ratio},   % AXIS NAME
-            xmin=1, xmax=1.04,       % AXIS LIMITS
-            ymin=0, ymax=69,        % AXIS LIMITS
+            xlabel={Cost Ratio},
+            xmin=1, xmax=1.04,
+            ymin=0, ymax=69,
             xtick={},
             ytick=\empty,
-            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1}, %MOVE LEGEND HERE
+            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1},
 			legend cell align={left},
-            %ymajorgrids=true,
             xmajorgrids=true,
             grid style=dashed,
         ]
@@ -476,30 +467,33 @@ which is the actual function that computes the heuristic.
         \addplot[Red,mark=o,mark size=1.5] table[x=cmp_0.01,y=idx, col sep=semicolon] {csv/em_random.csv};
         \addplot[Green,mark=triangle,mark size=1.5] table[x=cmp_0.001,y=idx, col sep=semicolon] {csv/em_random.csv}; 
         \addplot[Purple,mark=star,mark size=1.5] table[x=cmp_best,y=idx, col sep=semicolon] {csv/em_random.csv}; 
-        \addlegendentry{GRASP Chance = 0.03} 
-        \addlegendentry{GRASP Chance = 0.01}
-        \addlegendentry{GRASP Chance = 0.001}
-        \addlegendentry{Dynamic GRASP Chance}
+        \addlegendentry{0.03} 
+        \addlegendentry{0.01}
+        \addlegendentry{0.001}
+        \addlegendentry{dynamic}
             
         \end{axis}
     \end{tikzpicture}
-	\caption{Comparison of various values of chance with EM GRASP type \textit{random}}
+	\caption{Comparison between different probabilities, including dynamic probability mode, in EM with GRASP set to \textit{random}}
     \label{fig:emRandomCmp1}
 \end{figure}
+
+\subsubsection{EM GRASP settings comparison}
+
+Even though in the \textit{almostbest} setting we weren't able to find any optimal probability/instance-size curve, the \textit{random} is still outperformed by it.
+The deterministic execution is the one with the weakest performance, as it was the case for NN, enhancing the ability of GRASP to produce better results simply by using randomization.
 
 \begin{figure}[htbp]
 	\centering
 	\begin{tikzpicture}
         \begin{axis}[
-            xlabel={Cost Ratio},     % AXIS NAME
-            %ylabel={Iterations/s Ratio},   % AXIS NAME
-            xmin=1, xmax=1.07,       % AXIS LIMITS
-            ymin=0, ymax=69,        % AXIS LIMITS
+            xlabel={Cost Ratio},
+            xmin=1, xmax=1.07,
+            ymin=0, ymax=69,
             xtick={},
             ytick=\empty,
-            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1}, %MOVE LEGEND HERE
+            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1},
 			legend cell align={left},
-            %ymajorgrids=true,
             xmajorgrids=true,
             grid style=dashed,
         ]
@@ -513,25 +507,32 @@ which is the actual function that computes the heuristic.
             
         \end{axis}
     \end{tikzpicture}
-	\caption{Comparison between EM GRASP modes}
+	\caption{Comparison between EM GRASP settings}
     \label{fig:emCmp}
 \end{figure}
 
 \section{Comparison}
 
+In this section both NN and EM are compared when executed within the same time limit.
+Each heuristic used its most performing settings in this comparison, namely dynamic probability mode with GRASP set to \textit{almostbest}.
+It's clear that EM outputs better solutions overall compared to NN.
+This is not always the case and the reason of why that happens can be explained by discussing computational complexity.
+The NN algorithm has a time complexity of $O(n^2)$ while EM is more expensive, with a complexity of $O(n^3)$.
+Then, when the size of the instance becomes very high, the EM heuristic falls behind NN in terms of iterations done each second.
+Therefore we can conclude that the cases in which EM perfomed worse than NN are due to the fact that EM did not have enough time to compute enough solutions and find a good one.
+These computational complexity considerations are made upon our implementations of the algorithms, since there may be a way to optimize the EM heuristic more.
+
 \begin{figure}[htbp]
 	\centering
 	\begin{tikzpicture}
         \begin{axis}[
-            xlabel={Cost Ratio},     % AXIS NAME
-            %ylabel={Iterations/s Ratio},   % AXIS NAME
-            xmin=1, xmax=1.1,       % AXIS LIMITS
-            ymin=0, ymax=69,        % AXIS LIMITS
+            xlabel={Cost Ratio},
+            xmin=1, xmax=1.1,
+            ymin=0, ymax=69,
             xtick={},
             ytick=\empty,
-            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1}, %MOVE LEGEND HERE
+            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1},
 			legend cell align={left},
-            %ymajorgrids=true,
             xmajorgrids=true,
             grid style=dashed,
         ]
@@ -551,15 +552,14 @@ which is the actual function that computes the heuristic.
 	\centering
 	\begin{tikzpicture}
         \begin{loglogaxis}[
-            xlabel={Number of nodes},     % AXIS NAME
-            ylabel={Iterations/s Ratio},   % AXIS NAME
-            xmin=48, xmax=2392,       % AXIS LIMITS
-            ymin=1, ymax=2650,        % AXIS LIMITS
+            xlabel={Number of nodes},
+            ylabel={Iterations/s Ratio},
+            xmin=48, xmax=2392,
+            ymin=1, ymax=2650,
             xtick={},
             ytick={},
-            legend style={at={(0.02,0.98)},anchor=north west,legend columns=1}, %MOVE LEGEND HERE
+            legend style={at={(0.02,0.98)},anchor=north west,legend columns=1},
 			legend cell align={left},
-            %ymajorgrids=true,
             xmajorgrids=true,
             grid style=dashed,
         ]
@@ -571,6 +571,6 @@ which is the actual function that computes the heuristic.
             
         \end{loglogaxis}
     \end{tikzpicture}
-	\caption{Comparison the number of iterations NN and EM were able to do within the same time limit (Probably there is no need for this figure since it can be explained by the fact that NN is $O(n^2)$ while EM is $O(n^3)$)}
+	\caption{Comparison the number of iterations NN and EM were able to do within the same time limit.}
     \label{fig:cmpNNEMiter}
 \end{figure}
