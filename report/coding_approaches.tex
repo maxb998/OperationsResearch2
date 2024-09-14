@@ -1,31 +1,40 @@
 \chapter{Coding Approaches}
 
+In this chapter, we will explore some low-level implementation details common to most algorithms discussed in the following chapters, as well as some important tricks and decisions made during the development of the project.
+
 \section{Approaches to Cost Function}
 
-When talking about TSP, the distance between nodes can be seen as the cost of the edges themselves.
-These type of distances are defined by TSPLIB\cite{tsplib} and can be computed or precomputed and given as input inside the .tsp files, if they are not specified to begin with.
-In this project only instances where the cost of the edges is represented by the distance between nodes will be considered, hence all the instances are made of a fully connected graph.
-Since the edge costs are frequently accessed during the execution of the algorithms studied in this paper, the method to retrieve them must be as fast as possible.
-It is possible to differentiate between two main categories of methods for retrieving edge costs.
-\newline
-The first one consist in computing the distance each time it is needed, while the second method involves computing all the distances at the beginning and storing each edge value inside the memory.
-While the first is the simpleset and most straightforward implementation, it does come with a major drawback: speed.
-Indeed there are more than a couple distance function defined by TSPLIB, almost every instance used during this project development included the need to compute the square root at some point.
-The square root operation is an operation that is computationally intesive for computers that usually require iterative algorithms to compute.
-Nowadays most modern computer architectures include an hardware dedicated square root instruction, which is many times faster compared to the interative algorithm, yet still takes a lot of time to execute.
-\newline
-The second category of methods eliminates this problem, since allowing to compute all cost at the start completely removes the need to use any kind of cost function down the line.
-On paper this method is indeed the one which allows for the greatest speedup, but, unfortunatly that is not always the case.
-Since the graphs under consideration are all fully connected, the number of edges increases in a quadratic relationship to the number of nodes.
-Because of this the amount of memory needed to cache the cost of all edges is in the order of $O(n^2)$, as an example 137MB of memory is needed to store the edge costs of an instance with 6000 nodes.
-Although it is still a small amount of memory compared to the amount of memory modern computers are equipped with, it is too much to fit a normal personal computer CPU cache.
-It's well known that CPU cache is significantly faster than regular system memory, so being unable to fit the cost matrix inside the cache can negatively impact performance.
-Cache misses occur when the data the CPU needs is not found in the fast-access cache memory and must be retrieved from the slower main memory.
-This delay happens because the CPU has to pause its current operations to fetch the required data, leading to increased latency and reduced overall performance.
-For this reason, it is very important to access the cost matrix in a manner that is as localized as possible; otherwise, the resulting algorithm speed can be severely affected.
-\figurename{ \ref{fig:matrixBadIndex}} shows the performance difference caused by swapping the row and column indices when accessing a value of the matrix.
+In the TSP, the factor that determines whether a path in a graph is good or not is its overall cost, which represents the sum of all the edges visited along that path.
+In this project, we used only instances from TSPLIB\cite{tsplib} in order to provide a wide variety of graphs for experimentation.
+This section will explore three different approaches for determining the cost of each edge.
 
-\begin{figure}[H]
+\subsection{TSPLIB Specifications}
+
+We focused exclusively on instances where the cost of the edges in the TSP graph could be computed using specific formulas.
+In these instances, each node is assigned fixed coordinates, in our case $x$ and $y$ coordinates.
+Using these coordinates, the distance between each pair of nodes can be calculated using the appropriate formula according to TSPLIB specifications.
+We limited ourself in the implementation of only the most popular distance functions:
+\begin{itemize}
+    \item EUC\_2D $round(\sqrt{(x_1 - x_2)^2 + (x_1 - x_2)^2})$
+    \item MAX\_2D $round(max(|x_1 - x_2|,|x_1 - x_2|))$
+    \item MAN\_2D $round(|x_1 - x_2| + |x_1 - x_2|)$
+    \item CEIL\_2D $ceil(\sqrt{(x_1 - x_2)^2 + (x_1 - x_2)^2})$
+    \item ATT \qquad $round(\sqrt{(x_1 - x_2)^2 + (x_1 - x_2)^2}/10)$
+\end{itemize}
+Where $round(k)$ returns the integer number closest to $k$ and $ceil(k)$ returns the smallest integers greater or equal than $k$.
+
+\subsection{Basic approach}
+
+The first and simplest method involves computing the cost each time it is needed. 
+The main advantages of this approach are its inherent simplicity and its $O(2n)$ memory requirement, as it only needs to store the coordinates of the nodes in memory.
+Its greatest drawback is the slow execution speed.
+
+In the TSPLIB specifications the majority of the cost functions, which happen to be the same used during all the testing, include some computationally expensive operations.
+The square root operation is one of this operations as it usually requires an iterative algorithm, like the Newton's method\cite{newtonMethod}, to be computed.
+Nowadays most modern computer architectures include a hardware dedicated instructions, which can be many times faster when compared to the software conterparts, yet they still require several CPU cycles in order to be executed.
+In order to use these specialized instructions some additional parameters are required when compiling the code\footnote{\textit{gcc} and \textit{clang} compilers require the parameter "-ffast-math"}.
+
+\begin{figure}[htbp]
     \centering
     \begin{tikzpicture}
         \begin{axis}[
@@ -33,71 +42,121 @@ For this reason, it is very important to access the cost matrix in a manner that
             ymajorgrids=true,
             grid style={dashed,gray!30},
             xlabel=Instance size,
-            ymin=0, ymax=6,
-            ylabel=Relative iterations/s,
-            legend style={at={(0.02,0.98)},anchor=north west,legend columns=-1},
-            symbolic x coords={100,500,1000,5000,10000},
-            log ticks with fixed point,
-            xtick=data,
-            % ytick={1,2,3,4,5},
-            % yticklabels={100\%,200\%,300\%,400\%,500\%},
-            ybar, 
-                    ]
-            \addplot[Blue,fill] table[x=n, y=cmpmatrix_badindex, col sep=semicolon] {csv/cmp_2opt.csv};
-            \addplot[Red,fill] table[x=n, y=cmpmatrix_goodindex, col sep=semicolon] {csv/cmp_2opt.csv};
-            \legend{Bad Indexing , Good Indexing}
-        \end{axis}
-    \end{tikzpicture}
-    \caption{Comparison between good indexing and bad indexing performance} \label{fig:matrixBadIndex}
-\end{figure}
-
-Wanting to obtain greater speed we focused on optimizing one of the method explained above.
-Since the second category methods are harder to optimize, more focus was given in finding a way to compute edge cost faster, thus optimizing the first category of methods.
-The lingering issue lies in the time consumed by the square root operation, which can be streamlined through various optimizations like leveraging a lookup table.
-To address this, the optimization utilized SIMD instructions known as AVX.
-AVX (Advanced Vector Extensions) are a set of CPU instructions designed to perform parallel operations on multiple data elements simultaneously.
-They enable faster processing by allowing a single instruction to operate on multiple data points, enhancing the efficiency of tasks such as mathematical computations and data manipulation.
-Supporting operations between vectors of the size of 256 bits, AVX allows computing eight distance values, in floating-point 32-bit precision, simultaneously, enhancing computational efficiency.
-Another advantage is that with this approach an easy and quick approximation of the square root becomes available.
-By combining the instructions for reverse square root (rsqrt) and reciprocal (rpc), it is possible to achieve an approximation with a relative error smaller than $8 \times 10^{-4}$ in less than half the time required for a precise result.
-This can be leveraged by performing the initial iterations of an algorithm like 2-Opt using the approximation, then switching to exact computation once the approximation can no longer identify optimizing moves.
-However, coding an algorithm to utilize AVX is more complex, and not all algorithms can be optimized this way, as they may not be suitable for vectorized execution (e.g., Simulated Annealing).
-
-\begin{figure}[H]
-    \centering
-    \begin{tikzpicture}
-        \begin{axis}[
-            width=11cm, height=8cm,
-            ymajorgrids=true,
-            grid style={dashed,gray!30},
-            xlabel=Instance size,
-            ymin=0, ymax=0.6,
+            ymin=1, ymax=2,
             ylabel=,
             legend style={at={(0.02,0.98)},anchor=north west,legend columns=-1},
             symbolic x coords={100,500,1000,5000,10000},
             log ticks with fixed point,
             xtick=data,
-            ytick={0,0.1,0.2,0.3,0.4,0.5,0.6},
+            ytick={1,1.2,1.4,1.6,1.8,2},
+            yticklabels={0\%,20\%,40\%,60\%,80\%,100\%},
+            ybar, 
+                    ]
+            \addplot[Blue,fill] table[x=n, y=cmpbase_hwinstructions, col sep=semicolon] {csv/cmp_2opt.csv};
+        \end{axis}
+    \end{tikzpicture}
+    \caption{Speedup of hardware specialized instructions with the Base approach in 2Opt.} \label{fig:baseHWSpecific}
+\end{figure}
+
+Another time-critical operation in the cost functions is the step in which the value is converted to integer, namely the $round$ and $ceil$ functions.
+Although not presenting a slowdown as great as the square root operation, they are still executed in more than a cycle.
+As with the previous case, modern computer architectures provide specific instructions which improve yet again the overall speed of this approach.
+Even with all the optimization described above implemented, this approach remains the slowest one, as we will see in the comparision section.
+
+\subsection{Cost-Matrix approach}
+
+The Cost-Matrix approach consists in storing the cost of the edges of the graph in a matrix $A$ of size $n^2$, where each element $a_{i,j}$ represents the cost of edge $e_{i,j}$.
+In this method, the costs are computed just once at the start of the execution.
+Once the matrix $A$ is initialized, the cost of any edge in the graph can be accessed by retrieving the corresponding value from $A$.
+
+The main advantage of this approach is the ability to obtain the cost of all edges without the need for recalculating them, avoiding the overhead of live computation.
+However, despite this significant benefit, there are some major drawbacks.
+
+The first is memory utilization: it requires $O(n^2 + 2n)$ memory to store both the matrix and the coordinates.
+It is worth noting that matrix $A$ is symmetric, and the main diagonal consists entirely of zeros, which means memory usage can be reduced to $O(n^2/2-n+2n)$.
+However, this memory optimization results in a more complex method of accessing the matrix, as the direct correspondence between edges and matrix elements would be lost.
+
+The second major drawback lies in how modern computers handle memory.
+Main memory is often a significant bottleneck for most algorithms, to the extent that the time complexity of algorithms is sometimes measured by estimating the number of memory accesses performed.
+To improve performance, caching was introduced.
+Caching involves storing frequently accessed portions of memory in faster memory pools, improving the overall speed of memory access.
+With this in mind, cache efficiency is an important factor to consider when comparing the performance of this approach to others.
+The issue arises when an algorithm requires access to locations in $A$ that are neither close together nor consistent, which can significantly reduce performance.
+A clear example of this can be observed in the performance difference between using row-major indexing versus column-major indexing in $A$.
+This is demonstrated in \figurename{ \ref{fig:matrixBadIndex}}, in which the speed difference increases with the size of $A$, which results in lower cache efficiency in the column-major indexing.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}
+        \begin{axis}[
+            width=11cm, height=8cm,
+            ymajorgrids=true,
+            grid style={dashed,gray!30},
+            xlabel=Instance size,
+            ymin=1, ymax=6,
+            ylabel=,
+            legend style={at={(0.02,0.98)},anchor=north west,legend columns=1},
+            symbolic x coords={100,500,1000,5000,10000},
+            log ticks with fixed point,
+            xtick=data,
+            ytick={2,3,4,5},
+            yticklabels={100\%,200\%,300\%,400\%},
+            ybar, 
+                    ]
+            \addplot[Blue,fill] table[x=n, y=cmpmatrix_rowmajor, col sep=semicolon] {csv/cmp_2opt.csv};
+        \end{axis}
+    \end{tikzpicture}
+    \caption{Speedup of row-major indexing against column-major indexing with the Cost-Matrix approach in 2Opt.} \label{fig:matrixBadIndex}
+\end{figure}
+
+\subsection{AVX approach}
+
+AVX (Advanced Vector Extensions)\cite{avxWikipedia} is a set of CPU instructions designed to enhance performance by enabling parallel processing of multiple data points with a single instruction.
+This approach utilizes these kind of SIMD (Single Instruction Multiple Data) extensions to achieve benefits like increased speed and lower memory usage, at the cost of simplicity: AVX code is significantly more difficult to write and debug.
+
+In simple terms, this method extends the Basic approach by computing multiple edge costs simultaneously, at roughly the same computational cost as calculating a single one.
+More specifically, AVX registers are 256 bits in size and support various operations and data types. 
+In this project, we chose to use 32-bit floating-point representation for both the node coordinates and the edge costs.
+This allows a single AVX register to hold a vector of eight values, effectively performing eight computations simultaneously.
+If higher precision is required, AVX instructions also support 64-bit double-precision floating-point numbers, but with the limitation of processing only four elements at a time, which is half the number in our implementation.
+
+The simplicity of the code is sacrificed in several ways.
+The first challenge is the need to arrange the data in a suitable manner so that the vectors loaded into the AVX registers are consistent and not scattered across memory.
+A second challenge arises from handling conditional statements involving individual variables within the eight-packed vectors, which must be processed in two phases.
+Other technical difficulties involve loading the final elements of an array, which can result in loading unintended variables into the register and potentially invalidating the entire computation if not handled properly.
+
+The use of AVX paves the way for further optimizations based on approximation.
+Specifically, the square root operation is optimized by using instructions that perform the \textit{approximated reciprocal square root} and \textit{approximated reciprocal} functions.
+This allows an approximation of the square root function to be obtained in a significantly shorter time frame, thanks to the improved latency and throughput of these instructions.
+Of course, this type of computation can only be used when minimizing or maximizing between edges or some function of them, and the final result must be verified with the more precise function.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}
+        \begin{axis}[
+            width=11cm, height=8cm,
+            ymajorgrids=true,
+            grid style={dashed,gray!30},
+            xlabel=Instance size,
+            ymin=1, ymax=1.6,
+            ylabel=,
+            legend style={at={(0.02,0.98)},anchor=north west,legend columns=-1},
+            symbolic x coords={100,500,1000,5000,10000},
+            log ticks with fixed point,
+            xtick=data,
+            ytick={1,1.1,1.2,1.3,1.4,1.5,1.6},
             yticklabels={0\%,10\%,20\%,30\%,40\%,50\%,60\%},
             ybar, 
                     ]
-            \addplot[Red,fill] table[x=n, y=cmpavx_approx, col sep=semicolon] {csv/cmp_2opt.csv};
-            %\legend{}
+            \addplot[Blue,fill] table[x=n, y=cmpavx_approx, col sep=semicolon] {csv/cmp_2opt.csv};
         \end{axis}
     \end{tikzpicture}
-    \caption{Speedup percentage given by using approximated search in 2opt} \label{fig:avxApprox}
+    \caption{Speedup of approximated edge costs with the AVX approach in 2Opt.} \label{fig:avxApprox}
 \end{figure}
 
 \subsection{Performance Comparison}
 
-Comparing these three approaches is complex due to numerous factors, including the number of iterations the AVX approximated method performs before switching to the exact method, and the manner in which the cost matrix is accessed.
-To minimize as much as possible these external factors, the data was gathered using multiple instances sizes as well as different cost functions.
-\figurename{ \ref{fig:avxShowcase}} compares all approaches, scaling the to the basic one.
-As expected, using the cost matrix method is faster than the basic method for small instances but loses its advantage as instance size increases.
-Throughout the entire testing, the AVX approach consistently proved to be the fastest by a significant margin in every scenario.
-However, it should be noted that the AVX method yielded unstable results on smaller instances, occasionally performing slower than the matrix method.
-
-\begin{figure}[H]
+\begin{figure}[htbp]
     \centering
     \begin{tikzpicture}
         \begin{axis}[
@@ -111,42 +170,37 @@ However, it should be noted that the AVX method yielded unstable results on smal
             symbolic x coords={100,500,1000,5000,10000},
             log ticks with fixed point,
             xtick=data,
-            % ytick={1,2,3,4,5,6,7,8},
+            ytick={1,2,3,4,5,6,7,8},
             % yticklabels={100\%,200\%,300\%,400\%,500\%,600\%,700\%,800\%},
             ybar, 
                     ]
-            \addplot[Blue,fill] table[x=n, y=cmp_base, col sep=semicolon] {csv/cmp_2opt.csv};
+            \addplot[Blue,fill] table[x=n, y=ones, col sep=semicolon] {csv/cmp_2opt.csv};
             \addplot[Red,fill] table[x=n, y=cmp_matrix, col sep=semicolon] {csv/cmp_2opt.csv};
             \addplot[Green,fill] table[x=n, y=cmp_avx, col sep=semicolon] {csv/cmp_2opt.csv};
             \legend{Basic,Matrix,AVX}
         \end{axis}
     \end{tikzpicture}
-    \caption{Comparison of all three approaches in 2-Opt (measurment were taken using the best optimizations found for each approach)} \label{fig:avxShowcase}
+    \caption{Comparison of all three approaches in 2-Opt (measurment were taken using the best optimizations found for each approach).} \label{fig:avxShowcase}
 \end{figure}
 
+Comparing these three approaches is complex due to numerous factors.
+For example, cache efficiency may be better in some TSP instances than in others, depending on how sequentially the cost matrix is accessed.
+To minimize these factors as much as possible, data was gathered using multiple instance sizes, with the most common cost function (EUC\_2D).
+
+\figurename{ \ref{fig:avxShowcase}} compares all three methods, scaled relative to the Basic approach.
+As expected, the Cost-Matrix method is faster than the Basic method for smaller instances but loses its advantage as the instance size increases, likely because the Cost-Matrix becomes too large for the CPU cache.
+Throughout the testing, the AVX approach consistently proved to be the fastest by a significant margin in every scenario.
+However, it should be noted that the AVX method yielded unstable results on smaller instances (fewer than 100 nodes), occasionally performing slower than the Cost-Matrix method.
 
 \section{Multithreading}
 
-Multithreading is a programming technique that allows a computer program to perform multiple tasks concurrently, by dividing its execution into smaller threads of execution that can run independently.
-In most of the algorithms implemented, multithreading consists in running the same code on different threads while using at random different data.
-This is done by means of random seed, which means, giving to each thread running a different seed value so that it may find different solutions from the other running threads.
-During this process the threads share between them the globally best solution found up to that point, so that, at the end of the execution, that solution will be given as output.
-This type of implementation allows to have minimal interaction between threads, allowing a great benefit in term of iterations each second as shown in \figurename{ \ref{fig:multithreadNN}}.
-
-Although this parallel design frequently appears in algorithm implementations, it is not always feasible to use this method.
-For instance, algorithms that utilize CPLEX, which is inherently designed to run on multiple threads, present such a case.
-Another example is the parallelization of the 2-Opt and the 3-Opt algorithms.
-As the instance size increases, both methods require progressively more time to complete their computations.
-Consequently, a straightforward parallel approach was developed.
-The algorithm's scalability varies based on the instance size and the number of threads used, as shown in \figurename{ \ref{fig:multithread2opt}}.
-
-\begin{figure}[H]
+\begin{figure}[htbp]
     \centering
     \begin{tikzpicture}
         \begin{axis}[
             % title={Multithreading speedup of 2-Opt parallel implementation},
             xlabel={Number of Threads},
-            ylabel={Iterations/s Ratio},
+            ylabel={Speedup},
             xmin=1, xmax=8,
             ymin=1, ymax=8,
             xtick={1,2,3,4,5,6,7,8},%,10,12,14,16,18,20},
@@ -166,17 +220,16 @@ The algorithm's scalability varies based on the instance size and the number of 
             
         \end{axis}
     \end{tikzpicture}
-	\caption{Multithreading speedup of Nearest Neighbor parallel implementation} \label{fig:multithreadNN}
+	\caption{Multithreading speedup of Nearest Neighbor parallel implementation.} \label{fig:multithreadNN}
 \end{figure}
 
-
-\begin{figure}[H]
+\begin{figure}[htbp]
     \centering
     \begin{tikzpicture}
         \begin{axis}[
             % title={Multithreading speedup of 2-Opt parallel implementation},
             xlabel={Number of Threads},
-            ylabel={Iterations/s Ratio},
+            ylabel={Speedup},
             xmin=1, xmax=8,
             ymin=0, ymax=8,
             xtick={1,2,3,4,5,6,7,8},
@@ -200,57 +253,49 @@ The algorithm's scalability varies based on the instance size and the number of 
             
         \end{axis}
     \end{tikzpicture}
-	\caption{Multithreading speedup of 2-Opt parallel implementation} \label{fig:multithread2opt}
+	\caption{Multithreading speedup of 2-Opt parallel implementation.} \label{fig:multithread2opt}
 \end{figure}
+
+Multithreading is a programming technique that allows a computer program to perform multiple tasks concurrently, by dividing its execution into smaller threads of execution that can run independently.
+
+In most of the algorithms implemented, multithreading consists in running the same code on different threads, each with its own randomization.
+This is achieved by assigning each thread a different random state value, allowing it to explore different solutions compared to the other threads.
+
+During the computations, the worker threads share the globally best solution found up to that point.
+As a result, at the end of the execution, this solution is provided as the output.
+This implementation minimizes interaction between threads, allowing for optimal speedup, as shown in \figurename{ \ref{fig:multithreadNN}}.
+The fact that smaller instances seem to perform slightly worse is likely due to the shorter execution time of the algorithm, which results in threads spending more time synchronizing the best solution among themselves.
+
+Although this parallel design is commonly used in our algorithm implementations, it is not always applicable.
+For example, algorithms that use CPLEX, which is inherently designed to run on multiple threads, do not rely on this approach.
+
+Another example is the 2-Opt and 3-Opt algorithms.
+Since these algorithms do not use randomization, the previous type of parallelization would result in each thread producing the same solution.
+In these cases, we implemented a straightforward parallelization of the original serial algorithm to optimize large instances in a reasonable amount of time.
+The algorithm's speedup and scalability depend on the instance size, as shown in \figurename{ \ref{fig:multithread2opt}}.
 
 \section{Solution Representation}
 
-Chosing the representation for the TSP solution the memory can be a challenge since there are many ways to do so.
-We chose the \textbf{Path of Indices} as our primary representation.
-This method involves using a single array whose size is equal to the number of nodes.
-In this array, the indices of the nodes are stored, sorted by their occurrence in the tour.
+Choosing the representation for the TSP solution in memory can be challenging due to the many available options, each with its own pros and cons.
+We selected the \textbf{Path of Indices} as the primary representation method.
+This approach uses a single array, with a size equal to the number of nodes, where the indices of the nodes are stored in the order of their occurrence in the tour.
 This representation offers a main advantage that we relied on: the edges in the tour can be easily determined by examining the connections between nodes in adjacent positions in the solution.
-This was useful during the development of the 2-Opt and 3-Opt algorithms, since this representation implicitly represents the edges of the tour, further data structures are not necessary.
-Although it must be noted that in order to make use of this advantage the most, aspecially when using the AVX approach, the first node must be attached at the end of the array as well, to represent the last visited edge in the solution.
-When not working with precomputed edges cost, it is also useful to keep the coordinates X and Y of the nodes sorted to match the solution order.
-This last trick allowed for a great speedup in AVX computation, since a fast \textit{load} instruction could be used as opposed to a \textit{gather} function, which generates a sequence of instructions.
-A small speedup was also observed on the Basic cost computation approach, probably due to the increase in the locality of memory access which caused a reduction in the overall number of cache misses.
+This is advantageous for the 2-Opt and 3-Opt algorithms because this representation implicitly encodes the edges of the tour, allowing the solution to be explored while maintaining high cache efficiency.
+However, it should be noted that to fully utilize this advantage, especially when using the AVX approach, the first node must also be appended to the end of the array to represent the last visited edge in the solution.
 
-\subsection{Cost Cache}
+When not using the Cost-Matrix approach, it is useful to keep a copy of the coordinates $X$ and $Y$ sorted to match the solution order.
+This optimization significantly improved the speed of AVX computation, as a fast \textit{load} instruction could be used instead of a \textit{gather} instruction, which involves multiple steps to be executed.
+A small improvement was also observed on the Basic approach, likely due to increased memory access locality, which reduced the overall number of cache misses.
 
-Throughout our implementations, many times an array of name \textbf{Cost Cache} appears.
-As its name suggests, this simple array contains the cost of each of the edges in the solution, sorted according on the order in which edges are visited in the solution.
+\subsection{Cost-Cache}
 
-\begin{figure}[H]
-    \centering
-    \begin{tikzpicture}
-        \begin{axis}[
-            width=11cm, height=8cm,
-            ymajorgrids=true,
-            grid style={dashed,gray!30},
-            xlabel=Instance size,
-            ymin=0, ymax=0.5,
-            ylabel=,
-            legend style={at={(0.02,0.98)},anchor=north west,legend columns=-1},
-            symbolic x coords={100,500,1000,5000,10000},
-            log ticks with fixed point,
-            xtick=data,
-            ytick={0,0.1,0.2,0.3,0.4},
-            yticklabels={0\%,10\%,20\%,30\%,40\%},
-            ybar, 
-                    ]
-            \addplot[Blue,fill] table[x=n, y=cmpcc_avx_cc, col sep=semicolon] {csv/cmp_2opt.csv};
-            \addplot[Red,fill] table[x=n, y=cmpcc_base_cc, col sep=semicolon] {csv/cmp_2opt.csv};
-            \addplot[Green,fill] table[x=n, y=cmpcc_matrix_cc, col sep=semicolon] {csv/cmp_2opt.csv};
-            \legend{Basic,Matrix,AVX}
-        \end{axis}
-    \end{tikzpicture}
-    \caption{Speedup gained by each approach using the cost cache in 2-Opt} \label{fig:costCacheShowcase} 
-\end{figure}
+Throughout our implementations, you may encounter an array named \textbf{Cost-Cache}.
+As its name suggests, this array contains the cost of each edge in the solution, sorted according to the order in which the edges are visited.
+It allows to gain performance even when using the Cost-Matrix approach, even if it is only a small improvement.
 
-Born at first as a simple caching method to improve the speed of some algorithms, it now serves a vital role in the Tabu Search algorithm.
+Initially conceived as a simple caching method to improve the speed of some algorithms, it now plays a crucial role in the Tabu Search algorithm.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
     \centering
     \begin{tikzpicture}[scale=0.75]
         \node[circle, draw, fill=white] (A) at (2.6, 4) {3};
@@ -280,25 +325,55 @@ Born at first as a simple caching method to improve the speed of some algorithms
         \end{scope}    
 
     \end{tikzpicture}
-    \caption{Example of a Path of Indicies solution}
+    \caption{Representation of the Cost-Cache.}
     \label{fig:solRepresentationExample}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}
+        \begin{axis}[
+            width=11cm, height=8cm,
+            ymajorgrids=true,
+            grid style={dashed,gray!30},
+            xlabel=Instance size,
+            ymin=1, ymax=1.5,
+            ylabel=,
+            legend style={at={(0.02,0.98)},anchor=north west,legend columns=-1},
+            symbolic x coords={100,500,1000,5000,10000},
+            log ticks with fixed point,
+            xtick=data,
+            ytick={1,1.1,1.2,1.3,1.4},
+            yticklabels={0\%,10\%,20\%,30\%,40\%},
+            ybar, 
+                    ]
+            \addplot[Blue,fill] table[x=n, y=cmpcc_base, col sep=semicolon] {csv/cmp_2opt.csv};
+            \addplot[Red,fill] table[x=n, y=cmpcc_matrix, col sep=semicolon] {csv/cmp_2opt.csv};
+            \addplot[Green,fill] table[x=n, y=cmpcc_avx_approx, col sep=semicolon] {csv/cmp_2opt.csv};
+            \legend{Basic,Matrix,AVX}
+        \end{axis}
+    \end{tikzpicture}
+    \caption{Speedup gained by each approach using the cost cache in 2-Opt.} \label{fig:costCacheShowcase} 
 \end{figure}
 
 \subsection{Solution Cost Precision}
 
-All the algorithms we implemented affect the total cost of the solution at some point, the ones that build the solution from scratch increase the cost of the tour as they iterate, while solution optimization oriented algorithm tend to decrease the overall cost by some amount at each iteration.
-When used together with floating point precision, some problems might occur, especially when working on big instances;
-We noticed this behavior when debugging the code of the 2-Opt algorithm:.
-The earliest implementations of this algorithm in fact computed the overall cost offset of the optimization in floating point single precision (32 bits) and applied it to the overall cost which was represented as a double precision floating point (64 bits).
-During the debugging phase a function to check the solution cost was called at each iteration.
-That function simply followed the solution tour and increased the overall cost every time a new edge was visited.
-Of course towards the end of the tour the overall cost would be much higher compared to the single edge cost that was going to be added, which means that, given a high enough instance size, the operation of computing the cost of the solution was bound to loose some precision in its representation.
-This happens because of the very nature of the floating point representation.
-Having said that it also stands to reason that by computing the cost the other way around would produce a ever so slightly different result.
-This effect is even magnified when adding to the overall cost the cost offset value of some move, a value which is added to the sum of all the costs of the edges not, just a portion of them.
-An easy fix for most of the isses caused by this precision problem is to recompute the cost of the solution each time.
-The disadvantages of this fix are the fact that recomputing the cost each time is very computationally expensive, as well as the fact that the problem is not entirely solved, since the same solution cost computed backwards is not guaranteed to be the same.
-We took a different approach to remove the issue entirely: we made the cost of the solution to be represented by a fixed point variable of 128 bits.
-While keeping the edge costs in floating point variables, when converting to the fixed point value truncation gets rid of any possible discrepancies.
-The size of 128 bits was to address a very large range of instances, since some may have nodes very close to each other which translates into small edge costs overall while other may be the opposite.
-We set the separation between integer and fractional part to be in the middle, giving 64 bits for each the integer and fractional parts.
+Throughout the execution of any implemented algorithm, the overall cost of the solution being generated or optimized constantly changes.
+During the project's development, we found it useful to update this value with each modification made to a solution.
+Although this is a good practice for debugging the algorithms, it can sometimes lead to precision issues.
+These issues stem from the limitations of floating-point standard representation.
+For example, consider two numbers, $a=10^8$ and $b=1.53$.
+When using the 32-bit floating-point standard, $a+b=10^8=a$, because the bits of the mantissa of $b$ are \textit{out of bounds} compared to those of $a$.
+This situation can arise when a solution has been optimized, and its overall cost is the result of adding or subtracting minor improvements throughout the optimization process.
+As a result, when the cost of the solution is recomputed at the end of the optimization procedure - usually to verify if it matches the current solution cost - these values might differ slightly. 
+This is especially true for very large instances.
+
+A solution to this problem is to store the cost of the solution in a higher precision variable.
+Extending the variable to 64 bits resolved the issue for the most part, but did not completely eliminate it.
+
+The best solution we found was to switch from floating-point to fixed-point representation.
+Since fixed-point representation does not have a standard implementation in the C language, we implemented one ourselves.
+We used 128 bits, with 64 for the integer part and the remaining 64 for the fractional part.
+This effectively eliminated all the precision issues we encountered, although it's not without drawbacks: fixed-point variables are less flexible with large ranges compared to floating-point ones.
+
+This precision problem is only a concern during debugging, as in production, it may be sufficient to simply recompute the cost of the solution when necessary.
