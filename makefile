@@ -10,7 +10,7 @@ HEADERS_DIR := src/headers/
 # build debug as default
 OBJ_DIR = obj/debug/
 BIN_DIR = bin/debug/
-CFLAGS = -Wall -g -ffast-math -mfma -mavx2 -march=native -mtune=native -Isrc/headers
+CFLAGS = -Wall -g -mfma -msse4 -mavx2 -march=native -mtune=native -Isrc/headers
 LDFLAGS1 = -L/opt/ibm/ILOG/CPLEX_Studio2211/cplex/lib/x86-64_linux/static_pic/ -L/opt/concorde
 LDFLAGS2 = -lcplex -lm -l:concorde.a
 
@@ -18,7 +18,7 @@ LDFLAGS2 = -lcplex -lm -l:concorde.a
 ifeq ($(MODE),exec)
 OBJ_DIR = obj/exec/
 BIN_DIR = bin/exec/
-CFLAGS = -O3 -ftree-loop-im -ffast-math -mfma -mavx2 -march=native -mtune=native -Isrc/headers
+CFLAGS = -O3 -mfma -msse4 -mavx2 -march=native -mtune=native -Isrc/headers
 endif
 
 # separate files into the ones that use cplex and will need the extra compiler flag to find cplex headers and the ones which don't use it
@@ -58,7 +58,7 @@ $(OBJ_DIR)%.o: $(SRC_DIR)%.c $(HEADER_FILES_NO_CPLEX)
 SRC_FILES_PATH := $(SOURCE_NAMES_NO_CPLEX:%=$(SRC_DIR)%) $(SOURCE_NAMES_CPLEX:%=$(SRC_DIR)%)
 
 final:
-	$(CC) -O3 -ftree-loop-im -ffast-math -mfma -mavx2 -march=native -mtune=native -Isrc/headers $(LDFLAGS1) $(CPLEX_HEADERS_COMPILER_FLAG) $(SRC_FILES_PATH) -o bin/exec/main $(LDFLAGS2)
+	$(CC) -O3 -ftree-loop-im -mfma -msse4 -mavx2 -march=native -mtune=native -Isrc/headers $(LDFLAGS1) $(CPLEX_HEADERS_COMPILER_FLAG) $(SRC_FILES_PATH) -o bin/exec/main $(LDFLAGS2)
 
 # delete all gcc output files
 clean:
