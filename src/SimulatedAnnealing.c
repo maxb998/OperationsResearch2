@@ -232,10 +232,12 @@ static void * runSimulatedAnnealing(void * arg)
             thSpecific->nonImprovingIters = 0;
         }
 
+        thSpecific->temperature = thShared->startTemperature;
+
         bool noMove = false;
-        for (int i = 0; (i < SAME_TEMP_MOVES_THRESHOLD) && (currentTime < thShared->timeLimit) && (thSpecific->temperature > STOP_TEMP) && (!noMove); i++)
+        while ((currentTime < thShared->timeLimit) && (thSpecific->temperature > STOP_TEMP) && (!noMove))
         {
-            while ((currentTime < thShared->timeLimit) && (thSpecific->temperature > STOP_TEMP) && (!noMove))
+            for (int i = 0; (i < SAME_TEMP_MOVES_THRESHOLD) && (currentTime < thShared->timeLimit) && (thSpecific->temperature > STOP_TEMP) && !noMove; i++)
             {
                 MoveData move;
                 bool accepted = false;
@@ -252,16 +254,19 @@ static void * runSimulatedAnnealing(void * arg)
                     if (updateBestSolution(thSpecific))
                         thSpecific->nonImprovingIters = 0;
                 }
-                else 
+                else
                     noMove = true;
-
-                thSpecific->temperature *= TEMPERATURE_MULTIPLIER;
 
                 clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
                 currentTime = cvtTimespec2Double(timeStruct);
             }
+
+            thSpecific->temperature *= TEMPERATURE_MULTIPLIER;
         }
         
+        LOG(LOG_LVL_DEBUG, "[%d] pre 2-Opt solution cost = %lf", thSpecific->iters, cvtCost2Double(thSpecific->sol.cost));
+        LOG(LOG_LVL_DEBUG, "[%d] Giving up and running 2-Opt at temp=%e", thSpecific->iters, thSpecific->temperature);
+
         // "fake" remaining annealing move with very low temperature (only improving moves) using 2opt, way less time than just waiting for improving moves to come up at random
         #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
             apply2OptBestFix_fastIteratively(sol, thSpecific->X, thSpecific->Y, thSpecific->costCache);
@@ -269,12 +274,13 @@ static void * runSimulatedAnnealing(void * arg)
             apply2OptBestFix_fastIteratively(sol, thSpecific->costCache);
         #endif
 
+        LOG(LOG_LVL_DEBUG, "[%d] post 2-Opt solution cost = %lf", thSpecific->iters, cvtCost2Double(thSpecific->sol.cost));
+
         if (updateBestSolution(thSpecific))
             thSpecific->nonImprovingIters = 0;
         else
             thSpecific->nonImprovingIters++;
 
-        thSpecific->temperature = thShared->startTemperature;
         thSpecific->iters++;
         thSpecific->nonImprovingIters++;
 
