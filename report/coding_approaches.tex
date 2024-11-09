@@ -32,7 +32,7 @@ Its greatest drawback is the slow execution speed.
 In the TSPLIB specifications the majority of the cost functions, which happen to be the same used during all the testing, include some computationally expensive operations.
 The square root operation is one of this operations as it usually requires an iterative algorithm, like the Newton's method\cite{newtonMethod}, to be computed.
 Nowadays most modern computer architectures include a hardware dedicated instructions, which can be many times faster when compared to the software conterparts, yet they still require several CPU cycles in order to be executed.
-In order to use these specialized instructions some additional parameters are required when compiling the code\footnote{\textit{gcc} and \textit{clang} compilers require the parameter "-ffast-math"}.
+In order to use these specialized instructions some additional parameters are required when compiling the code\footnote{\textit{gcc} requires the parameter "-march=native"}.
 
 \begin{figure}[htbp]
     \centering
@@ -42,25 +42,30 @@ In order to use these specialized instructions some additional parameters are re
             ymajorgrids=true,
             grid style={dashed,gray!30},
             xlabel=Instance size,
+            ylabel=Speedup,
             ymin=1, ymax=2,
-            ylabel=,
             legend style={at={(0.02,0.98)},anchor=north west,legend columns=-1},
             symbolic x coords={100,500,1000,5000,10000},
             log ticks with fixed point,
             xtick=data,
             ytick={1,1.2,1.4,1.6,1.8,2},
-            yticklabels={0\%,20\%,40\%,60\%,80\%,100\%},
+            %yticklabels={0\%,20\%,40\%,60\%,80\%,100\%},
             ybar, 
                     ]
             \addplot[Blue,fill] table[x=n, y=cmpbase_hwinstructions, col sep=semicolon] {csv/cmp_2opt.csv};
         \end{axis}
     \end{tikzpicture}
-    \caption{Speedup of hardware specialized instructions with the Base approach in 2Opt.} \label{fig:baseHWSpecific}
+    \caption{Speedup of the use of the "-ffasth-math" compiler flag with the Base approach in 2Opt.} \label{fig:baseHWSpecific}
 \end{figure}
 
-Another time-critical operation in the cost functions is the step in which the value is converted to integer, namely the $round$ and $ceil$ functions.
-Although not presenting a slowdown as great as the square root operation, they are still executed in more than a cycle.
-As with the previous case, modern computer architectures provide specific instructions which improve yet again the overall speed of this approach.
+A further improvement consists in allowing the compiler to stray from the need of computing exact results and approximate the results\footnote{\textit{gcc} requires the parameter "-ffast-math"}.
+This type of optimization greatly increases performance of this approach, as shown by \figurename{ \ref{fig:baseHWSpecific}}, however it can generate inaccurate results.
+A possible implementation which allows the use this optimization without sacrificing accuracy would be to implement suitable functions in another source file, which will then be compiled using the compiler's built-in tricks and approximations.
+Of course the outputs given by these functions would need to be double checked against accurate data, which can be easily done by recomputing the costs of involved edges using accurate methods.
+
+% Another time-critical operation in the cost functions is the step in which the value is converted to integer, namely the $round$ and $ceil$ functions.
+% Although not presenting a slowdown as great as the square root operation, they are still executed in more than a cycle.
+% As with the previous case, modern computer architectures provide specific instructions which improve yet again the overall speed of this approach.
 Even with all the optimization described above implemented, this approach remains the slowest one, as we will see in the comparision section.
 
 \subsection{Cost-Matrix approach}
@@ -76,15 +81,6 @@ The first is memory utilization: it requires $O(n^2 + 2n)$ memory to store both 
 It is worth noting that matrix $A$ is symmetric, and the main diagonal consists entirely of zeros, which means memory usage can be reduced to $O(n^2/2-n+2n)$.
 However, this memory optimization results in a more complex method of accessing the matrix, as the direct correspondence between edges and matrix elements would be lost.
 
-The second major drawback lies in how modern computers handle memory.
-Main memory is often a significant bottleneck for most algorithms, to the extent that the time complexity of algorithms is sometimes measured by estimating the number of memory accesses performed.
-To improve performance, caching was introduced.
-Caching involves storing frequently accessed portions of memory in faster memory pools, improving the overall speed of memory access.
-With this in mind, cache efficiency is an important factor to consider when comparing the performance of this approach to others.
-The issue arises when an algorithm requires access to locations in $A$ that are neither close together nor consistent, which can significantly reduce performance.
-A clear example of this can be observed in the performance difference between using row-major indexing versus column-major indexing in $A$.
-This is demonstrated in \figurename{ \ref{fig:matrixBadIndex}}, in which the speed difference increases with the size of $A$, which results in lower cache efficiency in the column-major indexing.
-
 \begin{figure}[htbp]
     \centering
     \begin{tikzpicture}
@@ -93,14 +89,14 @@ This is demonstrated in \figurename{ \ref{fig:matrixBadIndex}}, in which the spe
             ymajorgrids=true,
             grid style={dashed,gray!30},
             xlabel=Instance size,
+            ylabel=Speedup,
             ymin=1, ymax=6,
-            ylabel=,
             legend style={at={(0.02,0.98)},anchor=north west,legend columns=1},
             symbolic x coords={100,500,1000,5000,10000},
             log ticks with fixed point,
             xtick=data,
             ytick={2,3,4,5},
-            yticklabels={100\%,200\%,300\%,400\%},
+            %yticklabels={100\%,200\%,300\%,400\%},
             ybar, 
                     ]
             \addplot[Blue,fill] table[x=n, y=cmpmatrix_rowmajor, col sep=semicolon] {csv/cmp_2opt.csv};
@@ -108,6 +104,15 @@ This is demonstrated in \figurename{ \ref{fig:matrixBadIndex}}, in which the spe
     \end{tikzpicture}
     \caption{Speedup of row-major indexing against column-major indexing with the Cost-Matrix approach in 2Opt.} \label{fig:matrixBadIndex}
 \end{figure}
+
+The second major drawback lies in how modern computers handle memory.
+Main memory is often a significant bottleneck for most algorithms, to the extent that the time complexity of algorithms is sometimes measured by estimating the number of memory accesses performed.
+To improve performance, caching was introduced.
+Caching involves storing frequently accessed portions of memory in faster memory pools, improving the overall speed of memory access.
+With this in mind, cache efficiency is an important factor to consider when comparing the performance of this approach to others.
+The issue arises when an algorithm requires access to locations in $A$ that are neither close together nor consistent, which can significantly reduce performance.
+A clear example of this can be observed in the performance difference between using row-major indexing versus column-major indexing in $A$.
+This is demonstrated in \figurename{ \ref{fig:matrixBadIndex}}, in which the speed difference increases with the size of $A$, which results in lower cache efficiency in the column-major indexing.
 
 \subsection{AVX approach}
 
@@ -138,14 +143,14 @@ Of course, this type of computation can only be used when minimizing or maximizi
             ymajorgrids=true,
             grid style={dashed,gray!30},
             xlabel=Instance size,
+            ylabel=Speedup,
             ymin=1, ymax=1.6,
-            ylabel=,
             legend style={at={(0.02,0.98)},anchor=north west,legend columns=-1},
             symbolic x coords={100,500,1000,5000,10000},
             log ticks with fixed point,
             xtick=data,
             ytick={1,1.1,1.2,1.3,1.4,1.5,1.6},
-            yticklabels={0\%,10\%,20\%,30\%,40\%,50\%,60\%},
+            %yticklabels={0\%,10\%,20\%,30\%,40\%,50\%,60\%},
             ybar, 
                     ]
             \addplot[Blue,fill] table[x=n, y=cmpavx_approx, col sep=semicolon] {csv/cmp_2opt.csv};
@@ -165,7 +170,7 @@ Of course, this type of computation can only be used when minimizing or maximizi
             grid style={dashed,gray!30},
             xlabel=Instance size,
             ymin=0, ymax=9,
-            ylabel=Relative iterations/s,
+            ylabel=Speedup,
             legend style={at={(0.02,0.98)},anchor=north west,legend columns=-1},
             symbolic x coords={100,500,1000,5000,10000},
             log ticks with fixed point,
