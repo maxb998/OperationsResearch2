@@ -1,9 +1,14 @@
 \chapter{Heuristics}
+As mentioned in chapter 1, NP-hard problems like the TSP present a serious challenge when computing their exact solution for large instances.
+Exact methods do exist, but the computational time required to apply them make them unsuitable for some real-world scenarios.
+In this chapter we tackle the heuristics that we explored to produce feasible solutions starting from an instance of the Traveling Salesman Problem,
+keeping the computational time in much reasonable margins while managing to maintain an acceptable level of quality.
+
 
 \section{Nearest Neighbor}
 
 Nearest Neighbor (NN) is a simple, intuive and yet relatively effective greedy algorithm designed to find a feasible solution to the Traveling Salesman Problem.
-As its name suggests, NN consists of building a solution to a TSP instance by selecting the nearest node to the last visited one.
+As its name suggests, NN consists of building a solution to a TSP instance by selecting the next node in the path as nearest node to the last visited one.
 The key steps of the algorithm are:
 \begin{enumerate}
     \item choose an initial node as the starting location.
@@ -54,7 +59,7 @@ We implemented the GRASP technique in our algorithm with two different settings:
     in this implementation we simply add a completely random node as successor in the solution.
     The probability at which a random successor is chosen over the optimal one is set during the initilization phase.
 \end{enumerate}
-Both these enhancements allow NN to run indefinitevly while still finding different solutions.
+Both these enhancements allow NN to run indefinitetly while still finding different solutions.
 In this setting, the use of a time limit is necessary.
 
 % \subsection{Implementation}
@@ -298,35 +303,38 @@ Now that the best performing parameters for each mode have been esablished, it i
 
 \section{Extra Mileage}
 
-The Extra Mileage (EM) heuristic is another greedy algorithm able to find solutions to the TSP, with no guarantees on optimality.
-While similar to NN, it comes with a slight variation in the selection process. 
-In EM the idea is to minimize the additional \textit{mileage} (or cost) traveled at each iteration, rather than always selecting the nearest unvisited node.
+The Extra Mileage (EM) heuristic is another technique able to find solutions to the TSP, with no guarantees on optimality.
+While similar to NN, instead of using a greedy behavior it approaches the problem from a more strategic point of view. 
+In EM the idea is to minimize the additional \textit{mileage} (or cost) resulting from adding a node to the circuit at each iteration, rather than always selecting the nearest unvisited node.\\
 The procedure starts by creating an arbitrary cycle inside the input instance.
 A cycle with just two nodes is sufficient to initiate the method.
 At each iteration, we consider adding every unvisited node at every possible position of the current cycle, and compute the increase in cost, or the \textit{extra mileage}.
 The algorithm continues to add nodes to the solution until there are no nodes left to add.
-
-\begin{algorithm}[H]
-	\TitleOfAlgo{\textbf{Extra Mileage}}
-    \SetKwInOut{Input}{Input}
-    \SetKwInOut{Output}{Output}
-    \Input{
-        Graph $G(V,E)$ fully connected \newline
-        $c_{ij}=$ cost of $edge(i,j) \in |E|$ \newline
-        Starting subtour $S$
-    }
-    \Output{A tour $T$ of $G$ and its cost $b$}
-    \BlankLine
-    $T \gets S$\\
-    $b \gets$ $cost(S)$\\
-    \While{{$|T| < |V|$}}{
-        identify $w \in V/T$ s.t. $c_{uw} + c_{wv} - c_{uv}$ is minumum $\forall$ $u,v \in T$, $u \neq v$\\
-        insert $w$ between $u$, $v$ in $T$\\
-        $b \gets b + c_{uw} + c_{wv} - c_{uv}$\\
-    }
-    \Return $tour$, $b$\\
-    
-\end{algorithm}
+\\
+\begin{figure}[htbp]
+    \begin{algorithm}[H]
+        \TitleOfAlgo{\textbf{Extra Mileage}}
+        \SetKwInOut{Input}{Input}
+        \SetKwInOut{Output}{Output}
+        \Input{
+            Graph $G(V,E)$ fully connected \newline
+            $c_{ij}=$ cost of $edge(i,j) \in |E|$ \newline
+            Starting subtour $S$
+        }
+        \Output{A tour $T$ of $G$ and its cost $b$}
+        \BlankLine
+        $T \gets S$\\
+        $b \gets$ $cost(S)$\\
+        \While{{$|T| < |V|$}}{
+            identify $w \in V/T$ s.t. $c_{uw} + c_{wv} - c_{uv}$ is minumum $\forall$ $u,v \in T$, $u \neq v$\\
+            insert $w$ between $u$, $v$ in $T$\\
+            $b \gets b + c_{uw} + c_{wv} - c_{uv}$\\
+        }
+        \Return $tour$, $b$\\
+        
+    \end{algorithm}
+    \caption{Extra Mileage algorithm}
+\end{figure}
 
 As it was the case with NN, in EM the final solution on a single instance depends on the initialization of the algorithm.
 Since we chose to use a cycle composed of only two nodes as initialization of the algorithm, the number of possible initialization is finite.
@@ -415,7 +423,7 @@ Since there doesn't seem to be any correlation between the best records and the 
 
 In the case of the GRASP \textit{random} setting, the linear correlation between probability value and instance size appeared once again.
 Then we completed the testing the exact same way as before and found the exponential function that outputs the "optimal" probability value based on the instance size.
-The results are shown in \figurename{ \ref{fig:emRandomCmp1}} where it's clear that the dynamic probability mode outperformns the fixed one.
+The results are shown in \figurename{ \ref{fig:emRandomCmp1}} where it is clear that the dynamic probability mode outperformns the fixed one.
 
 \begin{figure}[htbp]
 	\centering
@@ -511,7 +519,7 @@ The deterministic execution is the one with the weakest performance, as it was t
     \label{fig:emCmp}
 \end{figure}
 
-\section{Comparison}
+\section{Heuristics Comparison}
 
 In this section both NN and EM are compared when executed within the same time limit.
 Each heuristic used its most performing settings in this comparison, namely dynamic probability mode with GRASP set to \textit{almostbest}.
@@ -544,7 +552,7 @@ These computational complexity considerations are made upon our implementations 
             
         \end{axis}
     \end{tikzpicture}
-	\caption{Comparison the quality of the output of NN and EM}
+	\caption{Comparison of the quality of the output of NN and EM}
     \label{fig:cmpNNEMcost}
 \end{figure}
 
@@ -571,6 +579,6 @@ These computational complexity considerations are made upon our implementations 
             
         \end{loglogaxis}
     \end{tikzpicture}
-	\caption{Comparison the number of iterations NN and EM were able to do within the same time limit.}
+	\caption{Comparison of the number of iterations NN and EM were able to do within the same time limit.}
     \label{fig:cmpNNEMiter}
 \end{figure}

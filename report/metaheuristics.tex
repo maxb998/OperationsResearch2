@@ -12,7 +12,7 @@ Common termination conditions include achieving convergence in the objective fun
 The broad definition of metaheuristics also accounts for the frequent need to adjust parameters for optimization, which may vary across different implementations.
 % This difference with the heuristics can be confirmed also by the ones that we explored in this work.
 
-It's also worth mentioning the fact that heuristics like NN and EM are limited in discovering new solutions at each iteration, while metaheuristics usually start from an existing feasible solution, with the objective of improving it.
+It's also worth mentioning the fact that heuristics like NN and EM are focused on discovering new solutions at each iteration, while metaheuristics usually start from an existing feasible solution, with the objective of improving it.
 % Popular metaheuristics that we worked on are \textit{Simulated Annealing}, \textit{Genetic algorithm}, \textit{Tabu Search}, and \textit{Variable Neighborhood Search0}.
 
 \section{2-Opt}
@@ -58,15 +58,15 @@ These swaps are referred to as \textbf{optimizing swaps} or \textbf{2-Opt moves}
 
 The key step in the 2-Opt algorithm consists in finding and choosing a combination of edges that allows for a 2-Opt move.
 A simple approach consists in scanning all possible swaps and choose the first detected optimizing move.
-Another approach consists in scanning all possible swaps like before, and selecting the swap with has the lowest offset.
+Another approach consists in scanning all possible swaps like before, and selecting the swap with the best offset.
 The first procedure has the advantage of being able to find a suitable swap faster, while the quality of the optimizing swaps is never considered.
-As opposed to the first method, the second procedure takes longer to find swaps, but the swap slected is the one that reduces the cost of the solution the most.
+As opposed to the first method, the second procedure takes longer to find swaps, but the swap selected is the one that reduces the cost of the solution the most.
 In this project we implemented the second approach.
 
 %Once the edges are swapped the total cost of the tour is recalculated, and if it is lower than the previous cost, the swap is integrated in the solution permanently, or until a better swap involving one of those two edges is found.
 %This operation is iterated across all possible pairs of the tour, and is repeated until a time limit is reached, or no further improvements are possible (which involves checking all possible combinations many time, making it infeasible for real-life complex scenarios).
 2-Opt can improve significantly a solution, while maintaining an acceptable computational complexity across the board.
-Each iteration of 2-Opt is of $O(n^2)$ complexity, while the number of iterations depends both on the quality of the starting solution.
+Each iteration of 2-Opt is of $O(n^2)$ complexity, while the number of iterations depends both on the size and quality of the starting solution.
 Its main limitation is the fact that due of it being a local search method, it usually gets stuck in a local minima, thus failing to find the best solution.
 
 \begin{figure}[htbp]
@@ -308,7 +308,7 @@ This not only raises the computational complexity due to the greater number of t
 
 \subsection{Performance}
 
-As expected, the performance of the 3-Opt algorithm consistently surpasses that of 2-Opt.
+As expected, the quality of the solutions found by the 3-Opt algorithm consistently surpasses that of 2-Opt.
 However, the time required by the two algorithms differs significantly: while 2-Opt completes the optimization of a NN generated solution in under a second, the 3-Opt algorithm takes over a minute to fully optimize the same solution.
 
 \begin{figure}[htbp]
@@ -375,7 +375,7 @@ We refer to this as the \textbf{edge locking procedure}.
 For each \textit{forbidden swap} we lock in place a single edge, which is chosed at random between the two edges introduced by the swap.
 Locking both edges will effectively prevent any improvement from any 2-Opt implementation, since the remaining part of the solution in already optimized.
 
-Since 2-Opt is an external method we needed to figure out a way to prevent it to perform swaps which involve edges locked in the tenure.
+In our implementation 2-Opt is an external method called from the tabu function, and we needed to figure out a way to prevent it to perform swaps which involve edges locked in the tenure.
 To this end we exploited the cost cache implementation by setting the cost of locked edges to $-\infty$.
 
 Let's consider a swap $s$ involving two \textit{current} edges, $e_{a,b}$, $e_{c,d}$, which are part of the current solution, and two \textit{alternative} edges, $e_{a,c}$, $e_{b,d}$, which are the edges that would replace $e_{a,b}$ and $e_{c,d}$.
@@ -441,7 +441,7 @@ This edge locking mechanic can be used if 3-Opt is used as local search method i
 \subsection{Performance}
 
 To study the performance of the Tabu Search algorithm we implemented we must first choose a key hyperparameter: the \textbf{tenure size}.
-We three different values which are compared in \figurename{ \ref{fig:tabuParmTune}}.
+We chose three different values which are compared in \figurename{ \ref{fig:tabuParmTune}}.
 
 \begin{figure}[htbp]
 	\centering

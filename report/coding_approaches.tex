@@ -1,11 +1,11 @@
 \chapter{Coding Approaches}
 
-In this chapter, we will explore some low-level implementation details common to most algorithms discussed in the following chapters, as well as some important tricks and decisions made during the development of the project.
+In this chapter, we will explore some low-level implementation details common to most algorithms discussed in the following chapters, as well as some important tricks and decisions taken to improve the quality and efficience of the code during the development of the project.
 
 \section{Approaches to Cost Function}
 
 In the TSP, the factor that determines whether a path in a graph is good or not is its overall cost, which represents the sum of all the edges visited along that path.
-In this project, we used only instances from TSPLIB\cite{tsplib} in order to provide a wide variety of graphs for experimentation.
+In this project, we used instances from TSPLIB\cite{tsplib} in order to provide a wide variety of graphs for experimentation.
 This section will explore three different approaches for determining the cost of each edge.
 
 \subsection{TSPLIB Specifications}
@@ -15,11 +15,11 @@ In these instances, each node is assigned fixed coordinates, in our case $x$ and
 Using these coordinates, the distance between each pair of nodes can be calculated using the appropriate formula according to TSPLIB specifications.
 We limited ourself in the implementation of only the most popular distance functions:
 \begin{itemize}
-    \item EUC\_2D $round(\sqrt{(x_1 - x_2)^2 + (x_1 - x_2)^2})$
-    \item MAX\_2D $round(max(|x_1 - x_2|,|x_1 - x_2|))$
-    \item MAN\_2D $round(|x_1 - x_2| + |x_1 - x_2|)$
-    \item CEIL\_2D $ceil(\sqrt{(x_1 - x_2)^2 + (x_1 - x_2)^2})$
-    \item ATT \qquad $round(\sqrt{(x_1 - x_2)^2 + (x_1 - x_2)^2}/10)$
+    \item EUC\_2D: $round(\sqrt{(x_1 - x_2)^2 + (x_1 - x_2)^2})$
+    \item MAX\_2D: $round(max(|x_1 - x_2|,|x_1 - x_2|))$
+    \item MAN\_2D: $round(|x_1 - x_2| + |x_1 - x_2|)$
+    \item CEIL\_2D: $ceil(\sqrt{(x_1 - x_2)^2 + (x_1 - x_2)^2})$
+    \item ATT: \qquad $round(\sqrt{(x_1 - x_2)^2 + (x_1 - x_2)^2}/10)$
 \end{itemize}
 Where $round(k)$ returns the integer number closest to $k$ and $ceil(k)$ returns the smallest integers greater or equal than $k$.
 
@@ -29,10 +29,10 @@ The first and simplest method involves computing the cost each time it is needed
 The main advantages of this approach are its inherent simplicity and its $O(2n)$ memory requirement, as it only needs to store the coordinates of the nodes in memory.
 Its greatest drawback is the slow execution speed.
 
-In the TSPLIB specifications the majority of the cost functions, which happen to be the same used during all the testing, include some computationally expensive operations.
-The square root operation is one of this operations as it usually requires an iterative algorithm, like the Newton's method\cite{newtonMethod}, to be computed.
+In the TSPLIB specifications the majority of the cost functions, which are the same used during all the testing, include some computationally expensive operations.
+The square root operation is one of these, as it usually requires an iterative algorithm, like the Newton's method\cite{newtonMethod}, to be computed.
 Nowadays most modern computer architectures include a hardware dedicated instructions, which can be many times faster when compared to the software conterparts, yet they still require several CPU cycles in order to be executed.
-In order to use these specialized instructions some additional parameters are required when compiling the code\footnote{\textit{gcc} requires the parameter "-march=native"}.
+In order to take advantage of these specialized instructions some additional parameters are required when compiling the code\footnote{\textit{gcc} requires the parameter "-march=native"}.
 
 \begin{figure}[htbp]
     \centering
@@ -110,24 +110,24 @@ Main memory is often a significant bottleneck for most algorithms, to the extent
 To improve performance, caching was introduced.
 Caching involves storing frequently accessed portions of memory in faster memory pools, improving the overall speed of memory access.
 With this in mind, cache efficiency is an important factor to consider when comparing the performance of this approach to others.
-The issue arises when an algorithm requires access to locations in $A$ that are neither close together nor consistent, which can significantly reduce performance.
+The issue arises when an algorithm requires repeated access to locations in $A$ that are neither close together nor consistent, which can significantly reduce performance.
 A clear example of this can be observed in the performance difference between using row-major indexing versus column-major indexing in $A$.
 This is demonstrated in \figurename{ \ref{fig:matrixBadIndex}}, in which the speed difference increases with the size of $A$, which results in lower cache efficiency in the column-major indexing.
 
 \subsection{AVX approach}
-
+To avoid the drawbacks of the two methodologies presented, we decided to consider an AVX-instructions implementation.
 AVX (Advanced Vector Extensions)\cite{avxWikipedia} is a set of CPU instructions designed to enhance performance by enabling parallel processing of multiple data points with a single instruction.
 This approach utilizes these kind of SIMD (Single Instruction Multiple Data) extensions to achieve benefits like increased speed and lower memory usage, at the cost of simplicity: AVX code is significantly more difficult to write and debug.
 
 In simple terms, this method extends the Basic approach by computing multiple edge costs simultaneously, at roughly the same computational cost as calculating a single one.
 More specifically, AVX registers are 256 bits in size and support various operations and data types. 
-In this project, we chose to use 32-bit floating-point representation for both the node coordinates and the edge costs.
+In this project, we chose to use 32-bit floating-point representation for both node coordinates and edge costs.
 This allows a single AVX register to hold a vector of eight values, effectively performing eight computations simultaneously.
 If higher precision is required, AVX instructions also support 64-bit double-precision floating-point numbers, but with the limitation of processing only four elements at a time, which is half the number in our implementation.
 
 The simplicity of the code is sacrificed in several ways.
 The first challenge is the need to arrange the data in a suitable manner so that the vectors loaded into the AVX registers are consistent and not scattered across memory.
-A second challenge arises from handling conditional statements involving individual variables within the eight-packed vectors, which must be processed in two phases.
+A second challenge arises from handling conditional statements involving individual variables within the eight-elements packed vectors, which must be processed in two phases.
 Other technical difficulties involve loading the final elements of an array, which can result in loading unintended variables into the register and potentially invalidating the entire computation if not handled properly.
 
 The use of AVX paves the way for further optimizations based on approximation.
@@ -298,7 +298,7 @@ Throughout our implementations, you may encounter an array named \textbf{Cost-Ca
 As its name suggests, this array contains the cost of each edge in the solution, sorted according to the order in which the edges are visited.
 It allows to gain performance even when using the Cost-Matrix approach, even if it is only a small improvement.
 
-Initially conceived as a simple caching method to improve the speed of some algorithms, it now plays a crucial role in the Tabu Search algorithm.
+Initially conceived as a simple caching method to improve the speed of some algorithms, it now plays a crucial role in our implementation of the Tabu Search algorithm.
 
 \begin{figure}[htbp]
     \centering
