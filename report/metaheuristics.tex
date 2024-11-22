@@ -707,9 +707,9 @@ The process consists in the following steps:
 \subsection{Performance}
 
 Our implementation of VNS requires tuning only one hyperparameter: the perturbation magnitude interval.
-This interval is defined by two variables, representing the lower and upper bounds, respectively.
+Each time that we apply a perturbation a number within the interval is picked at random, and it represents the amount of nodes in the solution array that are getting swapped.
 
-In order to find the best possible variable tested the algorithm by running it in different configurations multiple times.
+In order to find the best possible variable we tested the algorithm by running it in different configurations multiple times.
 The intervals we chose to test were: [4,4], [5,5], [5,10], [5,20], [5,40] and [20,40].
 As shown by \figurename{ \ref{fig:vnsParmTune}}, the best overall intervals were the [5,5] and the [5,10] with a slight advantage of the latter.
 
@@ -782,18 +782,19 @@ As shown by \figurename{ \ref{fig:vnsParmTune}}, the best overall intervals were
 \end{figure}
 
 To investigate these differences in performance we also compared the speed that each configuration yielded.
-\figurename{ \ref{fig:vnsIters}} highlights the large gap in speed between each of the selected intervals, with the smallest interval running faster compared to larger ones.
+\figurename{ \ref{fig:vnsIters}} highlights the large gap in speed between each of the selected intervals, with smaller intervals, and with smaller bounds, running faster compared to larger ones.
 This behavior is to be expected since a higher perturbation magnitude causes solutions to be of overall worse quality compared to solutions affected by lighter perturbation.
-Of course a the higher quality is a solution, the less time 2-Opt will take to optimize it, therefore explaining the difference in speed between each configuration.
+Of course the higher the quality of a solution after a perturbation, the less time 2-Opt will take to optimize it, which explains the difference in speed between each configuration.
 
 However there is likely more to this behavior than simple execution speed.
 For istance, we can hypothesize that perturbations of a magnitude that is too high could be causing the algorithm to skip over high quality areas in solution space.
 The opposite is true as well: a perturbation that isn't strong enough problably does not manage to escape local minima neighborhoods as it was the case with the [4,4] interval.
 
-A way to obtain the best from both phenomemon likely lies in a different criterion in which the magnitude in picked inside the interval.
-In our implementations we used selected the size of the perturbation by selecting an element in the chosen interval according to a uniform distribution.
-Switching from that to a different distribution, like an exponential distribution, would allow smaller perturbation to be performed more often and larger perturbation rarely.
-This would result in a behavior that is overall fast due to the smaller average size of perturbation, but still able to escape larger valleys in solution space using rare but large perturbations.
+Likely, to find a good hyperparameter that can be of the right magnitude to both prevent skipping over the optimal solution neighborhood but still ensure escaping local minimas, a better criterion shoud be applied. 
+%A way to obtain the best from both phenomemon likely lies in a different criterion in which the magnitude in picked inside the interval.
+In our implementations we selected the size of the perturbation by picking an element in the chosen interval uniformly at random.
+Switching from that to a different distribution, like an exponential distribution, would allow smaller perturbation to be performed more often than larger ones.
+This could result in a behavior that is overall fast due to the smaller average size of perturbation, but still able to escape larger valleys in solution space using rare but large perturbations.
 
 \begin{figure}[htbp]
 	\centering
@@ -900,13 +901,11 @@ Simulated Annealing is a probabilistic metaheuristic inspired by the annealing p
 The key parameter in this method is in fact called \textit{temperature}.
 The value of this parameter indicates the rate for which we allow our method to accept swaps that have a positive offset\footnote{The concepts of swap and offset are the same as in the 2-Opt section}.
 Initially this parameter is set high, which allows for a greater exploration of the solution space.
-At every iteration this parameter is scaled down (by a factor of $0.9$ or $0.95$ for example), gradually avoiding swaps which quality is too low, thus restricting the search space. 
+At every iteration this parameter is scaled down (by a factor of $0.9$ or $0.95$ for example), gradually avoiding swaps of too low quality, thus restricting the search space. 
 This process is regulated to restart every time the temperature gets too low and there are no more swaps that are allowed due to the low temperature.
 
-subsection{Implementation}
-
 In our implementation we decided to perform more than one swap for each temperature value.
-The number of swaps performed before updating the temperature is decided at complile time.
+The number of swaps performed before updating the temperature is decided at complilation time.
 
 Another key point in our implementation is the "forced cooling".
 This technique consists in running 2-Opt whenever the randomized swap search isn't able to find a swap that is accepted given the current temperature value.
@@ -914,7 +913,7 @@ Such behavior is practically always triggered at low temperatures, when the solu
 We chose to set the number of nodes of the instance as attempts upper bound.
 
 We also chose to implement two criteria describing the quality of swaps.
-The chosen criteria than decide a quality value which is compared againts the current annealing temperature: if the quality value is lower than the temperature than the swap is accepted\footnote{A swap is better the lower its quality indicator is}.
+The chosen criteria determines a quality value which is compared againts the current annealing temperature: if the quality value is lower than the temperature then the swap is accepted\footnote{A swap is better the lower its quality indicator is}.
 
 \textbf{Swap ratio acceptance (SRA)} is a criterion which evaluates a swap quality according to the ratio between the newly introduced edges and the replaced ones.
 \[
@@ -1065,7 +1064,7 @@ Since there doesn't seems to be any particular configuration which allows for a 
 \end{figure}
 
 As shown by \figurename{ \ref{fig:annealingCost}}, Simulated Annealing manages to find the best solution, altough this happens only in small instances.
-Another details which is not perceptible from the comparison is that often Simulated Annealing completely fails to find any sort of improvement to the starting solution, ending its computation with the same exact solution as it started with.
+A detail which is not perceptible from the comparison is that often Simulated Annealing completely fails to find any sort of improvement to the starting solution, ending its computation with the same exact solution as it started with.
 
 \newpage
 
@@ -1075,7 +1074,7 @@ Genetic Algorithms (GAs), pioneered by John Holland in the 1960s, represent a si
 They draw inspiration from the principles of natural selection and genetics.
 By simulating processes such as selection, crossover, and mutation on a population of potential solutions, GAs iteratively evolve towards optimal or near-optimal solutions.
 Their ability to efficiently navigate large and complex search spaces has led to their application across diverse domains, including engineering, economics, and artificial intelligence.
-The robustness and versatility of GAs make them a powerful tool for tackling problems with expansive, poorly understood search spaces.
+%The robustness and versatility of GAs make them a powerful tool for tackling problems with expansive, poorly understood search spaces.
 
 In TSP case, Genetic Algorithms are particularly useful due to the complexity and enormity of the solution space.
 GAs approach this by encoding each possible route (solution) as a chromosome.
@@ -1096,9 +1095,9 @@ Aside from the usual iterative part which runs the algorithm over multiple itera
 
 The first generation that GA works upon is, in our case, a set of \textbf{completely randomly generated permutation}.
 With random permutation we mean that, starting from any random valid solution of a TSP instance, the generation procedure simply applies some random permutation on the order in which the nodes are visited.
-Therefore, given enough permuations, it creates a completely different chromosome from the starting one.
+Therefore, given enough permuations, it creates a chromosome very different from the starting one.
 This very same procedure is adopted when introducing new chromosomes in the population.
-Altough not the best in term of producing good solution, it still represent a very quick and easy way to generate unique solutions.
+Altough not the best in term of producing good solutions, it still represent a very quick and easy way to generate new diverse solutions.
 
 \subsubsection{Crossover}
 
@@ -1110,7 +1109,7 @@ We chose the \textbf{edge recombination operator} (\textbf{ERO}).
 The idea behind ERO involves the construction of a merged adiacency matrix from the parents.
 Then, starting from a random node, a successor is chosen based on the number of neighbors it has in the merged adiacency matrix or at random when the candidate nodes have the same number of neighbors.
 At every iteration the successor is added to the offspring and it is than removed from the all the neighborhoods inside the adiacency matrix.
-This process is repeated util the offspring solution is complete and the merged adiacency matrix is empty.
+This process is repeated util the merged adiacency matrix is empty and the offspring solution is complete.
 
 \subsubsection{Mutation}
 
