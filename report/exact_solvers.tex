@@ -15,8 +15,8 @@ This means that every iteration two or more SEC are added or the $x^*$ is optima
 The basic version of the Benders algorithm is described in \figurename{ \ref{fig:CPLEXinit}}.
 
 \begin{figure}[htbp]
-	\textbf{Benders} \\
 	\begin{algorithm}[H]
+		\TitleOfAlgo{\textbf{Benders}}
 		\SetKwInOut{Input}{input}
 		\SetKwInOut{Output}{output}
 		\Input{Graph $G(V,E)$ fully connected }
@@ -38,7 +38,7 @@ The basic version of the Benders algorithm is described in \figurename{ \ref{fig
 		}
 		\Return{$x^*$}
 	\end{algorithm}
-	\caption{Basic version of Benders algorithm} \label{fig:benders}
+	\caption{Pseudocode of the basic version of Benders algorithm} \label{fig:benders}
 \end{figure}
 
 \subsection{Warm Start}
@@ -151,8 +151,8 @@ The final outcome is a feasible TSP solution where a single tour visits each nod
 \end{figure}
 
 \begin{figure}[htbp]
-	\textbf{Patching Heuristic} \\
 	\begin{algorithm}[H]
+		\TitleOfAlgo{\textbf{Patching Heuristic}}
 		\SetKwInOut{Input}{input}
 		\SetKwInOut{Output}{output}
 		\Input{
@@ -170,7 +170,7 @@ The final outcome is a feasible TSP solution where a single tour visits each nod
 		}
 		\Return{$S$}
 	\end{algorithm}
-	\caption{Patching Heuristic pseudocode} \label{fig:patchHeur}
+	\caption{Pseudocode of the Patching Heuristic implemented} \label{fig:patchHeur}
 \end{figure}
 
 With this method the chance of Benders of not producing any solution is greatly reduced, but not nullified since CPLEX needs to finish at least once.
@@ -305,8 +305,8 @@ The generic callback technique allows to run user codes at specified points in t
 For the most simple implementation of Branch and Cut the callback code is just needed to run upon discovering a solution candidate so such solution can be checked for subtours and SEC can be added to the cut pool.
 
 \begin{figure}[htbp]
-	\textbf{Basic Candidate Callback} \\
 	\begin{algorithm}[H]
+		\TitleOfAlgo{\textbf{Basic Candidate Callback}}
 		\SetKwInOut{Input}{input}
 		\Input{ 
 			CPLEX problem $p$ \newline
@@ -323,11 +323,11 @@ For the most simple implementation of Branch and Cut the callback code is just n
 		}
 		\uElseIf{cost($t$) $<$ cost($b$) }{$b \gets t$}
 	\end{algorithm}
-	\caption{Basic Callback function} \label{fig:callbackBase}
+	\caption{Pseudocode of the Basic Callback function} \label{fig:callbackBase}
 \end{figure}
 \begin{figure}[htbp]
-	\textbf{Branch and Cut} \\
 	\begin{algorithm}[H]
+		\TitleOfAlgo{\textbf{Branch and Cut}}
 		\SetKwInOut{Input}{input}
 		\SetKwInOut{Output}{output}
 		\Input{Graph $G(V,E)$ fully connected }
@@ -338,7 +338,7 @@ For the most simple implementation of Branch and Cut the callback code is just n
 		$x^* \gets$ optimal solution of $p$\\
 		\Return{$x^*$}
 	\end{algorithm}
-	\caption{Branch and Cut algorithm} \label{fig:branchAndCut}
+	\caption{Pseudocode of the Branch and Cut algorithm} \label{fig:branchAndCut}
 \end{figure}
 
 The Branch and Cut algorithm implemented this way still has the same weakness of Benders: it's not sure that a feasible solution will be produced until the optimal solution is found.
@@ -355,8 +355,8 @@ Posting can be viewed as a low level implementation of the warm start technique 
 With the implementation of the solution posting the candidate callback is complete and it's shown in \figurename{ \ref{fig:callbackComplete}}
 
 \begin{figure}[htbp]
-	\textbf{Complete Candidate Callback} \\
 	\begin{algorithm}[H]
+		\TitleOfAlgo{\textbf{Complete Candidate Callback}}
 		\SetKwInOut{Input}{input}
 		\Input{ 
 			CPLEX problem $p$ \newline
@@ -378,7 +378,7 @@ With the implementation of the solution posting the candidate callback is comple
 			\textbf{Post Solution} $t$
 		}
 	\end{algorithm}
-	\caption{Candidate callback implementing both patching and posting} \label{fig:callbackComplete}
+	\caption{Pseudocode of the Candidate callback implementing both patching and posting} \label{fig:callbackComplete}
 \end{figure}
 
 \subsection{Concorde and  Usercuts}
@@ -405,8 +405,8 @@ To obtain access to the relaxation solution it is necessary to let CPLEX invoke 
 That said the candidate callback remains the same while the relaxation callback, \figurename{ \ref{fig:relaxCallback}}, is the one which implements usercuts.
 
 \begin{figure}[htbp]
-	\textbf{Relaxation Callback} \\
 	\begin{algorithm}[H]
+		\TitleOfAlgo{\textbf{Relaxation Callback}}
 		\SetKwInOut{Input}{input}
 		\Input{ 
 			CPLEX problem $p$ \newline
@@ -428,7 +428,7 @@ That said the candidate callback remains the same while the relaxation callback,
 			}
 		}
 	\end{algorithm}
-	\caption{Relaxation Callback implementing usercuts using Concorde library} \label{fig:relaxCallback}
+	\caption{Pseudocode of the Relaxation Callback implementing usercuts using Concorde library} \label{fig:relaxCallback}
 \end{figure}
 
 \subsection{Efficiency}

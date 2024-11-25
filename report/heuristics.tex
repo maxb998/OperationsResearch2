@@ -17,30 +17,32 @@ The key steps of the algorithm are:
     \item repeat from step 2 until all the nodes are marked as visited.
 \end{enumerate}
 
-\begin{algorithm}[htbp]
-	\TitleOfAlgo{\textbf{Nearest Neighbor}}
-    \SetKwInOut{Input}{Input}
-    \SetKwInOut{Output}{Output}
-    \Input{
-        Graph $G(V,E)$ fully connected \newline
-        $c_{ij}=$ cost of $edge(i,j) \in |E|$ \newline
-        Starting vertex $s$
-    }
-    \Output{A tour $T$ of $G$ and its cost $b$}
-    \BlankLine
-    $T \gets \{s\}$\\
-    $v \gets s$\\
-    $b \gets 0$\\
-    \While{$|T| < |V|$}{
-        identify $u \in V/T$ s.t. $c_{vu} \leq c_{vj}$, $\forall$ $j \in V/(T \cup {u})$\\
-        $T \gets T \cup \{u\}$\\
-        $b \gets b + c_{vu}$\\
-        $v \gets u$\\
-    }
-    $b \gets b + c_{vs}$\\
-    \Return $tour$, $b$\\
-\end{algorithm}
-
+\begin{figure}[htbp]
+    \begin{algorithm}[H]
+        \TitleOfAlgo{\textbf{Nearest Neighbor}}
+        \SetKwInOut{Input}{Input}
+        \SetKwInOut{Output}{Output}
+        \Input{
+            Graph $G(V,E)$ fully connected \newline
+            $c_{ij}=$ cost of $edge(i,j) \in |E|$ \newline
+            Starting vertex $s$
+        }
+        \Output{A tour $T$ of $G$ and its cost $b$}
+        \BlankLine
+        $T \gets \{s\}$\\
+        $v \gets s$\\
+        $b \gets 0$\\
+        \While{$|T| < |V|$}{
+            identify $u \in V/T$ s.t. $c_{vu} \leq c_{vj}$, $\forall$ $j \in V/(T \cup {u})$\\
+            $T \gets T \cup \{u\}$\\
+            $b \gets b + c_{vu}$\\
+            $v \gets u$\\
+        }
+        $b \gets b + c_{vs}$\\
+        \Return $tour$, $b$\\
+    \end{algorithm}
+    \caption{Pseudocode of the Nearest Neighbor algorithm}
+\end{figure}
 NN returns a feasible solution regardless of its starting position; however, the resulting solution usually depends on the starting point.
 Therefore, it's good practice to set a time limit and restart the algorithm each time with a different starting point, while keeping track of the best solution found so far.
 While NN is a good starting option, further refinement using a metaheuristic is usually necessary, as the initial solution is often far from optimal.
@@ -333,7 +335,7 @@ The algorithm continues to add nodes to the solution until there are no nodes le
         \Return $tour$, $b$\\
         
     \end{algorithm}
-    \caption{Extra Mileage algorithm}
+    \caption{Pseudocode of the Extra Mileage algorithm}
 \end{figure}
 
 As it was the case with NN, in EM the final solution on a single instance depends on the initialization of the algorithm.

@@ -49,9 +49,8 @@ Sequential addition tends to be more straightforward.
 This procedure is summarized in the algorithm in \figurename{ \ref{fig:CPLEXinit}}.
 
 \begin{figure}[htbp]
-	\textbf{CPLEX Initialization} \\
 	\begin{algorithm}[H]
-		%\TitleOfAlgo{\textbf{CPLEX initialization}}
+		\TitleOfAlgo{\textbf{CPLEX initialization}}
 		\SetKwInOut{Input}{input}
 		\SetKwInOut{Output}{output}
 		\Input{Graph $G(V,E)$ fully connected \newline$c_{ij}=$ cost of $edge(i,j) \in |E|$ }
@@ -67,7 +66,7 @@ This procedure is summarized in the algorithm in \figurename{ \ref{fig:CPLEXinit
 		}
 		\Return{$p$}
 	\end{algorithm}
-	\caption{CPLEX initialization algorithm}\label{fig:CPLEXinit}
+	\caption{Pseudocode of the CPLEX initialization algorithm}\label{fig:CPLEXinit}
 \end{figure}
 
 \section{CPLEX edge representation}
@@ -101,9 +100,8 @@ Given such an array, it can be quite troublesome to find an edge given its conne
 To extract the position of edge $(i,j)$ one must use a function like the \textbf{xpos} function, as shown in \figurename{ \ref{fig:xpos}}.
 
 \begin{figure}[htbp]
-	\textbf{xpos} \\
 	\begin{function}[H]
-		%\TitleOfAlgo{\textbf{xpos}}
+		\TitleOfAlgo{\textbf{xpos}}
 		\SetKwInOut{Input}{input}
 		\SetKwInOut{Output}{output}
 		\Input{$i$, $j$, $|V|$}
@@ -113,7 +111,7 @@ To extract the position of edge $(i,j)$ one must use a function like the \textbf
 		\If{$i > j$}{ $i \Leftrightarrow j$\; }
 		\Return{$i |V| + j - \frac{(i + 1) (i + 2)}{2}$}
 	\end{function}
-	\caption{xpos function}\label{fig:xpos}
+	\caption{Pseudocode of the xpos function, used to extract the position of an edge $(i,j)$ in a CPLEX solution array}\label{fig:xpos}
 \end{figure}
 
 Saving the solution this way requires a lot of space as well as an increase in indexing complexity caused by the need use the \textbf{xpos} function.

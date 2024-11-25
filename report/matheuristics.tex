@@ -96,8 +96,8 @@ To roughly detect the local minima one can simply check how many iterations from
 Then, after a threshold value of not-improving iterations has been crossed just decrease the number of fixed edges.
 In this implementation, the starting number of fixed edges is 10\% the number of nodes and it is decreased with steps of equal size.
 \begin{figure}[htbp]
-	\textbf{Hard Fixing} \\
 	\begin{algorithm}[H]
+        \TitleOfAlgo{\textbf{Hard Fixing}}
 		\SetKwInOut{Input}{input}
         \SetKwInOut{Output}{Output}
 		\Input{
@@ -132,7 +132,7 @@ In this implementation, the starting number of fixed edges is 10\% the number of
         }
         \textbf{return} $s$
 	\end{algorithm}
-	\caption{Hard Fixing algorithm} \label{fig:hardfix}
+	\caption{Pseudocode of the Hard Fixing algorithm} \label{fig:hardfix}
 \end{figure}
 
 \subsection{Performance}
@@ -266,8 +266,8 @@ After the algorithm escapes the critical point it's possible to reduce again the
 In this implementation $k$ starts out with the value of 10 and it is increased, when necessary, by 5.
 
 \begin{figure}[htbp]
-	\textbf{Local Branching} \\
 	\begin{algorithm}[H]
+        \TitleOfAlgo{\textbf{Local Branching}}
 		\SetKwInOut{Input}{input}
         \SetKwInOut{Output}{Output}
 		\Input{
@@ -297,7 +297,7 @@ In this implementation $k$ starts out with the value of 10 and it is increased, 
         }
         \textbf{return} $s$
 	\end{algorithm}
-	\caption{Local Branching algorithm} \label{fig:localBranching}
+	\caption{Pseudocode of the Local Branching algorithm} \label{fig:localBranching}
 \end{figure}
 
 \subsection{Performance}

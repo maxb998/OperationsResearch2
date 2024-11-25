@@ -70,8 +70,8 @@ Each iteration of 2-Opt is of $O(n^2)$ complexity, while the number of iteration
 Its main limitation is the fact that due of it being a local search method, it usually gets stuck in a local minima, thus failing to find the best solution.
 
 \begin{figure}[htbp]
-    \textbf{2-Opt} \\
     \begin{algorithm}[H]
+        \TitleOfAlgo{\textbf{2-Opt}}
         \SetKwInOut{Input}{Input}
         % \SetKwInOut{Output}{Output}
         \Input{Graph $G(V,E)$ \newline Cost function $C: E \rightarrow \mathbb{R}$, where $c_{i,j} = C(e_{i,j})$ \newline A tour $T$ of $G$}
@@ -87,7 +87,8 @@ Its main limitation is the fact that due of it being a local search method, it u
             }
         }
     \end{algorithm}
-    \caption{2-Opt algorithm} \label{fig:2OptPseudocode}
+    \caption{Pseudocode of the 2-Opt algorithm} 
+    \label{fig:2OptPseudocode}
 \end{figure}
 
 \subsection{Implementation}
@@ -101,8 +102,8 @@ Therefore an easy fix is to use the approximated search as long as the selected 
 Recomputing the offset at the proposal of any 2-Opt move is necessary, since the approximations might cause an unoptimizing swap to look like an optimizing one.
 
 \begin{figure}[htbp]
-    \textbf{2-Opt with approximated seach} \\
     \begin{algorithm}[H]
+        \TitleOfAlgo{\textbf{2-Opt with aproximated search}}
         \SetKwInOut{Input}{Input}
         % \SetKwInOut{Output}{Output}
         \Input{Graph $G(V,E)$ \newline Cost function $C: E \rightarrow \mathbb{R}$, where $c_{i,j} = C(e_{i,j})$ \newline A tour $T$ of $G$}
@@ -127,7 +128,7 @@ Recomputing the offset at the proposal of any 2-Opt move is necessary, since the
             }
         }
     \end{algorithm}
-    \caption{2-Opt algorithm} \label{fig:2OptPseudocodeApprox}
+    \caption{Pseudocode of the 2-Opt algorithm adjusted to take advantage of aproximations for the Base and AVX versions} \label{fig:2OptPseudocodeApprox}
 \end{figure}
 
 % % In our implementation of 2-opt we decided to optimize heavily the method using AVX functions rather than multithreading 
@@ -392,8 +393,8 @@ Therefore we can apply the 2-Opt procedure in a way which respects the locked ed
 This edge locking mechanic can be used if 3-Opt is used as local search method instead, altough it is not guaranteed to be as effective.
 
 \begin{figure}[htbp]
-    \textbf{Tabu Search} \\
     \begin{algorithm}[H]
+        \TitleOfAlgo{\textbf{Tabu Search}}
         \SetKwInOut{Input}{Input}
         \SetKwInOut{Output}{Output}
         \Input{Graph $G(V,E)$ \newline Cost function $c$ \newline A tour $T$ of $G$ \newline Size of the tenure $l_{size}$}
@@ -423,7 +424,7 @@ This edge locking mechanic can be used if 3-Opt is used as local search method i
         }
         \Return $T_{best}$
     \end{algorithm}
-    \caption{Tabu Search algorithm, where the Cost-cache related part are implicit as they are performed according to the tenure $L$} \label{fig:tabuPseudocode}
+    \caption{Pseudocode of the Tabu Search algorithm. The Cost-cache related part are implicit as they are performed according to the tenure $L$} \label{fig:tabuPseudocode}
 \end{figure}
 
 % \subsection{Implementation}
@@ -552,8 +553,8 @@ VNS explores different neighborhoods of the current solution, and if a better so
 The method involves two main phases: a descent phase, which focuses on finding a local optimum by exploring the current neighborhood, and a perturbation phase, which helps escape local minima by perturbing the solution to explore new areas of the solution space.
 
 \begin{figure}[htbp]
-    \textbf{VNS} \\
     \begin{algorithm}[H]
+        \TitleOfAlgo{\textbf{Variable Neighborhood Search}}
         \SetKwInOut{Input}{Input}
         \SetKwInOut{Output}{Output}
         \Input{Graph $G(V,E)$ \newline Cost function $c$ \newline A tour $T$ of $G$ \newline Perturbation magnitude interval $[p_{min},p_{max}]$}
@@ -569,7 +570,7 @@ The method involves two main phases: a descent phase, which focuses on finding a
         }
         \Return $T_{best}$
     \end{algorithm}
-    \caption{VNS algorithm} \label{fig:vnsPseudocode}
+    \caption{Pseudocode of the VNS algorithm} \label{fig:vnsPseudocode}
 \end{figure}
 
 We implemented this algorithm in a very simple manner, since it does not require any particular data structure like the tenure in Tabu Search.
@@ -651,8 +652,8 @@ The 3-Opt algorithm works just as well here, altough its increased computational
 \subsection{Perturbation implementation}
 
 \begin{figure}[htbp]
-    \textbf{Perturb} \\
     \begin{algorithm}[H]
+        \TitleOfAlgo{\textbf{VNS Perturbation}}
         \SetKwInOut{Input}{Input}
         \SetKwInOut{Output}{Output}
         \Input{A tour $T$ of $G$ as an array of indices \newline Perturbation magnitude $p$}
@@ -677,7 +678,7 @@ The 3-Opt algorithm works just as well here, altough its increased computational
         \BlankLine
         \Return $T$
     \end{algorithm}
-    \caption{Perturbation procedure} \label{fig:vnsPerturbPseudocode}
+    \caption{Pseudocode of the Perturbation procedure implemented in VNS} \label{fig:vnsPerturbPseudocode}
 \end{figure}
 
 The \textbf{perturbation} is the procedure in which the solution is changed to escape the local minima.
