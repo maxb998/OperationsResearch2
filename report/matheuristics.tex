@@ -419,4 +419,33 @@ However, it remains unclear whether Hard Fixing is both more effective and faste
 	\caption{Comparison between Hard Fixing and Local Branching iterations/s \label{fig:hardFixLocBranchIterCMP}}
 \end{figure}
 
-Finally one last comparison can be made between metaheuristics and matheuristics, specifically to check the difference in performance between VNS and Hard Fixing which are the best algorithms in each section.
+Finally we can compare metaheuristics and matheuristics, specifically comparing the performance between VNS and Hard Fixing which are the best algorithms in each section and we can see that VNS yields overall better performance when compared to Hard Fixing.
+
+\begin{figure}[htbp]
+	\centering
+	\begin{tikzpicture}
+        \begin{axis}[
+            xlabel={Cost Ratio},     % AXIS NAME
+            %ylabel={Iterations/s Ratio},   % AXIS NAME
+            xmin=1, xmax=1.06,       % AXIS LIMITS
+            ymin=0, ymax=66,        % AXIS LIMITS
+            xtick={},
+            ytick=\empty,
+            legend style={at={(0.98,0.02)},anchor=south east,legend columns=1}, %MOVE LEGEND HERE
+			legend cell align={left},
+            %ymajorgrids=true,
+            xmajorgrids=true,
+            grid style=dashed,
+        ]
+        
+        \addplot[Blue,mark=square,mark size=1.5] table[x=vns, y=idx, col sep=semicolon] {csv/vnshardfix.csv}; 
+        \addplot[Red,mark=o,mark size=1.5] table[x=hardfix, y=idx, col sep=semicolon] {csv/vnshardfix.csv};
+        \addplot[Green,mark=triangle,mark size=1.5] table[x=opt, y=idx, col sep=semicolon] {csv/vnshardfix.csv};
+        \addlegendentry{VNS}
+        \addlegendentry{Hard Fixing}
+        \addlegendentry{Optimal}
+            
+        \end{axis}
+    \end{tikzpicture}
+	\caption{Comparison between Hard Fixing and VNS} \label{fig:vnshardfix}
+\end{figure}
