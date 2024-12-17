@@ -5,11 +5,11 @@ By integrating these two paradigms, matheuristics aim to efficiently solve large
 This chapter will address two Matheuristics, \textbf{Hard Fixing} and \textbf{Local Branching}, which rely on the use of CPLEX to optimize an already existing solution.
 
 \section{Hard Fixing}
-Hard Fixing is a Matheuristic that optimize an already feasible TSP solution "fixing" in place some of the edges of the solution and the optimizing the rest using CPLEX.
-This approach begins with the generation of an initial feasible solution, typically derived from a heuristic or metaheuristic method such as Tabu Search or Variable Neighborhood Search.
+Hard Fixing is a Matheuristic that optimize an already feasible TSP solution "fixing" in place some of the edges of the solution and optimizing the rest using CPLEX.
+This procedure begins with the generation of an initial feasible solution, typically derived from a heuristic or metaheuristic method such as Tabu Search or VNS.
 Once an initial solution is obtained, the process of "hard fixing" commences.
-In this context, hard fixing refers to selecting a subset of the solution's components and fixing them in place.
-This reduces the problem size and complexity for subsequent optimization steps.
+In this context, hard fixing refers to selecting a subset of the solution's components and fixing them in place with the goal of reducing the problem size and complexity for subsequent optimization steps.
+
 There are multiple ways to choose which edges to fix and which edges to keep "free":
 
 \begin{itemize}
@@ -41,8 +41,9 @@ There are multiple ways to choose which edges to fix and which edges to keep "fr
 	    \caption{Example of a random fix of 8 edges} \label{fig:exampleRndFix}
     \end{figure}
     \item \textbf{Smallest Edges Fix}\\
-    To fix edges based on their cost is a greedy technique that consists in fixing the first $n$ edges sorted in ascending order by cost.
-    This makes that only the edges in the solution with the greatest cost are allowed to be removed from the solution.
+    This is a greedy technique that fixes in place only those edges whose cost is the smallest in the current solution.
+    The first step is to sort the edges of the solution according to their cost, then the cheapest cost are locked by hardfixing.
+    This allows only the edges in the solution with the greatest cost to be swapped out of the solution.
     The avantage here is that intuitevly speaking the most expensive nodes in the solution are the ones that can usually be swapped with some move with cheaper edges.
     The downside is that, once the optimal solution is found among the most expensive edges in the solution, the optimization gets stuck in a local minimum.
     \begin{figure}[H]
@@ -70,8 +71,8 @@ There are multiple ways to choose which edges to fix and which edges to keep "fr
     \end{figure}
     \item \textbf{Sequence Fix}\\
     Fixing along a sequence means that edges are locked starting from a node, following the path of the known solution until the desired number of nodes have been locked.
-    On the upside this technique allows to optimize contigous sections of the solution, resulting in obtaining piecese of solution that, taken alone, have reached optimality.
-    The disadvantage is that this method allows only localized moves, while completely negleting optimizations that view the problem with a wider angle.
+    On the upside this technique allows to optimize contigous sections of the solution, resulting in a solution that is composed of a sequence of optimal paths.
+    The disadvantage of this method is that it permits only localized moves, thereby neglecting optimizations that consider the problem from a broader perspective.
     \begin{figure}[H]
         \centering
         \begin{tikzpicture}[thick,scale=.6]
@@ -89,11 +90,11 @@ There are multiple ways to choose which edges to fix and which edges to keep "fr
 	    \caption{Example of a sequence fix of 8 edges} \label{fig:exampleSeqFix}
     \end{figure}
 \end{itemize}
-Since every one of these techniques have different advantages and disadvantages, a good strategy is to choose at random which method to use to fix edges at every iteration.
-Even by using all of these procedure together there is the risk of becoming stuck in a local minima.
-There surely exist a lot of ways to escape a local minimum point, the simplest one is just to reduce the amount of fixed edges once the solution stops improving.
+Since every one of these techniques have different advantages and disadvantages, we chose to mix them all together by selecting at random which method to use to fix edges at every iteration.
+Even by using all of these procedure together there is the risk of getting stuck in a local minima.
 To roughly detect the local minima one can simply check how many iterations from the last improving iteration have been performed.
-Then, after a threshold value of not-improving iterations has been crossed just decrease the number of fixed edges.
+There surely are many ways to escape a local minimum point, one of the simplest is to just reduce the amount of fixed edges once the solution stops improving.
+After a threshold value of not-improving iterations has been reached, decrease the number of fixed edges.
 In this implementation, the starting number of fixed edges is 10\% the number of nodes and it is decreased with steps of equal size.
 \begin{figure}[htbp]
 	\begin{algorithm}[H]
@@ -137,9 +138,27 @@ In this implementation, the starting number of fixed edges is 10\% the number of
 
 \subsection{Performance}
 
-Even though matheuristics are written on top of the exact method Branch and Cut, their output solution is not guaranteed to be optimal since, from a high level viewpoint, their behavior is more comparable to a metaheuristic.
-Therefore it makes sense for algorithms like Hard Fixing to be analyzed on the quality of the output solution.
-\figurename{ \ref{fig:hardfixCost}} does exactly that, showing the difference between the cost of the solution used as input, the output solution as well as the optimal solution, in order to derive meaningful conclusion on the performance of the algorithm.
+\begin{table}[htbp]
+	\centering
+	\begin{tabular}{|c|c|}
+        \hline \textbf{Instance size} & \textbf{Time limit} \\
+		\hline 0-80 & 1 \\
+		\hline 100-200 & 3 \\
+        \hline 220-320 & 8 \\
+        \hline 400-500 & 20 \\
+        \hline 500-800 & 60 \\
+        \hline 1000-1440 & 180 \\
+        \hline 1570-2400 & 400 \\
+        \hline
+	\end{tabular}
+    \vspace{2mm}    
+	\caption{Time limit for matheuristics} \label{tab:mathheurTlim}
+\end{table}
+
+Even though matheuristics are written on top of the exact method Branch and Cut, their output is not guaranteed to be optimal since, from a high level viewpoint, their behavior is more comparable to a metaheuristic.
+Therefore it makes sense for algorithms like Hard Fixing to be analyzed on the quality of the output solution rather than their efficiency like with the exact methods.
+
+\figurename{ \ref{fig:hardfixCost}} shows the difference between the cost of the solution used as input, the output solution as well as the optimal solution, in order to derive meaningful conclusion on the performance of the algorithm.
 \begin{figure}[htbp]
 	\centering
     \begin{tikzpicture}
@@ -170,42 +189,33 @@ Therefore it makes sense for algorithms like Hard Fixing to be analyzed on the q
 \end{figure}
 Like with the other algorithms using CPLEX shown before, the time limit set to find the initial solution was set to 1\% of the full time limit.
 The initial solution was obtained using Nearest Neighbor and 2-Opt.
-% Time limits are set as follows:
-% \begin{itemize}
-%     \item from 0 to 80 nodes, 1 second
-%     \item form 100 to 200 nodes, 3 seconds
-%     \item from 220 to 320 nodes, 8 seconds
-%     \item from 400 to 500 nodes, 20 seconds
-%     \item from 500 to 800 nodes, 60 seconds
-%     \item from 1000 to 1440 nodes, 180 seconds
-%     \item from 1440 to 2400 nodes, 400 seconds
-% \end{itemize}
-\begin{table}[htbp]
-	\centering
-	\begin{tabular}{c|c|c|}
-        & \textbf{Optimization Amount} & \textbf{Distance from Optimal} \\
-		\hline \textbf{mean} & 3.34\% & 0.96\% \\
-		\hline \textbf{std dev} & 1.70\% & 1.08\% \\
-        \hline \textbf{Q(25\%)} & 2.23\% & 0.14\% \\
-        \hline \textbf{Q(50\%)} & 3.39\% & 0.47\% \\
-        \hline \textbf{Q(75\%)} & 4.25\% & 1.42\% \\
-	\end{tabular}
-    \vspace{2mm}
-	\caption{Statistics on results from Hard Fixing} \label{tab:hardfixStats}
-\end{table}
+
+% \begin{table}[htbp]
+% 	\centering
+% 	\begin{tabular}{c|c|c|}
+%         & \textbf{Optimization Amount} & \textbf{Distance from Optimal} \\
+% 		\hline \textbf{mean} & 3.34\% & 0.96\% \\
+% 		\hline \textbf{std dev} & 1.70\% & 1.08\% \\
+%         \hline \textbf{Q(25\%)} & 2.23\% & 0.14\% \\
+%         \hline \textbf{Q(50\%)} & 3.39\% & 0.47\% \\
+%         \hline \textbf{Q(75\%)} & 4.25\% & 1.42\% \\
+% 	\end{tabular}
+%     \vspace{2mm}
+% 	\caption{Statistics on results from Hard Fixing} \label{tab:hardfixStats}
+% \end{table}
 
 \section{Local Branching}
 
-Local Branching is a matheuristic technique that basically performes a series of "k-Opt" move to improve the solution.
-Like Hard Fixing, it begins with a feasible initial solution, which can be generated using various heuristics or metaheuristics.
-This initial solution serves as a starting point for the local branching process.
-In Local Branching, a neighborhood of the current solution is defined by introducing additional constraints, known as local branching constraints.
-These constraints limit the search to a subset of solutions that are "close" to the current solution in terms of some predefined criteria, such as the number of differing edges in the TSP tour.
+Local Branching is a matheuristic technique that basically performes a series of “k-Opt” move to improve the solution.
+Like Hard Fixing, it begins with a feasible initial solution, which can be generated using various heuristics or metaheuristics which serves as a starting point for the local branching process.
+In Local Branching, a neighborhood of the current solution is defined by introducing additional constraints, that we will refer to as \textbf{local branching constraints}.
+These constraints limit the search to a subset of solutions that are close to the current solution in terms of some predefined criteria, such as the number of differing edges in the TSP tour.
+
 By restricting the search to this localized region, the optimization process can focus on improving the solution within a manageable computational effort.
 The optimization within this local neighborhood is performed using mathematical programming techniques, in this case, the Branch and Cut algorithm implemented with CPLEX is used.
 The solver explores this restricted solution space to find an improved solution.
 If an improved solution is found, it becomes the new incumbent solution, and a new neighborhood is defined around it.
-This iterative process of defining local neighborhoods and optimizing within them continues until a stopping criterion is met, in this case a time limit.
+This iterative process of defining local neighborhoods and optimizing within them continues until a stopping criterion is met, which in our case is a time limit.
 
 \begin{figure}[htbp]
     \centering
@@ -253,15 +263,15 @@ This iterative process of defining local neighborhoods and optimizing within the
 \end{figure}    
 
 The implementation of this matheuristic is not much different from the implementation of Hard Fixing.
-Of course the initial solution will be used to initialize the CPLEX problem and the Branch and Cut algorithm will be used as well.
-The differences with Hard Fixing is in the way the CPLEX problem is modified: instead of changing the lower bound of variables a new constraint is added.
-Given $n$ as the number of nodes, $S = \{(a,b),(b,c),(c,d),...\}$ as the starting solution, $|S| = n$, and $k$ as the neighborhood size, the \textbf{locality constraint} is defined as follows
+Of course we used the initial solution to initialize the CPLEX problem and the Branch and Cut algorithm as well.
+The difference with Hard Fixing is in the way the CPLEX problem is modified: instead of changing the lower bound of variables we add new constraint.
+Given $n$ as the number of nodes, $S = \{(a,b),(b,c),(c,d),...\}$ as the starting solution, $|S| = n$, and $k$ as the neighborhood size, the \textbf{locality constraint} is defined as follows.
 \[
     \sum_{e \in S} x_e >= n-k
 \]
 Of course, as it was the case with all 2-Opt, there is the risk in becoming stuck into a local minima solution for a given value of $k$.
-When that happens, metaheuristics like Variable Neighborhood Search and Tabu Search used the techniques of performing some kind of non-improving moves so to escape the local minimum point.
-In Local Branching it's not necessary to use such a technique since it's possible to increase $k$ without any efforts, allowing to escape the local minima at the cost of a harder problem for Branch and Cut to solve.
+When that happens, metaheuristics like Variable Neighborhood Search and Tabu Search used the techniques of performing some kind of non-improving moves in order to escape the local minimum point.
+In Local Branching it's not necessary to use such a technique since it's possible to increase $k$ without requiring any additional efforts, allowing to escape the local minima at the cost solving a harder problem with Branch and Cut.
 After the algorithm escapes the critical point it's possible to reduce again the value of $k$, to return to the original problem complexity.
 In this implementation $k$ starts out with the value of 10 and it is increased, when necessary, by 5.
 
@@ -302,7 +312,7 @@ In this implementation $k$ starts out with the value of 10 and it is increased, 
 
 \subsection{Performance}
 
-The data shown by \figurename{ \ref{fig:localBranchingCost}} and \tablename{ \ref{tab:localBranchingStats}} was gathered using the same settings, the same time limits as well as on the same instances as with Hard Fixing data collection.
+We performed the testing using the same settings, the same time limits as well as the same instances as with Hard Fixing data collection.
 
 \begin{figure}[htbp]
 	\centering
@@ -333,28 +343,26 @@ The data shown by \figurename{ \ref{fig:localBranchingCost}} and \tablename{ \re
 	\caption{Performance profile graph of Local Branching\label{fig:localBranchingCost}}
 \end{figure}
 
-\begin{table}[htbp]
-	\centering
-	\begin{tabular}{c|c|c|}
-        & \textbf{Optimization Amount} & \textbf{Distance from Optimal} \\
-		\hline \textbf{mean} & 2.70\% & 1.55\% \\
-		\hline \textbf{std dev} & 1.81\% & 1.80\% \\
-        \hline \textbf{Q(25\%)} & 1.24\% & 0.00\% \\
-        \hline \textbf{Q(50\%)} & 2.56\% & 0.76\% \\
-        \hline \textbf{Q(75\%)} & 3.84\% & 2.79\% \\
-	\end{tabular}
-    \vspace{2mm}
-	\caption{Statistics on results from Local Branching} \label{tab:localBranchingStats}
-\end{table}
+% \begin{table}[htbp]
+% 	\centering
+% 	\begin{tabular}{c|c|c|}
+%         & \textbf{Optimization Amount} & \textbf{Distance from Optimal} \\
+% 		\hline \textbf{mean} & 2.70\% & 1.55\% \\
+% 		\hline \textbf{std dev} & 1.81\% & 1.80\% \\
+%         \hline \textbf{Q(25\%)} & 1.24\% & 0.00\% \\
+%         \hline \textbf{Q(50\%)} & 2.56\% & 0.76\% \\
+%         \hline \textbf{Q(75\%)} & 3.84\% & 2.79\% \\
+% 	\end{tabular}
+%     \vspace{2mm}
+% 	\caption{Statistics on results from Local Branching} \label{tab:localBranchingStats}
+% \end{table}
 
 \section{Comparison}
 To conclude this chapter, \figurename{ \ref{fig:hardFixLocBranchCMP}} provides graphical means to compare the quality of the solutions of Hard Fixing and Local Branching.
-It is clear that Hard Fixing holds is a superior algorithm given the same time limit, but there is more to it than that.
-\figurename{ \ref{fig:hardFixLocBranchIterCMP}} shows the percentage difference in the number of iterations per second recored in every test.
+It is clear that Hard Fixing holds is a superior algorithm given the same time limit, but this is just another case of an algorithm being faster than the other one.
 The significantly higher number of iterations performed by Hard Fixing questions the autenticity of the results and poses another question: would local branching perform better or worse if enough time is given to match Hard Fixing speed?
-To answer this question a significant amount of data would need to be gathered and studied.
-The proposed experiment, while valuable, is beyond the current scope of this project.
-Considering the limited resources available, it can be concluded that this implementation of Hard Fixing is generally superior to the Local Branching method.
+To answer this question we would need to gather and studied a significant amount of data and, while this is still a valuable experiment, it is beyond the scope of this project.
+Considering the limited resources available, we concluded that this implementation of Hard Fixing is generally superior to the Local Branching method and that changing the bounds of some variables in a CPLEX problem is more effective than to introduce a new constraint.
 However, it remains unclear whether Hard Fixing is both more effective and faster, or if its faster execution simply allows it to achieve better results within the same timeframe.
 
 \begin{figure}[htbp]
@@ -410,3 +418,5 @@ However, it remains unclear whether Hard Fixing is both more effective and faste
     \end{tikzpicture}
 	\caption{Comparison between Hard Fixing and Local Branching iterations/s \label{fig:hardFixLocBranchIterCMP}}
 \end{figure}
+
+Finally one last comparison can be made between metaheuristics and matheuristics, specifically to check the difference in performance between VNS and Hard Fixing which are the best algorithms in each section.
