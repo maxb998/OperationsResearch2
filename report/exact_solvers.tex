@@ -10,8 +10,8 @@ Both of these approaches are based around CPLEX.
 Benders is a method that, given enough time, allows to find an optimal solution to the TSP.
 The algorithm consists in running CPLEX's ILP solver multiple times on the problem $p$ obtained using CPLEX Initialization (\figurename{ \ref{fig:CPLEXinit}}).
 This is done until the solution $x^*$ obtained at the current iteration does not contain any subtours, or the number of subtours in the solution is equal to one.
-Every time $x^*$ contains two or more subtours $x^*$ must be rejected and a number equal to the number of subtours found of SEC must be added to $p$.
-This means that every iteration two or more SEC are added or the $x^*$ is optimal.
+Every time $x^*$ contains two or more subtours it must be rejected and a number equal to the number of subtours found of SEC must be added to $p$.
+This means that every iteration either two or more SEC are added or the $x^*$ is optimal.
 The basic version of the Benders algorithm is described in \figurename{ \ref{fig:CPLEXinit}}.
 
 \begin{figure}[htbp]
@@ -47,6 +47,7 @@ Warm starting is a procedure that involves supplying the solver with an initial 
 This solution can originate from heuristic methods, results from previous optimization runs, or domain-specific insights.
 The initial solution serves as a valuable starting point for the optimization algorithm, profoundly influencing the search process in several key ways.
 In the branch and bound algorithm the solver systematically explores branches of a decision tree that represent subsets of feasible solutions.
+
 By integrating a warm start, the solver benefits in multiple aspects. Firstly, the initial feasible solution provides a concrete starting point, which the solver can immediately use to initialize the search.
 This starting point offers an initial upper bound for minimization problems, thus narrowing the search space from the outset and allowing more effective pruning of non-promising branches.
 In terms of node selection and pruning, the initial feasible solution enables the solver to prioritize nodes within the decision tree that are more likely to yield optimal or near-optimal solutions.
@@ -54,9 +55,8 @@ This prioritization is based on the initial bounds provided by the warm start so
 Consequently, the solver can prune the decision tree more aggressively; if a node's bound is worse than the initial bound provided by the warm start solution, that node and its descendants can be discarded, reducing the computational effort required.
 Furthermore, the initial feasible solution guides the solver's search towards more promising regions of the solution space, leading to faster convergence.
 The warm start also aids in tightening the dual bounds, narrowing the optimality gap, and expediting the overall optimization process.
-In Benders's case, as well as all other algorithms that use CPLEX in this project, a warm start consists in a solution obtained using an algorithm like ones from the previous chapters or a combination of them.
-The time limit also includes the time necessary to find the warm starting solution and corresponds to 5\% of the whole
 
+In Benders's case, as well as all other algorithms that use CPLEX in this project, a warm start consists in a solution obtained using an algorithm like ones from the previous chapters or a combination of them.
 
 \subsection{Patching Heuristic}
 
@@ -65,19 +65,21 @@ As an example, on almost all of the instances with 100 nodes, Benders takes less
 This means that when Benders is required to run within a specific time limit it may end up running out of time without producing any valid solution.
 To address this issue it is possible to use the solutions produced at each step iteration of Benders.
 Those solutions contain at least two subtours, hence, they are not valid solution for the TSP, however they can be "patched" by merging the subtours into one.
+
 Patching Heuristic is a greedy heuristic algorithm that merges all subtours contained in a solution into one, generating a valid solution, as shown by the pseudocode in \figurename{ \ref{fig:patchHeur}}.
 The basic reasoning behind it is to find merge two subtours at each iteration until only one subtour remain.
 Patching Heuristic begins by identifying two subtours to be merged.
 In each iteration, select an edge from each subtour to be removed.
 These edges are chosen such that their removal creates openings at the endpoints of the subtours.
-For example, consider subtours AA and BB with edges $(a_i,a_{i+1})$ in $A$ and $(b_j,b_{j+1})$ in BB.
-Remove these edges to create the openings $(a_i \leftarrow a_{i+1})$ and $(b_j \leftarrow b_{j+1})$.
+For example, consider subtours $A$ and $B$ with edges $(a_i,a_{i+1})$ in $A$ and $(b_j,b_{j+1})$ in $B$.
+Remove these edges to create the openings $(a_i \leftrightarrow a_{i+1})$ and $(b_j \leftrightarrow b_{j+1})$.
 Next, introduce new edges to bridge these openings. Specifically, connect node $a_i$ to node $b_j$ and node $a_{i+1}$ to node $b_{j+1}$.
 This effectively merges the two subtours by forming a larger tour that includes all nodes from both subtours while maintaining the constraints of the TSP.
 Continue this process iteratively, selecting pairs of subtours and merging them in a similar fashion until only one tour remains.
+
 The choice of which subtours to merge and which edges to be used in the merge is done by simulating all possibile merges between all couples of subtours and combinations of edges and selecting the merge that increases the objective value the least.
-The algorithm ensures that at each step, the total number of subtours decreases, ultimately resulting in a single subtour that spans all nodes in the graph.
-The final outcome is a feasible TSP solution where a single tour visits each node exactly once and returns to the starting node.
+The algorithm ensures that at each step, the total number of subtours decreases, ultimately resulting in a single tour that spans all nodes in the graph.
+The final outcome is a feasible TSP solution.
 
 \begin{figure}[htbp]
 	\begin{center}
@@ -165,7 +167,7 @@ The final outcome is a feasible TSP solution where a single tour visits each nod
 		$count \gets$ number of subtours in $S$ \\
 		\While{$count > 1$ }{
 			$e_{i,j} \in s_1$, $e_{k,l} \in s_2$ $\gets$ Find Best Patching Edges \\%(procedure similar to 2opt) \\
-			merge $s_1$ with $s_2$ by swapping $e_{i,j}$, $e_{k,l}$ with $e_{i,l}$, $e_{k,j}$ (or with $e_{i,k}$, $e_{j,l}$ if it is cheaper on the cost) \\
+			merge $s_1$ with $s_2$ by swapping $e_{i,j}$, $e_{k,l}$ with $e_{i,l}$, $e_{k,j}$ (or with $e_{i,k}$, $e_{j,l}$ if it is cheaper) \\
 			$count \gets count - 1$ 
 		}
 		\Return{$S$}
@@ -175,17 +177,16 @@ The final outcome is a feasible TSP solution where a single tour visits each nod
 
 With this method the chance of Benders of not producing any solution is greatly reduced, but not nullified since CPLEX needs to finish at least once.
 Patching Heuristic allows to generate a new solution at each iteration of Benders and, as the number of SEC added increases the quality of such solution usually increases.
-This happens because the solution that is produced resembles more and more an optimal solution as Benders iterates, sometimes it even happens that an optimal solution is found by patching subtours before the end of Benders, however the only way to verify optimality is to wait for the algorithm to finish.
+This happens because the solution that is produced resembles more and more an optimal solution as Benders iterates, sometimes it even happens that an optimal solution is found by patching subtours before the end of the execution of Benders, however the only way to verify optimality is to wait for the algorithm to finish.
 Furthermore this technique can be applied together with warm starting: by keeping the best solution obtained, at each iteration such solution can be used to warm start cplex.
 Since better solutions than the first warm starting solution are likely to be produced at some point, efficiency of subtree pruning will also increase as the best solution quality improves, resulting, theoretically, in better efficiency.
 
 \subsection{Efficiency}
 Benders, being an exact algorithm, automatically stops once it finds the optimal solution and the runtime changes at every run in a random way, depending on the random seed of CPLEX. 
-This means that it's more interesting to study time efficiency than the performance given by the cost of the resulting solution.
+This means that it's more interesting to study time efficiency rather than the performance given by the cost of the resulting solution.
 Since the algorithm is quite slow the instances on which it has run are all below 1000 nodes\footnote{Instances ts225 and p654 were excluded since for some reason the solving time on those is way higher compared to the others. Such difference would offset too much time limits hence they were removed}, with an increased time limit compared to previous testing which allowed to always reach optimality.
 Specifying the time limit is mandatory since some of the tests use warm start which requires a global time limit to obtain it's own time limit that is set to either 5\% or 1\%.
 % \tablename{ \ref{tab:bendersSimple}} contains the average runtime of Benders of five runs on each instance with different seeds, however it must be noted that time used to find the warm starting solution is not included.
-The time limits used to gather data as set according to \tablename{ \ref{tab:bendersTlims}}.
 
 \begin{table}[htbp]
 	\centering
@@ -292,7 +293,7 @@ However the time taken to find that first solution must also be taken into accou
 
 In \figurename{ \ref{fig:bendersFullPerfProf}} it's clear to see that the time needed to get the first solution using external means than Benders is actually greatly affecting the efficiency of the run in a negative way.
 The efficiency decreases so much that even the basic version of Benders is on par or better, while the best for overall runtime is given by only Patching.
-It's also possible to advance the hypothesis that the first solution doesn't need to be a strictly good one when Patching is involved, since Patching will find a better solutions during the execution, it would be beneficial to define a specific way to find the first solution in order to waste least possible amount of time on it.
+It's also possible to advance the hypothesis that the first solution doesn't need to be a strictly good one when Patching is involved, since it will find a better solutions during the execution, it would probably be beneficial to define a specific way to find the first solution in order to waste least possible amount of time on it.
 Further testing may be considered to be done on top of such hypothesis by using even less time to find the first warm starting solution, that however is outside of the scope of this project.
 
 % \newpage
@@ -300,9 +301,10 @@ Further testing may be considered to be done on top of such hypothesis by using 
 \section{Branch and Cut}
 Branch and Cut is a method that builds upon the Branch and Bound technique and improves it using knowledge specific on the problem domain to find more efficient cuts.
 The simplest way to implement this algorithm is to check for subtours and add necessary SEC directly within \textit{CPXmipopt}.
-To achieve this CPLEX allows the user to define some code that will be called while CPLEX solver itself is running, thus allowing to add SEC before \textit{CPXmipopt} terminates losing the cut pool and other useful informations.
+To achieve this CPLEX allows the user to define some code that will be called while CPLEX solver itself is running, thus allowing to add SEC before \textit{CPXmipopt} terminates, losing the cut pool and other useful informations.
+
 The generic callback technique allows to run user codes at specified points in the execution, like when a candidate solution is found or when the LP relaxation is solved.
-For the most simple implementation of Branch and Cut the callback code is just needed to run upon discovering a solution candidate so such solution can be checked for subtours and SEC can be added to the cut pool.
+For the most simple implementation of Branch and Cut the callback code is just needed to run upon discovering a solution candidate, so that such solution can be checked for subtours and SEC can be added to the cut pool.
 
 \begin{figure}[htbp]
 	\begin{algorithm}[H]
@@ -346,8 +348,9 @@ The problem is solved the same way as Benders's, it's simply necessary to run Pa
 With the same reasoning the warm start procedure can also be applied.
 
 \subsection{Posting}
-During the execution of Branch and Cut it's possible for a solution better than the ones observed before it to apper while navigating the search tree.
+During the execution of Branch and Cut it's possible for a solution better than the ones observed before it to appear while navigating the search tree.
 Solutions obtained this way cannot be used to warm start CPLEX because in this Branch and Cut implementation there is only one chance for a warm start, that is at the very beginning since \textit{CPXmipopt} runs only once.
+
 To allow CPLEX to reap similar benefits of the warm start and Patching of Benders while the solver is running a similar but callback-specific operation called Posting needs to be performed.
 The Posting procedure allows the user to give CPLEX a feasible solution during the solving procedure to improve the pruning of the search tree yielding overall better time efficiency.
 A feasible solution to use in the Posting procedure can be either found as candidate while exploring the search tree or by patching an invalid candidate solution.
@@ -372,7 +375,7 @@ With the implementation of the solution posting the candidate callback is comple
 			reject candidate $x$ \\
 			$t \gets$ \textbf{Patching Heuristic}($t$) (\ref{fig:patchHeur})
 		}
-		\tcc{$t$ is certainly a valid solution at point}
+		\tcc{$t$ is certainly a valid solution at this point}
 		\uIf{cost($t$) $<$ cost($b$) }{
 			$b \gets t$\\
 			\textbf{Post Solution} $t$
@@ -387,8 +390,9 @@ The Concorde TSP Solver, developed by William Cook and his collaborators, is one
 Using it as a C library, Concorde provides with multiple useful functions including those that allow to compute advanced cuts on a fractional solution in Branch and Cut.
 These cuts come in the form simple Gomory cuts as well as TSP specific cuts, which allow to add SEC in advance, avoiding spending time to reach some invalid candidate solutions, although not avoiding them entirely.
 A brief description on how these specific cuts are found is described below.
+
 Initially, the LP relaxation of the TSP is solved, where the integer constraints on the decision variables \( x_{ij} \) are relaxed, allowing them to take fractional values between 0 and 1.
-The resultant solution provides fractional edge values \( x_{ij}^* \), representing the degree to which each edge \( (i,j) \) is included in the tour.
+The resulting solution provides fractional edge values \( x_{ij}^* \), representing the degree to which each edge \( (i,j) \) is included in the tour.
 Using the fractional solution, a residual graph \( G = (V, E) \) is constructed.
 In this graph, nodes \( V \) correspond to cities, and edges \( E \) are weighted by the fractional values \( x_{ij}^* \), which serve as the capacities of the edges.
 To identify violated subtour elimination constraints, a maximum flow algorithm is employed.
@@ -400,7 +404,7 @@ If the sum of the fractional values \( x_{ij}^* \) across the cut is less than \
 Upon identifying a violated subtour elimination constraint, it is added to the LP formulation and the procedure then continues.
 
 In order for the procedure above to work it needs to get as input the solution at the LP relaxation point, thus requiring to complicate a bit the callback function.
-In fact before it was said that the callback was only executed on discovering a new candidate solution which is an integer solution.
+In fact before it we said that the callback was only executed on discovering a new candidate solution which is an integer solution.
 To obtain access to the relaxation solution it is necessary to let CPLEX invoke the callback at both candidate and relaxation point, dividing the callback into two parts.
 That said the candidate callback remains the same while the relaxation callback, \figurename{ \ref{fig:relaxCallback}}, is the one which implements usercuts.
 
@@ -505,7 +509,7 @@ Such a result is very similar to Benders's case of warm starting, where the effi
 This situation gives more gravity to a matter secondary to the algorithm itself: what is the exact time needed obtain a good enough solution to use as warm start while not deteriorating the algorithm efficiency as a whole?
 An interesting experiment would be to run again all tests while instead of optimizing the warm start solution according to a time limit, obtain the first possible solution and optimizing it according to a number of iterations.
 As an example the first solution could be obtained by running Nearest Neightbor $k$ times with $k=10$ or some other reasonably low value and than optimize the best solution obtained using 2-Opt.
-Since such kind of experiment would require major changes to the project code it was deemed outside the scope of the project. 
+Since such kind of experiment would require major changes to the project code and it was outside the scope of the project we avoided further testing. 
 
 \section{Comparison}	
 Finally \figurename{ \ref{fig:bendersBranchCut}} directly compares Benders method and Branch and Cut algorithm, both with and without using the warm starting technique.

@@ -52,16 +52,16 @@ The name itself comes from the fact it optimizes the solution by replacing a cou
 
 A \textbf{swap} is a simple computation in which two edges are removed from a solution and replaced with a new pair of edges such that the newly obtained tour is a feasible solution.
 Every swap is characterized by their \textbf{offset value}, which represent the quality of the swap and is calculated as the sum of the edges added minus the sum of the edges removed.
-An offset is considered an optimizing offset only if its value is negative.
+An offset is considered an \textbf{optimizing offset} only if its value is negative.
 Each solution usually allows for a finite yet very large number of swaps, however 2-Opt only involves swaps that reduce the overall cost of the tour, or a swaps with an optimizing offset.
 These swaps are referred to as \textbf{optimizing swaps} or \textbf{2-Opt moves}.
 
 The key step in the 2-Opt algorithm consists in finding and choosing a combination of edges that allows for a 2-Opt move.
-A simple approach consists in scanning all possible swaps and choose the first detected optimizing move.
-Another approach consists in scanning all possible swaps like before, and selecting the swap with the best offset.
+A simple approach involves scanning all possible swaps until an optimizing move is detected and chosen.
+Another approach consists in scanning all possible swaps and selecting the swap with the best offset.
 The first procedure has the advantage of being able to find a suitable swap faster, while the quality of the optimizing swaps is never considered.
 As opposed to the first method, the second procedure takes longer to find swaps, but the swap selected is the one that reduces the cost of the solution the most.
-In this project we implemented the second approach.
+In this project we only implemented the second approach.
 
 %Once the edges are swapped the total cost of the tour is recalculated, and if it is lower than the previous cost, the swap is integrated in the solution permanently, or until a better swap involving one of those two edges is found.
 %This operation is iterated across all possible pairs of the tour, and is repeated until a time limit is reached, or no further improvements are possible (which involves checking all possible combinations many time, making it infeasible for real-life complex scenarios).
@@ -143,10 +143,11 @@ Recomputing the offset at the proposal of any 2-Opt move is necessary, since the
 
 \subsection{3-Opt}
 
-The 3-Opt metaheuristic is an extension of the 2-Opt algorithm, with the key difference that it is not limited to swaps involving just two edges, but instead considers swaps of up to three edges. This broader approach allows for a larger neighborhood of solutions to be explored, potentially enabling the algorithm to escape local minima that 2-Opt might not be able to overcome.
+The 3-Opt metaheuristic is an extension of the 2-Opt algorithm, with the key difference that it is not limited to swaps involving just two edges, but instead considers swaps of up to three edges.
+This broader approach allows for a larger neighborhood of solutions to be explored, potentially enabling the algorithm to escape local minima that 2-Opt might not be able to overcome.
+It is important to note, however, that while the solution space is expanded, escaping all local minima is not guaranteed and is generally not achievable with algorithms like this.
 
-It is important to note, however, that while the solution space is expanded, escaping all local minima is not guaranteed and is generally not achievable with algorithms like this. The overall process is similar to 2-Opt, with the primary distinction being the number of nodes involved in each swap and the various configurations that these swaps can take.
-
+The overall process is similar to 2-Opt, with the primary distinction being the number of nodes involved in each swap and the various configurations that these swaps can take.
 The concepts of \textbf{swap}, \textbf{optimizing swap} and \textbf{offset value} remain the same as in the 2-Opt method, but they are extended to include three edges.
 As shown in \figurename{ \ref{fig:3optMoves}}, the number of possible edge swaps increases significantly.
 This not only raises the computational complexity due to the greater number of three-edge configurations, but also increases the asymptotic factor, which changes to $O(n^3)$ per iteration.
@@ -337,7 +338,7 @@ However, the time required by the two algorithms differs significantly: while 2-
             
         \end{axis}
     \end{tikzpicture}
-	\caption{Performance comparison between different tenure sizes} \label{fig:23OptPerformance}
+	\caption{Performance comparison between 2-Opt and 3-Opt} \label{fig:23OptPerformance}
 \end{figure}
 
 \section{Tabu Search}
@@ -347,33 +348,34 @@ The key idea is to avoid revisiting solutions that are known not to lead to the 
 
 Let's assume we already have a refined solution and have reached a local minimum using the 2-Opt algorithm; we'll call this solution $x_k$.
 Attempting to refine it further will not yield any improvement, as $x_k$ contains no 2-Opt moves, having been fully optimized by 2-Opt.
-Tabu Search addresses this situation by accepting a \textit{bad} move; in other words, it performs a swap even if it results in a positive offset\footnote{A swap with a positive offset is a swap that increases the overall cost of the solution}.
+Tabu Search addresses this situation by accepting a \textit{bad} move; in other words, it performs a swap even if its offset is positive\footnote{A swap with a positive offset is a swap that increases the overall cost of the solution}.
 
 Therefore, a new tour, $x_{k+1}$, is produced in the hope that applying 2-Opt again will yield a better solution than $x_k$.
 However, there's a significant chance that the local search algorithm will revert from $x_{k+1}$ back to $x_k$, ending up in the same local minimum.
 To avoid this, Tabu Seach uses a list called \textbf{tenure} which records the swaps made to escape a local minima.
-This tenure list acts as a set of \textit{forbidden swaps}, ensuring that 2-Opt cannot perform swaps that are included in this data structure.
+This tenure list acts as a set of \textbf{forbidden swaps}, ensuring that 2-Opt cannot perform swaps that are included in this data structure.
 
 There are additional considerations regarding the tenure, particularly its size and contents.
 Intuitively, the size of this list should be limited, otherwise, it might block too many edges, causing the optimization to become stuck with no swaps allowed.
 This particular aspect of the tenure will be explored in the next subsection, in which multiple tenure sizes will be compared.
-When the list is full, newly introduced \textit{forbidden swaps} replace the oldest elements in the tenure.
+When the list is full, newly introduced forbidden swaps replace the oldest elements in the tenure.
 
-Another potential improvement regards a detection mechanism on whether the local minima has been escaped or not: by checking if 2-Opt made any improvements on the solution, even while avoiding \textit{forbidden moves}, it is possible to have a rough estimation on wether or not the local optima point has been escaped or not.
+Another potential improvement regards a detection mechanism on whether the local minima has been escaped or not: by checking if 2-Opt made any improvements on the solution, even while avoiding forbidden moves, it is possible to have a rough estimation on wether or not the local optima point has been escaped or not.
 Upon detecting a potential escape, removing the oldest element from the tenure in hope of having actually escaped of the local minima.
 % This size is called \textit{NOT TENURE}, and could be a fixed amount or it could be adaptive depending on the instance of the problem we are approaching.
 % When the list is full, we start replacing the edges in it starting from the older ones.
 
-It's imperative for this procedure to work to its fullest to always keep a copy of the best solution found throughout its execution between all working threads.
 This process continues until some termination condition is reached.
 As for the other metaheuristic presented in this project, the termination condition is a time limit.
 
+It's imperative for this procedure to work to its fullest to always keep a copy of the best solution found throughout its execution between all working threads.
+
 \subsection{Edge locking implementation}
 
-The mechanism in which \textit{forbidden swaps} are avoided can be difficult in its design.
-In this project, we implemented the \textit{forbidden swaps} by preventing a single edge of such swaps from being used in a 2-Opt move.
+The mechanism that prevents forbidden swaps to be applied again can be difficult to design.
+In this project, we implemented the forbidden swaps by preventing a single edge of such swaps from being used in a 2-Opt move.
 We refer to this as the \textbf{edge locking procedure}.
-For each \textit{forbidden swap} we lock in place a single edge, which is chosed at random between the two edges introduced by the swap.
+For each forbidden swap we lock in place a single edge, which is chosed at random between the two edges introduced by the swap.
 Locking both edges will effectively prevent any improvement from any 2-Opt implementation, since the remaining part of the solution in already optimized.
 
 In our implementation 2-Opt is an external method called from the tabu function, and we needed to figure out a way to prevent it to perform swaps which involve edges locked in the tenure.
@@ -386,11 +388,11 @@ The offset of $s$ is defined as
 \]
 In 2-Opt $s$ has a chance of being applied to a solution only if offset$(s)<0$.
 If $e_{a,b}$ is a locked edge than $c(e_{a,b})=-\infty$, as defined in the cost cache.
-This means that offset$(s) = [c(e_{a,c}) + c(e_{b,d})] - [-\infty + c(e_{c,d})] = \infty > 0$, so swap $s$ will not be applied by 2-Opt.
+This means that offset$(s) = [c(e_{a,c}) + c(e_{b,d})] - [-\infty + c(e_{c,d})] = \infty > 0$, so $s$ will not be applied by 2-Opt.
 The same reasoning applies if $e_{c,d}$ is the locked edge.
 
 Therefore we can apply the 2-Opt procedure in a way which respects the locked edges without any additional effort.
-This edge locking mechanic can be used if 3-Opt is used as local search method instead, altough it is not guaranteed to be as effective.
+This edge locking mechanic can be used if 3-Opt is used as local search method instead, altough it is not guaranteed to be as effective since it was designed specifically with 2-Opt in mind.
 
 \begin{figure}[htbp]
     \begin{algorithm}[H]
@@ -441,6 +443,24 @@ This edge locking mechanic can be used if 3-Opt is used as local search method i
 
 \subsection{Performance}
 
+\begin{table}[htbp]
+	\centering
+	\begin{tabular}{|c|c|}
+        \hline \textbf{Instance size} & \textbf{Time limit} \\
+		\hline 0-80 & 1 \\
+		\hline 100-200 & 3 \\
+        \hline 220-320 & 8 \\
+        \hline 400-500 & 20 \\
+        \hline 500-800 & 60 \\
+        \hline 1000-1440 & 180 \\
+        \hline 1570-2400 & 400 \\
+        \hline 3000-6000 & 600 \\
+        \hline
+	\end{tabular}
+    \vspace{2mm}    
+	\caption{Time limit for metaheuristics} \label{tab:metaheurTlim}
+\end{table}
+
 To study the performance of the Tabu Search algorithm we implemented we must first choose a key hyperparameter: the \textbf{tenure size}.
 We chose three different values which are compared in \figurename{ \ref{fig:tabuParmTune}}.
 
@@ -474,9 +494,9 @@ We chose three different values which are compared in \figurename{ \ref{fig:tabu
 \end{figure}
 
 As shown in the graph, the tenure size value which consistently gave the best results was 1.
-This is strictly dependent on our implementation of the Tabu Search method, since other implementations might use different edge locking mechanics as well as different local search method.
-Still this result is a bit unexpected, since we were expecting to see a linear correlation between the tenure size and the size of the instance, with larger instances favoring larger tenures.
-However, as stated above, this result is specific to this implementation, so there might be some opportunity to optimize this algorithm, albeit we didn't manage to find it.
+This is strictly dependent on our implementation of the Tabu Search method, since other implementations might use different edge locking mechanics as well as different local search method, therefore favoring different values. %for the tenure size.
+Still this result is a bit unexpected, since we were expecting to see some kind of correlation between the tenure size and the size of the instance, with larger instances favoring larger tenures.
+However, as stated above, this result is specific to this implementation, so there may be opportunities to optimize this algorithm, although we were unable to identify any.
 
 \begin{figure}[htbp]
 	\centering
@@ -712,6 +732,8 @@ Each time that we apply a perturbation a number within the interval is picked at
 
 In order to find the best possible variable we tested the algorithm by running it in different configurations multiple times.
 The intervals we chose to test were: [4,4], [5,5], [5,10], [5,20], [5,40] and [20,40].
+The time limits were the same as the ones used for tabu search.
+
 As shown by \figurename{ \ref{fig:vnsParmTune}}, the best overall intervals were the [5,5] and the [5,10] with a slight advantage of the latter.
 
 \begin{figure}[htbp]
@@ -905,12 +927,9 @@ Initially this parameter is set high, which allows for a greater exploration of 
 At every iteration this parameter is scaled down (by a factor of $0.9$ or $0.95$ for example), gradually avoiding swaps of too low quality, thus restricting the search space. 
 This process is regulated to restart every time the temperature gets too low and there are no more swaps that are allowed due to the low temperature.
 
-In our implementation we decided to perform more than one swap for each temperature value.
-The number of swaps performed before updating the temperature is decided at complilation time.
-
-Another key point in our implementation is the "forced cooling".
+Another key point in our implementation is the “forced cooling”.
 This technique consists in running 2-Opt whenever the randomized swap search isn't able to find a swap that is accepted given the current temperature value.
-Such behavior is practically always triggered at low temperatures, when the solution is good enough that the randomized search isn't able to find good enough swaps to be accepted within an upper bound on the number of attempts.
+Such behavior is practically always triggered at low temperatures, when the solution is good enough that the randomized search isn't able to find good enough swaps to be accepted within an upper limit on the number of attempts.
 We chose to set the number of nodes of the instance as attempts upper bound.
 
 We also chose to implement two criteria describing the quality of swaps.
@@ -953,7 +972,7 @@ Therefore there are no issues in allowing the temperature value to reach 0.
 
 \subsection{Performance}
 
-When gathering the data to measure the performance of Simulated Annealing we encountered some issues.
+When gathering the data to measure the performance of Simulated Annealing we used the same time limits as before, and limit the testing on instances with less than 2400 nodes since we encountered some issues.
 In some instances of the TSP, the cost would not improve, regardless the temperature and criterion used.
 Another anormality we detected regared the independence between the final solution cost and all tunable parameters.
 
@@ -1032,7 +1051,7 @@ Another anormality we detected regared the independence between the final soluti
 
 As for the previous algorithms, we also compared the speed in which each setting performed, discovering that even in those there isn't a drammatic enough difference to explain the anormalities.
 
-To properly explain this behavior we would require much more time compared to other algorithms, like NN or VNS, since not only there are parameters to tune, but we must also consider the different quality criteria used.
+To properly explain this behavior we would require much more time compared to other algorithms, like NN or VNS, since not only there are more parameters to tune, but we would also need to consider the different quality criteria used.
 
 Since there doesn't seems to be any particular configuration which allows for a better performance we arbitrarely chose the ACRA with temperature set to $10^6$ to compare this algorithm with the best solutions as well as the other algorithms later on.
 
@@ -1125,15 +1144,40 @@ It's easy to see how using our GA implementation without introducing new solutio
 
 \subsection{Performance}
 
-\begin{itemize}
-    \item \textbf{Config 1}: Population = 50, Crossover = 10, Mutation = 10, Reintro =  5
-    \item \textbf{Config 2}: Population = 50, Crossover = 20, Mutation = 20, Reintro =  5
-    \item \textbf{Config 3}: Population = 100, Crossover = 50, Mutation = 20, Reintro = 20
-    \item \textbf{Config 4}: Population = 100, Crossover = 20, Mutation = 50, Reintro = 20
-    \item \textbf{Config 5}: Population = 100, Crossover = 40, Mutation = 40, Reintro = 10
-\end{itemize}
+In our implementation of GA there are many hyperparameter to tune, and, for the sake of time, we tried some configurations with different hyperparameter values combinations.
 
-\begin{figure}[H]
+\begin{table}[H]
+	\centering
+	\begin{tabular}{|c|c|c|c|c|}
+        \hline \textbf{Config} & \textbf{Population} & \textbf{Crossover} & \textbf{Mutation} & \textbf{Reintro} \\
+		\hline \textbf{1} & 50 & 10 & 10 & 5 \\
+		\hline \textbf{2} & 50 & 20 & 20 & 5 \\
+        \hline \textbf{3} & 100 & 50 & 20 & 20 \\
+        \hline \textbf{4} & 100 & 20 & 50 & 20 \\
+        \hline \textbf{5} & 100 & 40 & 40 & 10 \\
+        \hline
+	\end{tabular}
+    \vspace{2mm}    
+	\caption{Configuration used during testing of GA} \label{tab:geneticConf}
+\end{table}
+
+In addition to this there is also the fact that the overall performance of this implementation of GA is much worse that all the other metaheuristics implemented in this project and to obtain some decent results we needed to relax the time limits a bit.
+
+\begin{table}[htbp]
+	\centering
+	\begin{tabular}{|c|c|}
+        \hline \textbf{Instance size} & \textbf{Time limit} \\
+		\hline 0-80 & 20 \\
+		\hline 100-200 & 30 \\
+        \hline 220-320 & 60 \\
+        \hline 400-500 & 100 \\
+        \hline
+	\end{tabular}
+    \vspace{2mm}    
+	\caption{Time limit for GA} \label{tab:geneticTlim}
+\end{table}
+
+\begin{figure}[htbp]
 	\centering
 	\begin{tikzpicture}
         \begin{axis}[
@@ -1166,7 +1210,9 @@ It's easy to see how using our GA implementation without introducing new solutio
     \label{fig:geneticParmTune}
 \end{figure}
 
-\begin{figure}[H]
+As \figurename{ \ref{fig:geneticParmTune}} shows, there is a clear advantage of the first configuration in across the board, however, as it was for some of the previous cases this does not prove that the first configuration is the better one.
+
+\begin{figure}[htbp]
 	\centering
 	\begin{tikzpicture}
         \begin{axis}[
@@ -1201,7 +1247,12 @@ It's easy to see how using our GA implementation without introducing new solutio
     \label{fig:geneticIters}
 \end{figure}
 
-\begin{figure}[H]
+In fact the reason for its dominance in the graph is the ease of computation that this configuration has compared to the other ones.
+\figurename{ \ref{fig:geneticIters}} shows this very clearly, with the first configuration running as fast as five times faster than the other ones.
+However speed is not the only thing that matters: configuration 2 is the second fastest, however it is also the one that has the worst preformance overall.
+This serves to prove that more time would be needed to properly find a “best” configuration, since there are too many parameters in play here.
+
+\begin{figure}[htbp]
 	\centering
 	\begin{tikzpicture}
         \begin{axis}[
@@ -1227,9 +1278,14 @@ It's easy to see how using our GA implementation without introducing new solutio
     \label{fig:geneticCost}
 \end{figure}
 
+Finally, \figurename{ \ref{fig:geneticCost}} shows how well the solutions found by GA compare to the optimal solutions.
+Seeing how big is the scale on the \textit{x} axis in this graph we can clearly state that, in this project, GA was the worst performing algorithm.
+
 \section{Comparison}
 
-\begin{figure}[H]
+To conclude this chapter lets put all of the metaheuristics shown in a final comparsion.
+
+\begin{figure}[htbp]
 	\centering
 	\begin{tikzpicture}
         \begin{axis}[
@@ -1261,3 +1317,7 @@ It's easy to see how using our GA implementation without introducing new solutio
 	\caption{Comparsion between all metaheuristics with best parameters found}
     \label{fig:metacmp}
 \end{figure}
+
+As \figurename{ \ref{fig:metacmp}} illustrates, VNS emerged as the best metaheuristic identified in this project.
+GA is not shown in the graph because its performance was significantly lower than that of the other methods, even though we used a larger time frame during its testing in order to obtain reasonable results.
+Including it would have either caused it to disappear from the graph or required a much greater zoom, which would have made comparing the other algorithms more challenging.

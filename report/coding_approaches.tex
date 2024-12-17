@@ -1,6 +1,6 @@
 \chapter{Coding Approaches}
 
-In this chapter, we will explore some low-level implementation details common to most algorithms discussed in the following chapters, as well as some important tricks and decisions taken to improve the quality and efficience of the code during the development of the project.
+In this chapter, we will explore some low-level implementation details common to most algorithms discussed in the following chapters, as well as some important tricks and decisions taken to improve the quality and efficiencency of the code during the development of the project.
 
 \section{Approaches to Cost Function}
 
@@ -34,6 +34,10 @@ The square root operation is one of these, as it usually requires an iterative a
 Nowadays most modern computer architectures include a hardware dedicated instructions, which can be many times faster when compared to the software conterparts, yet they still require several CPU cycles in order to be executed.
 In order to take advantage of these specialized instructions some additional parameters are required when compiling the code\footnote{\textit{gcc} requires the parameter "-march=native"}.
 
+A further improvement consists in allowing the compiler to stray from the need of computing exact results and approximate the results\footnote{\textit{gcc} requires the parameter "-ffast-math"}.
+This type of optimization greatly increases performance of this approach, as shown by \figurename{ \ref{fig:baseHWSpecific}}, however it can generate inaccurate results.
+A possible implementation which allows the use this optimization without sacrificing accuracy would be to implement suitable functions in another source file, which will then be compiled using the compiler's built-in tricks and approximations.
+
 \begin{figure}[htbp]
     \centering
     \begin{tikzpicture}
@@ -58,14 +62,9 @@ In order to take advantage of these specialized instructions some additional par
     \caption{Speedup of the use of the "-ffasth-math" compiler flag with the Base approach in 2Opt.} \label{fig:baseHWSpecific}
 \end{figure}
 
-A further improvement consists in allowing the compiler to stray from the need of computing exact results and approximate the results\footnote{\textit{gcc} requires the parameter "-ffast-math"}.
-This type of optimization greatly increases performance of this approach, as shown by \figurename{ \ref{fig:baseHWSpecific}}, however it can generate inaccurate results.
-A possible implementation which allows the use this optimization without sacrificing accuracy would be to implement suitable functions in another source file, which will then be compiled using the compiler's built-in tricks and approximations.
-Of course the outputs given by these functions would need to be double checked against accurate data, which can be easily done by recomputing the costs of involved edges using accurate methods.
+The outputs given by these functions should be checked against accurate data, which can be easily done by recomputing the costs of involved edges using accurate methods.
+Of course if this check should be performed every time the cost is computed the speed advantage would be lost, that is why we only check the cost before performing a modification to a solution.
 
-% Another time-critical operation in the cost functions is the step in which the value is converted to integer, namely the $round$ and $ceil$ functions.
-% Although not presenting a slowdown as great as the square root operation, they are still executed in more than a cycle.
-% As with the previous case, modern computer architectures provide specific instructions which improve yet again the overall speed of this approach.
 Even with all the optimization described above implemented, this approach remains the slowest one, as we will see in the comparision section.
 
 \subsection{Cost-Matrix approach}
@@ -106,8 +105,8 @@ However, this memory optimization results in a more complex method of accessing 
 \end{figure}
 
 The second major drawback lies in how modern computers handle memory.
-Main memory is often a significant bottleneck for most algorithms, to the extent that the time complexity of algorithms is sometimes measured by estimating the number of memory accesses performed.
-To improve performance, caching was introduced.
+Main memory is often a significant bottleneck for most algorithms, to the extent that the time complexity of algorithms is often measured by estimating the number of memory accesses performed.
+To improve performance, caching was introduced in comptuter architectures.
 Caching involves storing frequently accessed portions of memory in faster memory pools, improving the overall speed of memory access.
 With this in mind, cache efficiency is an important factor to consider when comparing the performance of this approach to others.
 The issue arises when an algorithm requires repeated access to locations in $A$ that are neither close together nor consistent, which can significantly reduce performance.
@@ -115,7 +114,7 @@ A clear example of this can be observed in the performance difference between us
 This is demonstrated in \figurename{ \ref{fig:matrixBadIndex}}, in which the speed difference increases with the size of $A$, which results in lower cache efficiency in the column-major indexing.
 
 \subsection{AVX approach}
-To avoid the drawbacks of the two methodologies presented, we decided to consider an AVX-instructions implementation.
+To avoid the drawbacks of the two methodologies presented, we decided to try a different implementation.
 AVX (Advanced Vector Extensions)\cite{avxWikipedia} is a set of CPU instructions designed to enhance performance by enabling parallel processing of multiple data points with a single instruction.
 This approach utilizes these kind of SIMD (Single Instruction Multiple Data) extensions to achieve benefits like increased speed and lower memory usage, at the cost of simplicity: AVX code is significantly more difficult to write and debug.
 
@@ -123,17 +122,20 @@ In simple terms, this method extends the Basic approach by computing multiple ed
 More specifically, AVX registers are 256 bits in size and support various operations and data types. 
 In this project, we chose to use 32-bit floating-point representation for both node coordinates and edge costs.
 This allows a single AVX register to hold a vector of eight values, effectively performing eight computations simultaneously.
-If higher precision is required, AVX instructions also support 64-bit double-precision floating-point numbers, but with the limitation of processing only four elements at a time, which is half the number in our implementation.
+If higher precision is required, AVX instructions also support 64-bit double-precision floating-point numbers, but with the limitation of processing only four elements at a time, which is half compared to our implementation.
 
 The simplicity of the code is sacrificed in several ways.
 The first challenge is the need to arrange the data in a suitable manner so that the vectors loaded into the AVX registers are consistent and not scattered across memory.
-A second challenge arises from handling conditional statements involving individual variables within the eight-elements packed vectors, which must be processed in two phases.
+To tackle this we used two extra arrays in which the coordinates of the nodes are kept, sorted according to the order in which a solution visit them.
+A second challenge arised from handling conditional statements involving individual variables within the eight-elements packed vectors.
+This was a bit trickier since it required to perform the conditional statements to whole vectors using specific instructions, save the result as another \textit{mask} vector and then us that vector to move data accrodingly.
 Other technical difficulties involve loading the final elements of an array, which can result in loading unintended variables into the register and potentially invalidating the entire computation if not handled properly.
+To fix this we simply allocated a bit more memory for each vector in which we stored the value of infinity, such that any computation involved with infinity would result in a \textit{NaN} or infinity itself.
 
-The use of AVX paves the way for further optimizations based on approximation.
+The use of AVX paves the way for further optimizations based on approximation, this time without solely relying on a compiler flag is in the basic approach.
 Specifically, the square root operation is optimized by using instructions that perform the \textit{approximated reciprocal square root} and \textit{approximated reciprocal} functions.
 This allows an approximation of the square root function to be obtained in a significantly shorter time frame, thanks to the improved latency and throughput of these instructions.
-Of course, this type of computation can only be used when minimizing or maximizing between edges or some function of them, and the final result must be verified with the more precise function.
+Of course, this type of computation can only be used when looking for a minimum or a maximum between edges or some function involving them, and the final result should always be verified with the more accurate function.
 
 \begin{figure}[htbp]
     \centering
