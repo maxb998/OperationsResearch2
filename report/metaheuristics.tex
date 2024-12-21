@@ -1090,14 +1090,15 @@ A detail which is not perceptible from the comparison is that often Simulated An
 
 \section{Genetic}
 
-Genetic Algorithms (GAs), pioneered by John Holland in the 1960s, represent a significant innovation in the field of optimization.
+Genetic Algorithms (GAs), pioneered by John Holland in the 1960s, represent a fresh approach in the field of optimization.
 They draw inspiration from the principles of natural selection and genetics.
 By simulating processes such as selection, crossover, and mutation on a population of potential solutions, GAs iteratively evolve towards optimal or near-optimal solutions.
-Their ability to efficiently navigate large and complex search spaces has led to their application across diverse domains, including engineering, economics, and artificial intelligence.
+Their ability to navigate large and complex search spaces has led to their application across diverse domains, including engineering, economics, and artificial intelligence.
 %The robustness and versatility of GAs make them a powerful tool for tackling problems with expansive, poorly understood search spaces.
 
-In TSP case, Genetic Algorithms are particularly useful due to the complexity and enormity of the solution space.
-GAs approach this by encoding each possible route (solution) as a chromosome.
+In TSP case, the strong point of Genetic Algorithms are the complexity and enormity of the explorable solution space, which is a direct consecuence of the high randomness characteristic of the method. 
+This logically comes with the tradeoff of larger convergence times, since the algorithm is not actively trying to improve the solution with its moves, but rather generate new solutions.
+GAs approach the problem by encoding each possible route (solution) as a chromosome.
 
 The process begins with a population of these chromosomes, which then undergo selection based on their fitness; typically, the shorter the route, the higher the fitness.
 New offspring solutions are then generated through crossover, which combines segments from two parent solutions.
