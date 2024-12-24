@@ -951,6 +951,41 @@ where $w$ is refers to the swap, $c(T)$ is the cost of solution $T$ and $|V|$ is
 By construction, $q \in \Re$ and since $c(T)/|V| > 0$ than $sign(q) = sign(offset(w))$.
 Therefore there are no issues in allowing the temperature value to reach 0.
 
+\begin{figure}[htbp]
+    \begin{algorithm}[H]
+        \TitleOfAlgo{\textbf{Simulated Annealing}}
+        \SetKwInOut{Input}{Input}
+        \SetKwInOut{Output}{Output}
+        \Input{Graph $G(V,E)$ \newline Cost function $c$ \newline A tour $T$ of $G$ \newline Starting temperature $k_s$ }
+        \Output{A tour $T_{best}$ where $c(T_{best}) \leq c(T)$}
+        \BlankLine
+        $T_{best} \gets T$\\
+        \While{time limit is not reached}{
+            $k \gets k_s$ // temperature \\
+            $noMove \gets $ False \\
+            $m \gets $ NULL \\
+            \While{$(k > k_{lower bound})$ AND $(!noMove)$}{
+                $\sigma \gets $ False\\
+                \For{$(i \in \{0,1,\dots, max\_tries\})$ AND $(!\sigma)$}{
+                    \BlankLine
+                    $m \gets $ swap chosen at random in $T$ \\
+                    $\sigma \gets $ AcceptMove($T$, $m$)
+                }
+                \eIf{$\sigma$}{
+                    PerformMove($T$, $m$) \\
+                    %\lIf{$c(T) \leq c(T_{best})$}{$T_{best} \gets T$}
+                }{
+                    $noMove \gets$ True
+                }
+                $k \gets k \times 0.99$
+            }
+            2-Opt($T$)\\
+            \lIf{$c(T) \leq c(T_{best})$}{$T_{best} \gets T$}
+        }
+        \Return $T_{best}$
+    \end{algorithm}
+    \caption{Pseudocode of Simulated Annealing procedure} \label{fig:simannPseudocode}
+\end{figure}
 
 % \subsection{Implementation}
 % For the implementation of Simulated Annealing we decided to set up a number of constants in order to be able to tweak the parameters of the method in input.
@@ -1140,6 +1175,65 @@ In our case we implemented two types of mutation:
     \item \textbf{Node swap} consists in simply swapping two nodes in the solution, effectively changing four edges.
     \item \textbf{Edge swap} is a random swap of the same kind used in 2-Opt, without regarding the quality of the swap in any way.
 \end{itemize}
+
+\subsubsection{Natural Selection}
+
+The key component in any GA is its ability to select which chromosomes are allowed into the next generation and which are purged.
+In our approach we simply compare two by two each element in the current population with the ones introduced in the current generation.
+Then, according to a probability which depends on the cost of the solutions themselves, they are swapped, removing the old solution from the next generation in favor of the other solution. 
+This method also allows for the retrieval of solutions that were previously discarded in earlier stages of the natural selection, however the retrieval is limited to the current generation solutions.
+
+\begin{figure}[H]
+    \begin{algorithm}[H]
+        \TitleOfAlgo{\textbf{Simulated Annealing}}
+        \SetKwInOut{Input}{Input}
+        \SetKwInOut{Output}{Output}
+        \Input{Graph $G(V,E)$ \newline Cost function $c$ \newline Population size $s_p$ \newline Crossover amount $s_c$ \newline Mutation amount $s_m$ \newline Reintroduction amount $s_r$}
+        \Output{A tour $T$ of $G$}
+        \BlankLine
+
+        $P \gets \{\}$ \\
+        \For{$i \in \{0,1,\dots, s_p\}$}{
+            \BlankLine
+            $p_i \gets$ tour generated through permutations\\
+            $P \gets P \cup {p_i}$
+        }
+
+        $T_{best} \gets$ best solution in $P$\\
+
+        \While{time limit is not reached}{
+            $C \gets \{\}$ \\
+            \For{$i \in \{0,1,\dots, s_c\}$}{
+                \BlankLine
+                $j,k \in \{0,1,\dots, s_p\}$, $j \neq k$ \\
+                $c_i \gets$ EdgeRecombinationCrossover($P[j]$, $P[k]$)\\
+                $C \gets C \cup {c_i}$
+            }
+            
+            $M \gets \{\}$ \\
+            \For{$i \in \{0,1,\dots, s_m\}$}{
+                \BlankLine
+                $j \gets$ random $\in \{0,1,\dots, s_p\}$ \\
+                $m_i \gets$ Mutate($P[j]$) \\
+                $M \gets M \cup {m_i}$
+            }
+
+            $R \gets \{\}$ \\
+            \For{$i \in \{0,1,\dots, s_r\}$}{
+                \BlankLine
+                $r_i \gets$ tour generated through permutations \\
+                $R \gets R \cup {r_i}$
+            }
+
+            $T \gets$ best solution in $P \cup C \cup M \cup R$ \\
+            \lIf{$c(T) \leq c(T_{best})$}{$T_{best} \gets T$}
+
+            $P \gets$ NaturalSelection($P \cup C \cup M \cup R$)
+        }
+        \Return $T_{best}$
+    \end{algorithm}
+    \caption{Pseudocode of GA} \label{fig:geneticPseudocode}
+\end{figure}
 
 It's easy to see how using our GA implementation without introducing new solutions from permutations and crossover results in an algorithm that is somewhat similar to SA.
 
