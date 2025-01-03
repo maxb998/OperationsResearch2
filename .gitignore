@@ -1,8 +1,8 @@
 .vscode/settings.json
 bin/debug/main
-bin/exec/main
+bin/release/main
 obj/debug/*.o
-obj/exec/*.o
+obj/release/*.o
 runs/*
 run
 report/report.*

@@ -5,7 +5,8 @@
             "type": "shell",
             "command": "make",
             "args": [
-                "build"
+                "build",
+                "MODE=debug"
             ],
             "group": {
                 "kind": "build",
