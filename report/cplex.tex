@@ -30,7 +30,7 @@ Using fact that in a TSP solution each node has degree equal to two we obtain:
 \begin{align}
 	\text{min} &\sum\limits_{(i,j)\in E} c_{ij} \cdot x_{ij} \tag{1.1}\label{eq:1.1} \\
 	&\sum\limits_{\:\;\;j=1\:\;\;}^{n} x_{ij} = 2 \quad \text{for } i = 1,2,\ldots,n \tag{1.2}\label{eq:1.2} \\
-	&\sum\limits_{(i,j)\in C} x_{ij} \leq |C| - 1 \quad \forall \; C: C \text{ is a subtour of } G \tag{1.3}\label{eq:1.3}
+	& \sum\limits_{i \in Q} \sum\limits_{j\neq i\in Q} x_{ij} \leq |Q| - 1 \quad \forall \; Q: Q \subsetneq \{1,...,n \}, |Q| \geq 2 \tag{1.3}\label{eq:1.3}
 \end{align}
 where equation \eqref{eq:1.1} is the total cost of the circuit, constraints \eqref{eq:1.2} are the degree constraints and \eqref{eq:1.3} are the Subtour Elimination Constraints(SEC). Counting the number of constraints we have $n$ constraints from \eqref{eq:1.2} and an exponential amount from \eqref{eq:1.3}. A number of constraints that big makes in practice the problem much harder to resolve, so a common workaround also used in the following algorithms is to ignore SEC and add only the ones that are violated each time cplex returns a feasible solution.
 
