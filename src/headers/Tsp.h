@@ -152,7 +152,6 @@ void argsort(float *arr, int *indexes, int n);
 */
 void sort(float *arr, int n);
 
-#if (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
 //###################################################################################################################################
 // COST_MATRIX
 //###################################################################################################################################
@@ -170,8 +169,6 @@ double computeCostMatrix(Instance *inst);
 * @attention Only use with very small Instances since the output is quadratic to the number of nodes
 */
 void printCostMatrix(Instance *inst);
-
-#endif
 
 //###################################################################################################################################
 // NEAREST_NEIGHBOR
@@ -226,27 +223,14 @@ void apply2OptBestFix(Solution *sol);
 void apply2OptBestFixMT(Solution *sol);
 
 
-#if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
 /*!
 * @brief  Same as apply2OptBestFix, but expects costCache array and, if using AVX, X and Y arrays all coherent with sol.indexPath. If not using AVX pass X = Y = NULL
 * @param sol Solution to optimize.
 * @result Number of optmizations made(iterations)
 */
 int apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *costCache);
-#elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-/*!
-* @brief  Same as apply2OptBestFix, but expects costCache array and, if using AVX, X and Y arrays all coherent with sol.indexPath. If not using AVX pass X = Y = NULL
-* @param sol Solution to optimize.
-* @result Number of optmizations made(iterations)
-*/
-int apply2OptBestFix_fastIteratively(Solution *sol, float *costCache);
-#endif
 
-#if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
 int apply2OptBestFix_fastIterativelyMT(Solution *sol, float *X, float *Y, float *costCache);
-#elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-int apply2OptBestFix_fastIterativelyMT(Solution *sol, float *costCache);
-#endif
 
 //###################################################################################################################################
 // 3OPT
@@ -268,25 +252,13 @@ void apply3OptBestFix(Solution *sol);
 void apply3OptBestFixMT(Solution *sol);
 
 
-#if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
 /*!
 * @brief  Same as apply2OptBestFix, but expects costCache array and, if using AVX, X and Y arrays all coherent with sol.indexPath. If not using AVX pass X = Y = NULL
 * @param sol Solution to optimize.
 */
 void apply3OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *costCache, int *sectionCopy);
-#elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-/*!
-* @brief  Same as apply2OptBestFix, but expects costCache array and, if using AVX, X and Y arrays all coherent with sol.indexPath. If not using AVX pass X = Y = NULL
-* @param sol Solution to optimize.
-*/
-void apply3OptBestFix_fastIteratively(Solution *sol, float *costCache, int *sectionCopy);
 
-#endif
-#if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
 void apply3OptBestFix_fastIterativelyMT(Solution *sol, float *X, float *Y, float *costCache, int *sectionCopy);
-#elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-void apply3OptBestFix_fastIterativelyMT(Solution *sol, float *costCache, int *sectionCopy);
-#endif
 
 
 //###################################################################################################################################

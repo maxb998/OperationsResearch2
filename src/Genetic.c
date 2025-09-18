@@ -453,17 +453,20 @@ static inline void mutateSolution(Solution *sol, unsigned int *rndState)
             swapElems(edge0, edge1)
 
         // update cost
-        #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+        if (inst->params.compType & (COMP_BASE|COMP_AVX))
+        {
             *(float*)&sol->cost -= computeEdgeCost(inst->X[path[edge0]], inst->Y[path[edge0]], inst->X[path[edge0+1]], inst->Y[path[edge0+1]], inst);
             *(float*)&sol->cost -= computeEdgeCost(inst->X[path[edge1]], inst->Y[path[edge1]], inst->X[path[edge1+1]], inst->Y[path[edge1+1]], inst);
             *(float*)&sol->cost += computeEdgeCost(inst->X[path[edge0]], inst->Y[path[edge0]], inst->X[path[edge1]], inst->Y[path[edge1]], inst);
             *(float*)&sol->cost += computeEdgeCost(inst->X[path[edge0+1]], inst->Y[path[edge0+1]], inst->X[path[edge1+1]], inst->Y[path[edge1+1]], inst);
-        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+        }
+        else
+        {
             *(float*)&sol->cost -= inst->edgeCostMat[(size_t)path[edge0] * (size_t)inst->nNodes + (size_t)path[edge0+1]];
             *(float*)&sol->cost -= inst->edgeCostMat[(size_t)path[edge1] * (size_t)inst->nNodes + (size_t)path[edge1+1]];
             *(float*)&sol->cost += inst->edgeCostMat[(size_t)path[edge0] * (size_t)inst->nNodes + (size_t)path[edge1]];
             *(float*)&sol->cost += inst->edgeCostMat[(size_t)path[edge0+1] * (size_t)inst->nNodes + (size_t)path[edge1+1]];
-        #endif
+        }
 
         for (int smallI = edge0 + 1, bigI = edge1; smallI < bigI; smallI++, bigI--)
             swapElems(path[smallI], path[bigI])
@@ -479,32 +482,44 @@ static inline void mutateSolution(Solution *sol, unsigned int *rndState)
         
         int first = path[edges[0]];
 
-        for (int i = 0; i < sizeof(edges) / sizeof(edges[0]); i++)
+        if (inst->params.compType & (COMP_BASE|COMP_AVX))
         {
-            // subtract old cost
-            #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+            for (int i = 0; i < sizeof(edges) / sizeof(edges[0]); i++)
+            {
+                // subtract old cost
                 *(float*)&sol->cost -= computeEdgeCost(inst->X[path[edges[i]-1]], inst->Y[path[edges[i]-1]], inst->X[path[edges[i]]],   inst->Y[path[edges[i]]],   inst);
                 *(float*)&sol->cost -= computeEdgeCost(inst->X[path[edges[i]]],   inst->Y[path[edges[i]]],   inst->X[path[edges[i]+1]], inst->Y[path[edges[i]+1]], inst);
-            #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-                *(float*)&sol->cost -= inst->edgeCostMat[(size_t)path[edges[i]] * (size_t)n + (size_t)path[edges[i]-1]];
-                *(float*)&sol->cost -= inst->edgeCostMat[(size_t)path[edges[i]] * (size_t)n + (size_t)path[edges[i]+1]];
-            #endif
+                
+                if (i == 0)
+                    path[edges[i]] = path[edges[i+1]];
+                else
+                    path[edges[i]] = first;
 
-            
-            if (i == 0)
-                path[edges[i]] = path[edges[i+1]];
-            else
-                path[edges[i]] = first;
-
-            // add new cost
-            #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+                // add new cost
                 *(float*)&sol->cost += computeEdgeCost(inst->X[path[edges[i]-1]], inst->Y[path[edges[i]-1]], inst->X[path[edges[i]]],   inst->Y[path[edges[i]]],   inst);
                 *(float*)&sol->cost += computeEdgeCost(inst->X[path[edges[i]]],   inst->Y[path[edges[i]]],   inst->X[path[edges[i]+1]], inst->Y[path[edges[i]+1]], inst);
-            #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+            }
+        }
+        else
+        {
+            for (int i = 0; i < sizeof(edges) / sizeof(edges[0]); i++)
+            {
+                // subtract old cost
+                *(float*)&sol->cost -= inst->edgeCostMat[(size_t)path[edges[i]] * (size_t)n + (size_t)path[edges[i]-1]];
+                *(float*)&sol->cost -= inst->edgeCostMat[(size_t)path[edges[i]] * (size_t)n + (size_t)path[edges[i]+1]];
+                
+                if (i == 0)
+                    path[edges[i]] = path[edges[i+1]];
+                else
+                    path[edges[i]] = first;
+
+                // add new cost
                 *(float*)&sol->cost += inst->edgeCostMat[(size_t)path[edges[i]] * (size_t)n + (size_t)path[edges[i]-1]];
                 *(float*)&sol->cost += inst->edgeCostMat[(size_t)path[edges[i]] * (size_t)n + (size_t)path[edges[i]+1]];
-            #endif
+            }
         }
+
+        
         break;
     }
 
@@ -513,50 +528,48 @@ static inline void mutateSolution(Solution *sol, unsigned int *rndState)
     }
 }
 
-#if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
 static inline float fitness(ThreadSpecificData *thSpecific, Solution *sol)
 {
     Instance *inst = sol->instance;
-
-    __m256 costSumVec = _mm256_setzero_ps();
-    __m256i permuteVec = _mm256_setr_epi32(1,2,3,4,5,6,7,7);
-    for (int i = 0; i < inst->nNodes - (AVX_VEC_SIZE-2); i+=(AVX_VEC_SIZE-1))
-    {
-        __m256i index = _mm256_loadu_si256((__m256i_u*)&sol->indexPath[i]);
-        __m256 x1 = _mm256_i32gather_ps(inst->X, index, 4), y1 = _mm256_i32gather_ps(inst->Y, index, 4);
-        __m256 x2 = _mm256_permutevar8x32_ps(x1, permuteVec), y2 = _mm256_permutevar8x32_ps(y1, permuteVec);
-        __m256 cost = computeEdgeCost_VEC(x1, y1, x2, y2, inst);
-        costSumVec = _mm256_add_ps(costSumVec, cost);
-    }
-    
-    float avxStore[AVX_VEC_SIZE];
-    float cost = 0;
-    _mm256_storeu_ps(avxStore, costSumVec);
-    for (int i = 0; i < AVX_VEC_SIZE-1; i++)
-        cost += avxStore[i];
-    
-    if (inst->nNodes - (inst->nNodes % (AVX_VEC_SIZE-1)) > 0)
-        for (int i = inst->nNodes - (inst->nNodes % (AVX_VEC_SIZE-1)); i < inst->nNodes; i++)
-            cost += computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i+1]], inst->Y[sol->indexPath[i+1]], inst);
-
-    return cost;
-}
-#elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
-static inline float fitness(ThreadSpecificData *thSpecific, Solution *sol)
-{
-    Instance *inst = sol->instance;
-
     float cost = 0.F;
-    for (int i = 0; i < inst->nNodes; i++)
-        #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+
+    switch (inst->params.compType)
+    {
+    case COMP_BASE:
+        for (int i = 0; i < inst->nNodes; i++)
             cost += computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i+1]], inst->Y[sol->indexPath[i+1]], inst);
-        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+        break;
+    case COMP_MATRIX:
+        for (int i = 0; i < inst->nNodes; i++)
             cost += inst->edgeCostMat[sol->indexPath[i] * inst->nNodes + sol->indexPath[i+1]];
-        #endif
+        break;
+    case COMP_AVX:
+        __m256 costSumVec = _mm256_setzero_ps();
+        __m256i permuteVec = _mm256_setr_epi32(1,2,3,4,5,6,7,7);
+        for (int i = 0; i < inst->nNodes - (AVX_VEC_SIZE-2); i+=(AVX_VEC_SIZE-1))
+        {
+            __m256i index = _mm256_loadu_si256((__m256i_u*)&sol->indexPath[i]);
+            __m256 x1 = _mm256_i32gather_ps(inst->X, index, 4), y1 = _mm256_i32gather_ps(inst->Y, index, 4);
+            __m256 x2 = _mm256_permutevar8x32_ps(x1, permuteVec), y2 = _mm256_permutevar8x32_ps(y1, permuteVec);
+            __m256 cost = computeEdgeCost_VEC(x1, y1, x2, y2, inst);
+            costSumVec = _mm256_add_ps(costSumVec, cost);
+        }
+        
+        float avxStore[AVX_VEC_SIZE];
+        _mm256_storeu_ps(avxStore, costSumVec);
+        for (int i = 0; i < AVX_VEC_SIZE-1; i++)
+            cost += avxStore[i];
+        
+        if (inst->nNodes - (inst->nNodes % (AVX_VEC_SIZE-1)) > 0)
+            for (int i = inst->nNodes - (inst->nNodes % (AVX_VEC_SIZE-1)); i < inst->nNodes; i++)
+                cost += computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i+1]], inst->Y[sol->indexPath[i+1]], inst);
+        break;
+    }
+
+    
 
     return cost;
 }
-#endif
 
 static inline bool isSolDuplicate(Solution *s0, Solution *s1)
 {

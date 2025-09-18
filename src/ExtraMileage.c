@@ -26,17 +26,13 @@ typedef struct
 
     __uint128_t localBestCost;
     int *localBestPath;
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        float *localBestX;
-        float *localBestY;
-    #endif
+    float *localBestX;
+    float *localBestY;
 
     __uint128_t cost;
     int *path;
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        float *X;
-        float *Y;
-    #endif
+    float *X;
+    float *Y;
 
     float *costCache;
 
@@ -60,13 +56,13 @@ static ThreadSharedData initThreadSharedData (Instance *inst, double timeLimit);
 // Destroy mutex
 static void destroyThreadSharedData (ThreadSharedData *thShared);
 
-// Setup internal variables and allocate memory in thSpecific.X/Y if using COMPUTE_OPTION_AVX
+// Setup internal variables and allocate memory in thSpecific.X/Y if using COMP_AVX
 static ThreadSpecificData *initThreadSpecificData (ThreadSharedData *thShared, unsigned int rndState);
 
 // Deallocate memory pointed by thSpecific.X/Y if necessary
 static void destroyThreadSpecificData(ThreadSpecificData *thSpecific);
 
-// Swap elements in thSpecific.path and hSpecific.X, thSpecific.Y if COMPUTE_OPTION_AVX
+// Swap elements in thSpecific.path and hSpecific.X, thSpecific.Y if COMP_AVX
 static inline void swapElemsInThSpecific(ThreadSpecificData *thSpecific, int pos1, int pos2);
 
 // Method called by possibly multiple threads to run extra mileage until time limit. arg is a pointer to a ThreadSpecificData initialized struct
@@ -90,7 +86,9 @@ static void checkSolutionIntegrity(ThreadSpecificData *thSpecific, int nCovered)
 static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCovered, SuccessorData succ);
 
 // Find best or close to best successor
-static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered);
+static SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, int nCovered);
+static SuccessorData findSuccessorMatrix(ThreadSpecificData *thSpecific, int nCovered);
+static SuccessorData findSuccessorAVX(ThreadSpecificData *thSpecific, int nCovered);
 
 
 Solution ExtraMileage(Instance *inst, double timeLimit)
@@ -178,9 +176,8 @@ static ThreadSpecificData *initThreadSpecificData (ThreadSharedData *thShared, u
 {
     Instance *inst = thShared->bestSol.instance;
     size_t memToAlloc = sizeof(ThreadSpecificData) + (inst->nNodes + AVX_VEC_SIZE) * 3 * sizeof(int); // path, localBestPath, costCache
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+    if (inst->params.compType & COMP_AVX)
         memToAlloc += (inst->nNodes + AVX_VEC_SIZE) * 4 * sizeof(float); // X, Y, localBestX, localBestY
-    #endif
 
     ThreadSpecificData *thSpecific = malloc(memToAlloc);
     if (thSpecific == NULL)
@@ -194,17 +191,21 @@ static ThreadSpecificData *initThreadSpecificData (ThreadSharedData *thShared, u
     thSpecific->localBestCost = -1;
 
     thSpecific->localBestPath = (int*)&thSpecific[1];
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+    if (inst->params.compType & COMP_AVX)
+    {
         thSpecific->localBestX = (float*)&thSpecific->localBestPath[inst->nNodes + AVX_VEC_SIZE];
         thSpecific->localBestY = &thSpecific->localBestX[inst->nNodes + AVX_VEC_SIZE];
         thSpecific->path = (int*)&thSpecific->localBestY[inst->nNodes + AVX_VEC_SIZE];
         thSpecific->X = (float*)&thSpecific->path[inst->nNodes + AVX_VEC_SIZE];
         thSpecific->Y = &thSpecific->X[inst->nNodes + AVX_VEC_SIZE];
         thSpecific->costCache = &thSpecific->Y[inst->nNodes + AVX_VEC_SIZE];
-    #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
+    }
+    else
+    {
         thSpecific->path = &thSpecific->localBestPath[inst->nNodes + AVX_VEC_SIZE];
         thSpecific->costCache = (float*)&thSpecific->path[inst->nNodes + AVX_VEC_SIZE];
-    #endif
+        thSpecific->X = NULL;
+    }
 
     return thSpecific;
 }
@@ -216,10 +217,11 @@ static void destroyThreadSpecificData(ThreadSpecificData *thSpecific)
 
 static inline void swapElemsInThSpecific(ThreadSpecificData *thSpecific, int pos1, int pos2)
 {
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+    if (thSpecific->X)
+    {
         swapElems(thSpecific->X[pos1], thSpecific->X[pos2])
         swapElems(thSpecific->Y[pos1], thSpecific->Y[pos2])
-    #endif
+    }
     swapElems(thSpecific->path[pos1], thSpecific->path[pos2])
 }
 
@@ -234,12 +236,13 @@ static void *runExtraMileage(void * arg)
     double currentTime = cvtTimespec2Double(timeStruct);
 
     // set thSpecific->[path,X,Y] and localBest
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+    if (inst->params.compType & COMP_AVX)
+    {
         for (int i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
             thSpecific->X[i] = inst->X[i];
         for (int i = 0; i < (inst->nNodes + AVX_VEC_SIZE) * 2; i++)
             thSpecific->localBestX[i] = inst->X[i];
-    #endif
+    }
     for (int i = 0; i < inst->nNodes + AVX_VEC_SIZE; i++)
         thSpecific->path[i] = i;
     for (int i = 0; i < inst->nNodes + AVX_VEC_SIZE; i++)
@@ -249,18 +252,21 @@ static void *runExtraMileage(void * arg)
     {
         initialization(thSpecific);
 
-        #if ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
-            int *indexPath = thSpecific->path;
-        #endif
+        int *indexPath = thSpecific->path;
 
         // setup costCache
-        #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-            thSpecific->costCache[0] = thSpecific->costCache[1] = computeEdgeCost(thSpecific->X[0], thSpecific->Y[0], thSpecific->X[1], thSpecific->Y[1], inst);
-        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+        switch (inst->params.compType)
+        {
+        case COMP_BASE:
             thSpecific->costCache[0] = thSpecific->costCache[1] = computeEdgeCost(inst->X[indexPath[0]], inst->Y[indexPath[0]], inst->X[indexPath[1]], inst->Y[indexPath[1]], inst);
-        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+            break;
+        case COMP_MATRIX:
             thSpecific->costCache[0] = thSpecific->costCache[1] = inst->edgeCostMat[indexPath[0] * inst->nNodes + indexPath[1]];
-        #endif
+            break;
+        case COMP_AVX:
+            thSpecific->costCache[0] = thSpecific->costCache[1] = computeEdgeCost(thSpecific->X[0], thSpecific->Y[0], thSpecific->X[1], thSpecific->Y[1], inst);
+            break;
+        }
 
         applyExtraMileage(thSpecific, 2);
 
@@ -269,10 +275,11 @@ static void *runExtraMileage(void * arg)
         {
             thSpecific->localBestCost = thSpecific->cost;
             swapElems(thSpecific->path, thSpecific->localBestPath)
-            #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+            if (inst->params.compType & COMP_AVX)
+            {
                 swapElems(thSpecific->X, thSpecific->localBestX)
                 swapElems(thSpecific->Y, thSpecific->localBestY)
-            #endif
+            }
 
             if ((float)cvtCost2Double(thSpecific->cost) < thShared->bestCost)
             {
@@ -341,16 +348,21 @@ static void initialization(ThreadSpecificData *thSpecific)
 
     // update cost
     float firstEdgeCost;
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        firstEdgeCost = computeEdgeCost(thSpecific->X[0], thSpecific->Y[0], thSpecific->X[1], thSpecific->Y[1], inst);
-        thSpecific->cost = cvtFloat2Cost(firstEdgeCost) * 2;
-    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+    switch (inst->params.compType)
+    {
+    case COMP_BASE:
         firstEdgeCost = computeEdgeCost(inst->X[thSpecific->path[0]], inst->Y[thSpecific->path[0]], inst->X[thSpecific->path[1]], inst->Y[thSpecific->path[1]], inst);
         thSpecific->cost = cvtFloat2Cost(firstEdgeCost) * 2;
-    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+        break;
+    case COMP_MATRIX:
         firstEdgeCost = inst->edgeCostMat[(size_t)thSpecific->path[0] * (size_t)inst->nNodes + (size_t)thSpecific->path[1]];
         thSpecific->cost = cvtFloat2Cost(firstEdgeCost) * 2;
-    #endif
+        break;
+    case COMP_AVX:
+        firstEdgeCost = computeEdgeCost(thSpecific->X[0], thSpecific->Y[0], thSpecific->X[1], thSpecific->Y[1], inst);
+        thSpecific->cost = cvtFloat2Cost(firstEdgeCost) * 2;
+        break;
+    }
 }
 
 static inline void farthestPointsInit(ThreadSpecificData *thSpecific)
@@ -358,7 +370,8 @@ static inline void farthestPointsInit(ThreadSpecificData *thSpecific)
     Instance *inst = thSpecific->thShared->bestSol.instance;
     int n = inst->nNodes;
 
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+    if (inst->params.compType & COMP_AVX)
+    {
         __m256 maxCostVec = _mm256_set1_ps(0), rowMaxCostVec = _mm256_set1_ps(0); // cost is always positive
         __m256i maxIndexVec1 = _mm256_set1_epi32(0), maxIndexVec2 = _mm256_set1_epi32(0);
         __m256i incrementVec = _mm256_set1_epi32(AVX_VEC_SIZE), ones = _mm256_set1_epi32(1);
@@ -403,24 +416,20 @@ static inline void farthestPointsInit(ThreadSpecificData *thSpecific)
         thSpecific->initIndexes[0] = maxIndexes[maxIndex];
         _mm256_storeu_si256((__m256i_u *)maxIndexes, maxIndexVec2);
         thSpecific->initIndexes[1] = maxIndexes[maxIndex];
-    #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
+    }
+    else if (inst->params.compType & COMP_BASE)
+    {
         float maxCost = 0;
         for (int i = 0; i < n - 1; i++)
         {
-            #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-                // hope the compiler loads into the registers these variables that are accessed every time in the loop
-                float x1 = inst->X[i];
-                float y1 = inst->Y[i];
-            #endif
+            // hope the compiler loads into the registers these variables that are accessed every time in the loop
+            float x1 = inst->X[i];
+            float y1 = inst->Y[i];
 
             for (int j = i + 1; j < n; j++)
             {
                 float currentCost;
-                #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-                    currentCost = computeEdgeCost(x1, y1, inst->X[j], inst->Y[j], inst);
-                #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-                    currentCost = inst->edgeCostMat[(size_t)i * (size_t)n + (size_t)j];
-                #endif
+                currentCost = computeEdgeCost(x1, y1, inst->X[j], inst->Y[j], inst);
 
                 if (currentCost > maxCost)
                 {
@@ -430,7 +439,26 @@ static inline void farthestPointsInit(ThreadSpecificData *thSpecific)
                 }
             }
         }
-    #endif
+    }
+    else // COMP_MATRIX
+    {
+        float maxCost = 0;
+        for (int i = 0; i < n - 1; i++)
+        {
+            for (int j = i + 1; j < n; j++)
+            {
+                float currentCost;
+                currentCost = inst->edgeCostMat[(size_t)i * (size_t)n + (size_t)j];
+
+                if (currentCost > maxCost)
+                {
+                    maxCost = currentCost;
+                    thSpecific->initIndexes[0] = i;
+                    thSpecific->initIndexes[1] = j;
+                }
+            }
+        }
+    }
 
     LOG(LOG_LVL_DEBUG, "Extra Mileage EM_INIT_FARTHEST_POINTS: maximum cost found between nodes %d and %d", thSpecific->initIndexes[0], thSpecific->initIndexes[1]);
 }
@@ -442,12 +470,13 @@ static void applyExtraMileage(ThreadSpecificData *thSpecific, int nCovered)
     int n = inst->nNodes;
 
     // save element to last position & close the tour at index nCovered
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+    if (inst->params.compType & COMP_AVX)
+    {
         thSpecific->X[n] = thSpecific->X[nCovered];
         thSpecific->Y[n] = thSpecific->Y[nCovered];
         thSpecific->X[nCovered] = thSpecific->X[0];
         thSpecific->Y[nCovered] = thSpecific->Y[0];
-    #endif
+    }
     thSpecific->path[n] = thSpecific->path[nCovered];
     thSpecific->path[nCovered] = thSpecific->path[0];
 
@@ -465,23 +494,38 @@ static void applyExtraMileage(ThreadSpecificData *thSpecific, int nCovered)
         {
             succ.node = genRandom(&thSpecific->rndState, (nCovered + 1), (n + 1));
             succ.anchor = genRandom(&thSpecific->rndState, 0, nCovered);
-
-            #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-                succ.newCost0 = computeEdgeCost(thSpecific->X[succ.node], thSpecific->Y[succ.node], thSpecific->X[succ.anchor], thSpecific->Y[succ.anchor], inst);
-                succ.newCost1 = computeEdgeCost(thSpecific->X[succ.node], thSpecific->Y[succ.node], thSpecific->X[succ.anchor+1], thSpecific->Y[succ.anchor+1], inst);
             
-            #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+            switch (inst->params.compType)
+            {
+            case COMP_BASE:
                 succ.newCost0 = computeEdgeCost(inst->X[thSpecific->path[succ.node]], inst->Y[thSpecific->path[succ.node]], inst->X[thSpecific->path[succ.anchor]], inst->Y[thSpecific->path[succ.anchor]], inst);
                 succ.newCost1 = computeEdgeCost(inst->X[thSpecific->path[succ.node]], inst->Y[thSpecific->path[succ.node]], inst->X[thSpecific->path[succ.anchor+1]], inst->Y[thSpecific->path[succ.anchor+1]], inst);
-
-            #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+                break;
+            case COMP_MATRIX:
                 succ.newCost0 = inst->edgeCostMat[(size_t)thSpecific->path[succ.node] * (size_t)n + (size_t)thSpecific->path[succ.anchor]];
                 succ.newCost1 = inst->edgeCostMat[(size_t)thSpecific->path[succ.node] * (size_t)n + (size_t)thSpecific->path[succ.anchor+1]];
-
-            #endif
+                break;
+            case COMP_AVX:
+                succ.newCost0 = computeEdgeCost(thSpecific->X[succ.node], thSpecific->Y[succ.node], thSpecific->X[succ.anchor], thSpecific->Y[succ.anchor], inst);
+                succ.newCost1 = computeEdgeCost(thSpecific->X[succ.node], thSpecific->Y[succ.node], thSpecific->X[succ.anchor+1], thSpecific->Y[succ.anchor+1], inst);
+                break;
+            }
         }
         else
-            succ = findSuccessor(thSpecific, nCovered);
+        {
+            switch (inst->params.compType)
+            {
+            case COMP_BASE:
+                succ = findSuccessorBase(thSpecific, nCovered);
+                break;
+            case COMP_MATRIX:
+                succ = findSuccessorMatrix(thSpecific, nCovered);
+                break;
+            case COMP_AVX:
+                succ = findSuccessorAVX(thSpecific, nCovered);
+                break;
+            }
+        }
 
         insertNodeInSolution(thSpecific, nCovered, succ);
     }
@@ -522,7 +566,8 @@ static void checkSolutionIntegrity(ThreadSpecificData *thSpecific, int nCovered)
     free(found);
     
     // check X and Y
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+    if (inst->params.compType & COMP_AVX)
+    {
         for (int i = 0; i <= n; i++)
         {
             if (thSpecific->X[i] != inst->X[thSpecific->path[i]])
@@ -530,21 +575,27 @@ static void checkSolutionIntegrity(ThreadSpecificData *thSpecific, int nCovered)
             if (thSpecific->Y[i] != inst->Y[thSpecific->path[i]])
                 throwError("ExtraMileage-checkSolutionIntegrity: thSpecific.Y[%d] does not match correctly", i);
         }
-    #endif
+    }
 
     // check cost and costCache
     __uint128_t recomputedCost = 0;
     for (int i = 0; i < nCovered; i++)
     {
-        #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-            float currEdgeCost = computeEdgeCost(thSpecific->X[i], thSpecific->Y[i], thSpecific->X[i+1], thSpecific->Y[i+1], inst);
-        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-            int *indexPath = thSpecific->path;
-            float currEdgeCost = computeEdgeCost(inst->X[indexPath[i]], inst->Y[indexPath[i]], inst->X[indexPath[i+1]], inst->Y[indexPath[i+1]], inst);
-        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-            int *indexPath = thSpecific->path;
-            float currEdgeCost = inst->edgeCostMat[(size_t)indexPath[i] * (size_t)n + (size_t)indexPath[i+1]];
-        #endif
+        int *indexPath = thSpecific->path;
+        float currEdgeCost;
+        switch (inst->params.compType)
+        {
+        case COMP_BASE:
+            currEdgeCost = computeEdgeCost(inst->X[indexPath[i]], inst->Y[indexPath[i]], inst->X[indexPath[i+1]], inst->Y[indexPath[i+1]], inst);
+            break;
+        case COMP_MATRIX:
+            currEdgeCost = inst->edgeCostMat[(size_t)indexPath[i] * (size_t)n + (size_t)indexPath[i+1]];
+            break;
+        case COMP_AVX:
+            currEdgeCost = computeEdgeCost(thSpecific->X[i], thSpecific->Y[i], thSpecific->X[i+1], thSpecific->Y[i+1], inst);
+            break;
+        }
+        
         if (currEdgeCost != thSpecific->costCache[i])
             throwError("ExtraMileage-checkSolutionIntegrity: costCache is incoherent at position %d", i);
         recomputedCost += cvtFloat2Cost(currEdgeCost);
@@ -557,6 +608,7 @@ static void checkSolutionIntegrity(ThreadSpecificData *thSpecific, int nCovered)
 static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCovered, SuccessorData succ)
 {
     int *indexPath = thSpecific->path;
+    Instance *inst = thSpecific->thShared->bestSol.instance;
 
     nCovered++;
 
@@ -564,45 +616,140 @@ static inline void insertNodeInSolution(ThreadSpecificData *thSpecific, int nCov
     thSpecific->cost += cvtFloat2Cost(succ.newCost0);
     thSpecific->cost += cvtFloat2Cost(succ.newCost1);
 
-    // save best value
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        float bestX, bestY;
-        bestX = thSpecific->X[succ.node];
-        bestY = thSpecific->Y[succ.node];
-    #endif
     int bestIndex = indexPath[succ.node];
-
-    // place elements to insert in the tour at the end of the covered nodes "set"
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        thSpecific->X[succ.node] = thSpecific->X[nCovered];
-        thSpecific->Y[succ.node] = thSpecific->Y[nCovered];
-    #endif
     indexPath[succ.node] = indexPath[nCovered];
-
-    // shift elements forward one at a time
     for (int i = nCovered-1; i > succ.anchor; i--)
     {
-        #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-            thSpecific->X[i+1] = thSpecific->X[i];
-            thSpecific->Y[i+1] = thSpecific->Y[i];
-        #endif
         indexPath[i+1] = indexPath[i];
         thSpecific->costCache[i+1] = thSpecific->costCache[i];
     }
-
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        thSpecific->X[succ.anchor+1] = bestX;
-        thSpecific->Y[succ.anchor+1] = bestY;
-    #endif
     indexPath[succ.anchor+1] = bestIndex;
     thSpecific->costCache[succ.anchor] = succ.newCost0;
     thSpecific->costCache[succ.anchor+1] = succ.newCost1;
 
+    // save best value
+    if (inst->params.compType & COMP_AVX)
+    {
+        float bestX = thSpecific->X[succ.node];
+        float bestY = thSpecific->Y[succ.node];
+        thSpecific->X[succ.node] = thSpecific->X[nCovered];
+        thSpecific->Y[succ.node] = thSpecific->Y[nCovered];
+        // shift elements forward one at a time
+        for (int i = nCovered-1; i > succ.anchor; i--)
+        {
+            thSpecific->X[i+1] = thSpecific->X[i];
+            thSpecific->Y[i+1] = thSpecific->Y[i];
+        }
+        thSpecific->X[succ.anchor+1] = bestX;
+        thSpecific->Y[succ.anchor+1] = bestY;
+    }
+
     LOG(LOG_LVL_TRACE, "Extra Mileage Solution Update: Node %d added to solution between nodes %d and %d", indexPath[succ.anchor+1], indexPath[succ.anchor], indexPath[succ.anchor+2]);
 }
 
-#if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
+static SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, int nCovered)
+{
+    // shortcuts/decluttering
+    Instance *inst = thSpecific->thShared->bestSol.instance;
+    int n = inst->nNodes;
+    int *indexPath = thSpecific->path;
+    int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
+
+    SuccessorData bestSuccs[BASE_GRASP_BEST_SAVE_BUFFER_SIZE];
+    for (int i = 0; i < BASE_GRASP_BEST_SAVE_BUFFER_SIZE; i++)
+        bestSuccs[i].extraCost = INFINITY;
+    
+    
+    for (int node = nCovered+1; node <= n; node++)
+    {
+        float altEdgeCost0, altEdgeCost1;
+        altEdgeCost1 = computeEdgeCost(inst->X[indexPath[0]], inst->Y[indexPath[0]], inst->X[indexPath[node]], inst->Y[indexPath[node]], inst);
+
+        for (int anchor = 0; anchor < nCovered; anchor++)
+        {
+            altEdgeCost0 = altEdgeCost1;
+            altEdgeCost1 = computeEdgeCost(inst->X[indexPath[anchor+1]], inst->Y[indexPath[anchor+1]], inst->X[indexPath[node]], inst->Y[indexPath[node]], inst);
+            
+            SuccessorData currSucc = {
+                 .node=node,
+                 .anchor=anchor, 
+                 .extraCost = altEdgeCost0 + altEdgeCost1 - thSpecific->costCache[anchor],
+                 .newCost0 = altEdgeCost0,
+                 .newCost1 = altEdgeCost1
+            };
+
+            for (int i = 0; i < BASE_GRASP_BEST_SAVE_BUFFER_SIZE; i++)
+            {
+                if (currSucc.extraCost < bestSuccs[i].extraCost)
+                    swapElems(currSucc, bestSuccs[i])
+            }
+        }   
+    }
+    // reached this point we found the absolute #BASE_GRASP_BEST_SAVE_BUFFER_SIZE best combination of anchors and uncovered nodes possible for this iteration
+    int chosedNodeSubIndex = 0;
+    if ((inst->params.graspType == GRASP_ALMOSTBEST) && (graspThreshold > rand_r(&thSpecific->rndState)) && (n - nCovered - 1 > BASE_GRASP_BEST_SAVE_BUFFER_SIZE))
+    {
+        chosedNodeSubIndex = 1;
+        for (; chosedNodeSubIndex < BASE_GRASP_BEST_SAVE_BUFFER_SIZE - 1; chosedNodeSubIndex++)
+            if (rand_r(&thSpecific->rndState) > RAND_MAX / 2)
+                break;
+    }
+
+    return bestSuccs[chosedNodeSubIndex];
+}
+
+static SuccessorData findSuccessorMatrix(ThreadSpecificData *thSpecific, int nCovered)
+{
+    // shortcuts/decluttering
+    Instance *inst = thSpecific->thShared->bestSol.instance;
+    int n = inst->nNodes;
+    int *indexPath = thSpecific->path;
+    int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
+
+    SuccessorData bestSuccs[BASE_GRASP_BEST_SAVE_BUFFER_SIZE];
+    for (int i = 0; i < BASE_GRASP_BEST_SAVE_BUFFER_SIZE; i++)
+        bestSuccs[i].extraCost = INFINITY;
+    
+    
+    for (int node = nCovered+1; node <= n; node++)
+    {
+        float altEdgeCost0, altEdgeCost1;
+        altEdgeCost1 = inst->edgeCostMat[indexPath[node] * n + indexPath [0]];
+
+        for (int anchor = 0; anchor < nCovered; anchor++)
+        {
+            altEdgeCost0 = altEdgeCost1;
+            altEdgeCost1 = inst->edgeCostMat[indexPath[node] * n + indexPath[anchor+1]];
+            
+            SuccessorData currSucc = {
+                 .node=node,
+                 .anchor=anchor, 
+                 .extraCost = altEdgeCost0 + altEdgeCost1 - thSpecific->costCache[anchor],
+                 .newCost0 = altEdgeCost0,
+                 .newCost1 = altEdgeCost1
+            };
+
+            for (int i = 0; i < BASE_GRASP_BEST_SAVE_BUFFER_SIZE; i++)
+            {
+                if (currSucc.extraCost < bestSuccs[i].extraCost)
+                    swapElems(currSucc, bestSuccs[i])
+            }
+        }   
+    }
+    // reached this point we found the absolute #BASE_GRASP_BEST_SAVE_BUFFER_SIZE best combination of anchors and uncovered nodes possible for this iteration
+    int chosedNodeSubIndex = 0;
+    if ((inst->params.graspType == GRASP_ALMOSTBEST) && (graspThreshold > rand_r(&thSpecific->rndState)) && (n - nCovered - 1 > BASE_GRASP_BEST_SAVE_BUFFER_SIZE))
+    {
+        chosedNodeSubIndex = 1;
+        for (; chosedNodeSubIndex < BASE_GRASP_BEST_SAVE_BUFFER_SIZE - 1; chosedNodeSubIndex++)
+            if (rand_r(&thSpecific->rndState) > RAND_MAX / 2)
+                break;
+    }
+
+    return bestSuccs[chosedNodeSubIndex];
+}
+
+static SuccessorData findSuccessorAVX(ThreadSpecificData *thSpecific, int nCovered)
 {
     // shortcuts/decluttering
     Instance *inst = thSpecific->thShared->bestSol.instance;
@@ -693,65 +840,4 @@ static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
 
     return retVal;
 }
-
-#elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
-static SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int nCovered)
-{
-    // shortcuts/decluttering
-    Instance *inst = thSpecific->thShared->bestSol.instance;
-    int n = inst->nNodes;
-    int *indexPath = thSpecific->path;
-    int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
-
-    SuccessorData bestSuccs[BASE_GRASP_BEST_SAVE_BUFFER_SIZE];
-    for (int i = 0; i < BASE_GRASP_BEST_SAVE_BUFFER_SIZE; i++)
-        bestSuccs[i].extraCost = INFINITY;
-    
-    
-    for (int node = nCovered+1; node <= n; node++)
-    {
-        float altEdgeCost0, altEdgeCost1;
-        #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-            altEdgeCost1 = computeEdgeCost(inst->X[indexPath[0]], inst->Y[indexPath[0]], inst->X[indexPath[node]], inst->Y[indexPath[node]], inst);
-        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-            altEdgeCost1 = inst->edgeCostMat[indexPath[node] * n + indexPath [0]]; 
-        #endif
-
-        for (int anchor = 0; anchor < nCovered; anchor++)
-        {
-            altEdgeCost0 = altEdgeCost1;
-            #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-                altEdgeCost1 = computeEdgeCost(inst->X[indexPath[anchor+1]], inst->Y[indexPath[anchor+1]], inst->X[indexPath[node]], inst->Y[indexPath[node]], inst);
-            #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-                altEdgeCost1 = inst->edgeCostMat[indexPath[node] * n + indexPath[anchor+1]];
-            #endif
-            
-            SuccessorData currSucc = {
-                 .node=node,
-                 .anchor=anchor, 
-                 .extraCost = altEdgeCost0 + altEdgeCost1 - thSpecific->costCache[anchor],
-                 .newCost0 = altEdgeCost0,
-                 .newCost1 = altEdgeCost1
-            };
-
-            for (int i = 0; i < BASE_GRASP_BEST_SAVE_BUFFER_SIZE; i++)
-            {
-                if (currSucc.extraCost < bestSuccs[i].extraCost)
-                    swapElems(currSucc, bestSuccs[i])
-            }
-        }   
-    }
-    // reached this point we found the absolute #BASE_GRASP_BEST_SAVE_BUFFER_SIZE best combination of anchors and uncovered nodes possible for this iteration
-    int chosedNodeSubIndex = 0;
-    if ((inst->params.graspType == GRASP_ALMOSTBEST) && (graspThreshold > rand_r(&thSpecific->rndState)) && (n - nCovered - 1 > BASE_GRASP_BEST_SAVE_BUFFER_SIZE))
-    {
-        chosedNodeSubIndex = 1;
-        for (; chosedNodeSubIndex < BASE_GRASP_BEST_SAVE_BUFFER_SIZE - 1; chosedNodeSubIndex++)
-            if (rand_r(&thSpecific->rndState) > RAND_MAX / 2)
-                break;
-    }
-
-    return bestSuccs[chosedNodeSubIndex];
-}
-#endif
 

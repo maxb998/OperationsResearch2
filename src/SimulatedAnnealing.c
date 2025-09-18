@@ -45,10 +45,8 @@ typedef struct
     int maxTries;
 
     float *costCache;
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)) // useful for 2opt
-        float *X;
-        float *Y;
-    #endif
+    float *X;
+    float *Y;
 
 } __attribute__((aligned(64))) ThreadSpecificData;
 
@@ -151,23 +149,25 @@ static inline ThreadSpecificData initThreadSpecificData(Solution *sol, ThreadSha
         .nNodesSqrt = sqrt(n),
         .maxTries = (int)MAX_TRIES_FUNC(n),
         .rndState = rndState,
-        .thShared = thShared
+        .thShared = thShared,
+        .X = NULL,
+        .Y = NULL
     };
 
     size_t memToAlloc = (n + AVX_VEC_SIZE) * (sizeof(float) + sizeof(int));
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+    if (inst->params.compType & (COMP_BASE|COMP_AVX))
         memToAlloc += (n + AVX_VEC_SIZE) * sizeof(float) * 2;
-    #endif
     thSpecific.sol.indexPath = malloc(memToAlloc);
     if (!thSpecific.sol.indexPath)
         throwError("SimulatedAnnealing -> initThreadSpecificData: failed to allocate memory");
 
     thSpecific.costCache = (float*)&thSpecific.sol.indexPath[n+AVX_VEC_SIZE];
     
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+    if (inst->params.compType & (COMP_BASE|COMP_AVX))
+    {
         thSpecific.X = &thSpecific.costCache[n + AVX_VEC_SIZE];
         thSpecific.Y = &thSpecific.X[n + AVX_VEC_SIZE];
-    #endif
+    }
 
     // cloning of solution and setup of remaining data
     pthread_mutex_lock(&thShared->mutex);
@@ -176,7 +176,8 @@ static inline ThreadSpecificData initThreadSpecificData(Solution *sol, ThreadSha
 
     thSpecific.sol.indexPath[n] = thSpecific.sol.indexPath[0];
     
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+    if (inst->params.compType & (COMP_BASE|COMP_AVX))
+    {
         for (int i = 0; i < n+1; i++)
         {
             thSpecific.X[i] = inst->X[sol->indexPath[i]];
@@ -187,14 +188,17 @@ static inline ThreadSpecificData initThreadSpecificData(Solution *sol, ThreadSha
             thSpecific.X[i] = INFINITY;
             thSpecific.Y[i] = INFINITY;
         }
-    #endif
 
-    for (int i = 0; i < n; i++)
-        #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+        // build costCache
+        for (int i = 0; i < n; i++)
             thSpecific.costCache[i] = computeEdgeCost(thSpecific.X[i], thSpecific.Y[i], thSpecific.X[i+1], thSpecific.Y[i+1], inst);
-        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+    }
+    else
+    {
+        // build costCache
+        for (int i = 0; i < n; i++)
             thSpecific.costCache[i] = inst->edgeCostMat[thSpecific.sol.indexPath[i] * (size_t)n + thSpecific.sol.indexPath[i+1]];
-        #endif
+    }
 
     for (int i = n; i < n + AVX_VEC_SIZE; i++) // according to 2opt notation
         thSpecific.costCache[i] = INFINITY;
@@ -207,10 +211,8 @@ static inline void destroyThreadSpecificData(ThreadSpecificData *thSpecific)
     free(thSpecific->sol.indexPath);
     thSpecific->sol.indexPath = NULL;
     thSpecific->costCache = NULL;
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-        thSpecific->X = NULL;
-        thSpecific->Y = NULL;
-    #endif
+    thSpecific->X = NULL;
+    thSpecific->Y = NULL;
 }
 
 static void * runSimulatedAnnealing(void * arg)
@@ -268,11 +270,7 @@ static void * runSimulatedAnnealing(void * arg)
         LOG(LOG_LVL_DEBUG, "[%d] Giving up and running 2-Opt at temp=%e", thSpecific->iters, thSpecific->temperature);
 
         // "fake" remaining annealing move with very low temperature (only improving moves) using 2opt, way less time than just waiting for improving moves to come up at random
-        #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-            apply2OptBestFix_fastIteratively(sol, thSpecific->X, thSpecific->Y, thSpecific->costCache);
-        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-            apply2OptBestFix_fastIteratively(sol, thSpecific->costCache);
-        #endif
+        apply2OptBestFix_fastIteratively(sol, thSpecific->X, thSpecific->Y, thSpecific->costCache);
 
         LOG(LOG_LVL_DEBUG, "[%d] post 2-Opt solution cost = %lf", thSpecific->iters, cvtCost2Double(thSpecific->sol.cost));
 
@@ -296,12 +294,9 @@ static inline MoveData randomMoveOffsetEstimation(ThreadSpecificData *thSpecific
     Instance *inst = thSpecific->sol.instance;
     int n = inst->nNodes;
 
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-        float *X = thSpecific->X;
-        float *Y = thSpecific->Y;
-    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-        int *p = thSpecific->sol.indexPath;
-    #endif
+    float *X = thSpecific->X;
+    float *Y = thSpecific->Y;
+    int *p = thSpecific->sol.indexPath;
 
     MoveData s;
 
@@ -313,13 +308,16 @@ static inline MoveData randomMoveOffsetEstimation(ThreadSpecificData *thSpecific
     if (s.index1 > s.index2)
         swapElems(s.index1, s.index2);
 
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+    if (inst->params.compType & (COMP_BASE|COMP_AVX))
+    {
         s.newEdge1Cost = computeEdgeCost(X[s.index1], Y[s.index1], X[s.index2], Y[s.index2], inst);
         s.newEdge2Cost = computeEdgeCost(X[s.index1+1], Y[s.index1+1], X[s.index2+1], Y[s.index2+1], inst);
-    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+    }
+    else
+    {
         s.newEdge1Cost = inst->edgeCostMat[p[s.index1] * (size_t)n + p[s.index2]];
         s.newEdge2Cost = inst->edgeCostMat[p[s.index1+1] * (size_t)n + p[s.index2+1]];
-    #endif
+    }
 
     s.offset = s.newEdge1Cost + s.newEdge2Cost - (thSpecific->costCache[s.index1] + thSpecific->costCache[s.index2]);
     
@@ -353,12 +351,15 @@ static inline void performMove(ThreadSpecificData *thSpecific, MoveData m)
 
     // Update arrays
     for (int s = m.index1+1, b = m.index2; s < b; s++, b--)
-    {
         swapElems(thSpecific->sol.indexPath[s], thSpecific->sol.indexPath[b])
-        #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+        
+    if (thSpecific->sol.instance->params.compType & (COMP_BASE|COMP_AVX))
+    {
+        for (int s = m.index1+1, b = m.index2; s < b; s++, b--)
+        {
             swapElems(thSpecific->X[s], thSpecific->X[b])
             swapElems(thSpecific->Y[s], thSpecific->Y[b])
-        #endif
+        }
     }
 
     // Update cost cache
@@ -413,18 +414,19 @@ static inline void restartOnBestSol(ThreadSpecificData *thSpecific)
     int *solPath = thSpecific->sol.indexPath;
     solPath[n] = solPath[0];
     
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+    if (inst->params.compType & (COMP_BASE|COMP_AVX))
+    {
         for (int i = 0; i <= n; i++)
         {
             thSpecific->X[i] = inst->X[solPath[i]];
             thSpecific->Y[i] = inst->Y[solPath[i]];
         }
-    #endif
 
-    for (int i = 0; i < n; i++)
-        #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+        for (int i = 0; i < n; i++)
             thSpecific->costCache[i] = computeEdgeCost(thSpecific->X[i], thSpecific->Y[i], thSpecific->X[i+1], thSpecific->Y[i+1], inst);
-        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+    }
+    else
+        for (int i = 0; i < n; i++)
             thSpecific->costCache[i] = inst->edgeCostMat[solPath[i] * (size_t)n + solPath[i+1]];
-        #endif
 }
+

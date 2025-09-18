@@ -24,9 +24,7 @@ Instance newInstance ()
     Instance d = {
         .nNodes = 0,
         .X = NULL, .Y = NULL,
-        #if (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
         .edgeCostMat = NULL,
-        #endif
         .params = {
             .inputFile = { 0 },
             .mode=MODE_NONE,
@@ -57,6 +55,7 @@ Instance newInstance ()
             .showPlot = false,
             .saveSolution = false,
             .logLevel=LOG_LVL_INFO,
+            .compType=0,
 
             .edgeWeightType  = -1,
             .name = { 0 },
@@ -102,10 +101,8 @@ void destroyInstance (Instance *inst)
     inst->X = NULL;
     inst->Y = NULL;
 
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-        free(inst->edgeCostMat);
-        inst->edgeCostMat = NULL;
-    #endif
+    free(inst->edgeCostMat);
+    inst->edgeCostMat = NULL;
 }
 
 void destroySolution (Solution *sol)
@@ -205,17 +202,18 @@ __uint128_t computeSolutionCost(Solution *sol)
     int n = inst->nNodes;
     __uint128_t cost = 0;
 
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-        for (int i = 0; i < n - 1; i++)
-            cost += cvtFloat2Cost(computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i+1]], inst->Y[sol->indexPath[i+1]], inst));
-        
-        cost += cvtFloat2Cost(computeEdgeCost(inst->X[sol->indexPath[n-1]], inst->Y[sol->indexPath[n-1]], inst->X[sol->indexPath[0]], inst->Y[sol->indexPath[0]], inst));
-    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+    if (inst->params.compType == COMP_MATRIX)
+    {
         for (int i = 0; i < n - 1; i++)
             cost += cvtFloat2Cost(inst->edgeCostMat[(size_t)sol->indexPath[i] * (size_t)n + (size_t)sol->indexPath[i+1]]);
-        
         cost += cvtFloat2Cost(inst->edgeCostMat[(size_t)sol->indexPath[n-1] * (size_t)n + (size_t)sol->indexPath[0]]);
-    #endif
+    }
+    else
+    {
+        for (int i = 0; i < n - 1; i++)
+            cost += cvtFloat2Cost(computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i+1]], inst->Y[sol->indexPath[i+1]], inst));
+        cost += cvtFloat2Cost(computeEdgeCost(inst->X[sol->indexPath[n-1]], inst->Y[sol->indexPath[n-1]], inst->X[sol->indexPath[0]], inst->Y[sol->indexPath[0]], inst));
+    }
 
     return cost;
 }

@@ -24,6 +24,9 @@ int main (int argc, char *argv[])
     Instance inst = newInstance();
     argParse(&inst, argc, argv);
 
+    if ((inst.params.compType & (COMP_BASE|COMP_MATRIX|COMP_AVX)) == 0)
+        inst.params.compType = COMP_BASE;
+
     if (inst.params.randomSeed != -1)
         srand(inst.params.randomSeed);
     else
@@ -38,13 +41,13 @@ int main (int argc, char *argv[])
     if (inst.params.edgeWeightType > 4)
         throwError("Edge Weight Type is not supported. This solver only support: EUC_2D, MAN_2D, MAX_2D, CEIL_2D, ATT");
     
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+    if (inst.params.compType == COMP_MATRIX)
+    {
         printf(SEPARATOR_STR);
         double computeMatrixTime = computeCostMatrix(&inst);
         LOG(LOG_LVL_NOTICE, "Distance Matrix done in %lf seconds", computeMatrixTime);
         printf(SEPARATOR_STR"\n");
-    #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_USE_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_BASE))
-    #endif
+    }
 
     // initializing pointers to null to avoid possible errors on destruction of sol at the end of main
     Solution sol = { .instance=&inst, .indexPath = NULL };

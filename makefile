@@ -20,15 +20,6 @@ BIN_DIR = bin/debug/
 CFLAGS = -Wall -g -mfma -msse4 -mavx2 -march=native -mtune=native -Isrc/headers
 endif
 
-# avx default
-# PREPROCDEF = -D COMPUTATION_TYPE=0
-# ifeq ($(COMPUTATION),base)
-# PREPROCDEF = -D COMPUTATION_TYPE=1
-# endif
-# ifeq ($(COMPUTATION),matrix)
-# PREPROCDEF = -D COMPUTATION_TYPE=2
-# endif
-
 # separate files into the ones that use cplex and will need the extra compiler flag to find cplex headers and the ones which don't use it
 SOURCE_NAMES_NO_CPLEX = TspUtilities.c ArgParser.c TspIOUtils.c CostMatrix.c NearestNeighbor.c ExtraMileage.c 2Opt.c 2OptMultithread.c 3Opt.c 3OptMultithread.c Tabu.c VariableNeighborhood.c Genetic.c SimulatedAnnealing.c
 SOURCE_NAMES_CPLEX = main.c TspCplex.c Benders.c PatchingHeuristic.c BranchAndCut.c HardFixing.c LocalBranching.c
@@ -66,7 +57,7 @@ $(OBJ_DIR)%.o: $(SRC_DIR)%.c $(HEADER_FILES_NO_CPLEX)
 SRC_FILES_PATH := $(SOURCE_NAMES_NO_CPLEX:%=$(SRC_DIR)%) $(SOURCE_NAMES_CPLEX:%=$(SRC_DIR)%)
 
 final:
-	$(CC) -D COMPUTATION_TYPE=0 -O3 -ftree-loop-im -mfma -msse4 -mavx2 -march=native -mtune=native -Isrc/headers $(LDFLAGS1) $(CPLEX_HEADERS_COMPILER_FLAG) $(SRC_FILES_PATH) -o bin/release/main $(LDFLAGS2)
+	$(CC) -D -O3 -ftree-loop-im -mfma -msse4 -mavx2 -march=native -mtune=native -Isrc/headers $(LDFLAGS1) $(CPLEX_HEADERS_COMPILER_FLAG) $(SRC_FILES_PATH) -o bin/release/main $(LDFLAGS2)
 
 # delete all gcc output files
 clean:

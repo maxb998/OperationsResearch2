@@ -3,10 +3,7 @@
 
 #include "TspBase.h"
 #include <math.h>
-
-#if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-	#include <immintrin.h>
-#endif
+#include <immintrin.h>
 
 
 static inline float noSquaredRootEdgeCost (float x1, float y1, float x2, float y2, Instance *inst)
@@ -61,9 +58,6 @@ static inline float computeEdgeCost (float x1, float y1, float x2, float y2, Ins
 	return cost;
 }
 
-
-
-#if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
 
 static inline __m256 noSquaredRootEdgeCost_VEC (__m256 x1, __m256 y1, __m256 x2, __m256 y2, Instance *inst)
 {
@@ -155,7 +149,5 @@ static inline __m256 computeApproxEdgeCost_VEC (__m256 x1, __m256 y1,  __m256 x2
 	
 	return costVec;
 }
-
-#endif
 
 #endif // EDGE_COST_FUNCTIONS

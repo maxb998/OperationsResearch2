@@ -1,7 +1,5 @@
 #include "Tsp.h"
 
-#if (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-
 #include <pthread.h>
 #include <time.h>
 #include <unistd.h> // needed to get the _POSIX_MONOTONIC_CLOCK and measure time
@@ -109,5 +107,3 @@ static void * computeDistMatThread(void* arg)
 
     pthread_exit(NULL);
 }
-
-#endif

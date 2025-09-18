@@ -28,6 +28,11 @@
 #define SUBOPT_LOG_DEBUG "debug"
 #define SUBOPT_LOG_TRACE "trace"
 
+// #define SUBOPT_COMP_AUTO "auto"
+#define SUBOPT_COMP_BASIC "base"
+#define SUBOPT_COMP_MATRIX "matrix"
+#define SUBOPT_COMP_AVX "avx"
+
 #define DOC_NN SUBOPT_BLANKSPACE SUBOPT_NN "\t\t: Use Nearest Neighbor\n"
 #define DOC_EM SUBOPT_BLANKSPACE SUBOPT_EM "\t\t: Use Extra Mileage\n"
 #define DOC_TABU SUBOPT_BLANKSPACE SUBOPT_TABU "\t\t: Use Tabu Search\n"
@@ -89,7 +94,17 @@ SUBOPT_BLANKSPACE SUBOPT_LOG_DEBUG "\t\t: Show debug messages and all above\n" \
 SUBOPT_BLANKSPACE SUBOPT_LOG_TRACE "\t\t: Show all messages\n"
 
 static const char *logLevelStrings[] = { SUBOPT_LOG_ERROR, SUBOPT_LOG_CRITICAL, SUBOPT_LOG_WARNING, SUBOPT_LOG_NOTICE, SUBOPT_LOG_INFO, SUBOPT_LOG_DEBUG, SUBOPT_LOG_TRACE };
-static const int loglvlsCount = sizeof(logLevelStrings)/sizeof(*logLevelStrings);
+#define LOGLVLSCOUNT sizeof(logLevelStrings)/sizeof(*logLevelStrings)
+
+#define COMPUTATION_TYPE_DOC "\
+Specify the way cost computations are performed\n"\
+SUBOPT_BLANKSPACE SUBOPT_COMP_BASIC "\t\t: Standard way of perfoming cost computations one at a time\n"\
+SUBOPT_BLANKSPACE SUBOPT_COMP_MATRIX "\t: Use a matrix to precompute all the costs in the beginning only\n"\
+SUBOPT_BLANKSPACE SUBOPT_COMP_AVX "\t\t: Use a avx instructions to perform cost computations where possible\n"\
+// SUBOPT_BLANKSPACE SUBOPT_COMP_AUTO "\t\t: Automatically choose the best option based on the size of the instance\n"
+
+static const char *compTypeStrings[] = {SUBOPT_COMP_BASIC, SUBOPT_COMP_MATRIX, SUBOPT_COMP_AVX};
+#define COMPTYPECOUNT sizeof(compTypeStrings)/sizeof(*compTypeStrings)
 
 enum argpKeys{
     ARGP_FILE='f',
@@ -122,7 +137,9 @@ enum argpKeys{
     ARGP_ROUND='r',
     ARGP_PLOT='p',
     ARGP_SAVE='s',
-    ARGP_LOG_LEVEL='l'
+    ARGP_LOG_LEVEL='l',
+
+    ARGP_COMPUTATION_TYPE='c',
 };
 
 error_t argpParser(int key, char *arg, struct argp_state *state);
@@ -172,6 +189,7 @@ void argParse(Instance * inst, int argc, char *argv[])
         { .name="plot", .key=ARGP_PLOT, .arg=NULL, .flags=0, .doc="Specify this if yout want to plot final result\n", .group=6 },
         { .name="save", .key=ARGP_SAVE, .arg=NULL, .flags=0, .doc="Specify this if yout want to save final result in run/\n", .group=6 },
         { .name="loglvl", .key=ARGP_LOG_LEVEL, .arg="STRING", .flags=0, .doc=LOG_LEVEL_DOC, .group=6 },
+        { .name="computationtype", .key=ARGP_COMPUTATION_TYPE, .arg="STRING", .flags=0, .doc=COMPUTATION_TYPE_DOC, .group=6 },
         { 0 }
     };
 
@@ -306,9 +324,13 @@ error_t argpParser(int key, char *arg, struct argp_state *state)
         break;
     
     case ARGP_LOG_LEVEL:
-        parseEnumOption(arg, (int*)&inst->params.logLevel, logLevelStrings, 0, loglvlsCount, "loglvl");
+        parseEnumOption(arg, (int*)&inst->params.logLevel, logLevelStrings, 0, LOGLVLSCOUNT, "loglvl");
         setLogLevel(inst->params.logLevel);
         break;
+    
+    case ARGP_COMPUTATION_TYPE:
+        parseEnumOption(arg, (int*)&inst->params.compType, compTypeStrings, 0, COMPTYPECOUNT, "computationtype");
+        inst->params.compType = 1 << inst->params.compType;
     
     case ARGP_KEY_END:
         // check if necessary flags have been provided

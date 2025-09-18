@@ -14,15 +14,9 @@
 
 #define USE_REDUCED_DISTANCE_SET // only use EUC_2D, CEIL_2D and ATT distances since those are the only ones in the selected 81 tsplib .tsp files
 
-#define COMPUTE_OPTION_AVX 0
-#define COMPUTE_OPTION_BASE 1 
-#define COMPUTE_OPTION_USE_COST_MATRIX 2
-
-#define COMPUTATION_TYPE COMPUTE_OPTION_AVX
-
 // #define DEBUG
 
-// Amount of "best" elements to save when using grasp almostbest option and NOT using COMPUTE_OPTION_AVX
+// Amount of "best" elements to save when using grasp almostbest option and NOT using COMP_AVX
 #define BASE_GRASP_BEST_SAVE_BUFFER_SIZE 4
 
 
@@ -36,6 +30,12 @@ enum LogLevel{
 	LOG_LVL_TRACE
 };
 
+enum ComputationType{
+	// COMP_AUTO=1,
+	COMP_BASE=1,
+	COMP_MATRIX=2,
+	COMP_AVX=4,
+};
 
 enum EdgeWeightType{
 	#ifndef USE_REDUCED_DISTANCE_SET
@@ -125,6 +125,7 @@ typedef struct
 	bool showPlot;
 	bool saveSolution;
 	enum LogLevel logLevel;
+	enum ComputationType compType;
 
 	enum EdgeWeightType edgeWeightType;
 	char name[200];
@@ -137,9 +138,7 @@ typedef struct
     float *X;
     float *Y;
 
-	#if (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
 	float *edgeCostMat;
-	#endif
 
     Parameters params;
 } Instance;

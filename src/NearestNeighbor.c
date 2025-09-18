@@ -27,17 +27,13 @@ typedef struct
 
     __uint128_t localBestCost;
     int *localBestPath;
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-        float *localBestX;
-        float *localBestY;
-    #endif
+    float *localBestX;
+    float *localBestY;
 
     __uint128_t cost;
     int *path;
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-        float *X;
-        float *Y;
-    #endif
+    float *X;
+    float *Y;
 
 } ThreadSpecificData;
 
@@ -54,7 +50,7 @@ static ThreadSharedData initThreadSharedData (Instance *inst, double timeLimit);
 // Destroy mutexes
 static void destroyThreadSharedData (ThreadSharedData *thShared);
 
-// Setup internal variables and allocate memory in thSpecific.X/Y if using COMPUTE_OPTION_AVX
+// Setup internal variables and allocate memory in thSpecific.X/Y if using COMP_AVX
 static ThreadSpecificData *initThreadSpecificData (ThreadSharedData *thShared, unsigned int rndState);
 
 // Deallocate memory pointed by thSpecific.X/Y if necessary
@@ -72,13 +68,12 @@ static void applyNearestNeighbor(ThreadSpecificData *thSpecific, int firstNode);
 // Swap elements in thSpecific.X, thSpecific.Y and thSpecific.workingSol.indexPath
 static inline void swapElemsInThSpecific(ThreadSpecificData *thSpecific, int pos1, int pos2);
 
-#if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
 // finds the closest unvisited node using vectorized(SIMD) instructions
-static inline SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int lastPos);
-#elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
-// finds the closest unvisited node using normal(SISD) instructions
-static inline SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int lastAddedPos);
-#endif
+static inline SuccessorData findSuccessorAVX(ThreadSpecificData *thSpecific, int lastPos);
+
+static inline SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, int lastAddedPos);
+
+static inline SuccessorData findSuccessorMatrix(ThreadSpecificData *thSpecific, int lastAddedPos);
 
 
 Solution NearestNeighbor(Instance *inst, double timeLimit)
@@ -167,9 +162,8 @@ static ThreadSpecificData *initThreadSpecificData (ThreadSharedData *thShared, u
 {
     Instance *inst = thShared->bestSol.instance;
     size_t memToAlloc = sizeof(ThreadSpecificData) + (inst->nNodes + AVX_VEC_SIZE) * 2 * sizeof(int);
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+    if (inst->params.compType & (COMP_AVX|COMP_BASE))
         memToAlloc += (inst->nNodes + AVX_VEC_SIZE) * 4 * sizeof(float);
-    #endif
 
     ThreadSpecificData *thSpecific = malloc(memToAlloc);
     if (thSpecific == NULL)
@@ -181,15 +175,16 @@ static ThreadSpecificData *initThreadSpecificData (ThreadSharedData *thShared, u
     thSpecific->localBestCost = -1;
 
     thSpecific->localBestPath = (int*)&thSpecific[1];
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+    if (inst->params.compType & (COMP_AVX|COMP_BASE))
+    {
         thSpecific->localBestX = (float*)&thSpecific->localBestPath[inst->nNodes + AVX_VEC_SIZE];
         thSpecific->localBestY = &thSpecific->localBestX[inst->nNodes + AVX_VEC_SIZE];
         thSpecific->path = (int*)&thSpecific->localBestY[inst->nNodes + AVX_VEC_SIZE];
         thSpecific->X = (float*)&thSpecific->path[inst->nNodes + AVX_VEC_SIZE];
         thSpecific->Y = &thSpecific->X[inst->nNodes + AVX_VEC_SIZE];
-    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+    }
+    else if(inst->params.compType & COMP_MATRIX)
         thSpecific->path = &thSpecific->localBestPath[inst->nNodes + AVX_VEC_SIZE];
-    #endif
 
     return thSpecific;
 }
@@ -211,12 +206,13 @@ static void *loopNearestNeighbor(void *arg)
     double currentTime = cvtTimespec2Double(timeStruct);
 
     // set thSpecific->[path,X,Y] and localBest
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+    if (inst->params.compType & (COMP_AVX|COMP_BASE))
+    {
         for (int i = 0; i < (n + AVX_VEC_SIZE) * 2; i++)
             thSpecific->X[i] = inst->X[i];
         for (int i = 0; i < (n + AVX_VEC_SIZE) * 2; i++)
             thSpecific->localBestX[i] = inst->X[i];
-    #endif
+    }
     for (int i = 0; i < n + AVX_VEC_SIZE; i++)
         thSpecific->path[i] = i;
     for (int i = 0; i < n + AVX_VEC_SIZE; i++)
@@ -232,10 +228,10 @@ static void *loopNearestNeighbor(void *arg)
         if (inst->params.nnFirstNodeOption == NN_FIRST_TRYALL)
         {
             // reset needed in case we want a fully deterministic algorithm(starting order inside thSpecific.[X,Y,path] influences the output)
-            #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+            if (inst->params.compType & (COMP_AVX|COMP_BASE))
                 for (int i = 0; i < (n + AVX_VEC_SIZE) * 2; i++)
                     thSpecific->X[i] = inst->X[i];
-            #endif
+
             for (int i = 0; i < n + AVX_VEC_SIZE; i++)
                 thSpecific->path[i] = i;
 
@@ -254,10 +250,11 @@ static void *loopNearestNeighbor(void *arg)
         {
             thSpecific->localBestCost = thSpecific->cost;
             swapElems(thSpecific->path, thSpecific->localBestPath)
-            #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+            if (inst->params.compType & (COMP_AVX|COMP_BASE))
+            {
                 swapElems(thSpecific->X, thSpecific->localBestX)
                 swapElems(thSpecific->Y, thSpecific->localBestY)
-            #endif
+            }
 
             if ((float)cvtCost2Double(thSpecific->cost) < thShared->bestCost)
             {
@@ -334,19 +331,25 @@ static void applyNearestNeighbor(ThreadSpecificData *thSpecific, int firstNode)
         {
             successor.node = genRandom(&thSpecific->rndState, (i+1), n);
 
-            #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+            if (inst->params.compType & (COMP_BASE|COMP_AVX))
                 successor.cost = computeEdgeCost(thSpecific->X[i], thSpecific->Y[i], thSpecific->X[successor.node], thSpecific->Y[successor.node], inst);
-            #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+            else
                 successor.cost = inst->edgeCostMat[(size_t)thSpecific->path[i] * (size_t)n + (size_t)thSpecific->path[successor.node]];
-            #endif
         }
         else
         {
-            #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-                successor = findSuccessor(thSpecific, i);
-            #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
-                successor = findSuccessor(thSpecific, i);
-            #endif
+            switch (inst->params.compType)
+            {
+            case COMP_BASE:
+                successor = findSuccessorBase(thSpecific, i);
+                break;
+            case COMP_MATRIX:
+                successor = findSuccessorMatrix(thSpecific, i);
+                break;
+            case COMP_AVX:
+                successor = findSuccessorAVX(thSpecific, i);
+                break;
+            }
         }
 
         // simple debugging check. can be removed, but saved a lot of headaches so it's going to stay there
@@ -363,13 +366,16 @@ static void applyNearestNeighbor(ThreadSpecificData *thSpecific, int firstNode)
     float secondToLastCost, lastCost;
 
     // add cost of the two remaining edges
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+    if (inst->params.compType & (COMP_BASE|COMP_AVX))
+    {
         secondToLastCost = computeEdgeCost(thSpecific->X[n - 2], thSpecific->Y[n - 2], thSpecific->X[n - 1], thSpecific->Y[n - 1], inst);
         lastCost = computeEdgeCost(thSpecific->X[n - 1], thSpecific->Y[n - 1], thSpecific->X[0], thSpecific->Y[0], inst);
-    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+    }
+    else // COMP_MATRIX
+    {
         secondToLastCost = inst->edgeCostMat[(size_t)thSpecific->path[n-2] * (size_t)n + (size_t)thSpecific->path[n-1]];
         lastCost = inst->edgeCostMat[(size_t)thSpecific->path[n-1] * (size_t)n + (size_t)thSpecific->path[0]];
-    #endif
+    }
 
     thSpecific->cost += cvtFloat2Cost(secondToLastCost);
     thSpecific->cost += cvtFloat2Cost(lastCost);
@@ -377,15 +383,15 @@ static void applyNearestNeighbor(ThreadSpecificData *thSpecific, int firstNode)
 
 static inline void swapElemsInThSpecific(ThreadSpecificData *thSpecific, int pos1, int pos2)
 {
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)) //thSpecific->X in not used otherwise
+    if (thSpecific->thShared->bestSol.instance->params.compType & (COMP_BASE|COMP_AVX)) //thSpecific->X in not used otherwise
+    {
         swapElems(thSpecific->X[pos1], thSpecific->X[pos2])
         swapElems(thSpecific->Y[pos1], thSpecific->Y[pos2])
-    #endif
+    }
     swapElems(thSpecific->path[pos1], thSpecific->path[pos2])
 }
 
-#if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-static inline SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int lastAddedPos)
+static inline SuccessorData findSuccessorAVX(ThreadSpecificData *thSpecific, int lastAddedPos)
 {
     Instance *inst = thSpecific->thShared->bestSol.instance;
 
@@ -453,8 +459,8 @@ static inline SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int la
 
     return succ;
 }
-#elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
-static inline SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int lastAddedPos)
+
+static inline SuccessorData findSuccessorBase(ThreadSpecificData *thSpecific, int lastAddedPos)
 {
     Instance *inst = thSpecific->thShared->bestSol.instance;
     int n = inst->nNodes;
@@ -466,10 +472,6 @@ static inline SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int la
         bestSuccs[i].cost = INFINITY;
         bestSuccs[i].node = -1;
     }
-    
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-    int lastAddedIndex = thSpecific->path[lastAddedPos];
-    #endif
 
     int posToAdd = lastAddedPos + 1;
 
@@ -477,17 +479,11 @@ static inline SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int la
     {   
         SuccessorData currentSucc = { .node=node };
 
-        #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-            currentSucc.cost = noSquaredRootEdgeCost(thSpecific->X[lastAddedPos], thSpecific->Y[lastAddedPos], thSpecific->X[node], thSpecific->Y[node], inst);
-        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-            currentSucc.cost = inst->edgeCostMat[(size_t)lastAddedIndex * (size_t)n + (size_t)thSpecific->path[node]];
-        #endif
+        currentSucc.cost = noSquaredRootEdgeCost(thSpecific->X[lastAddedPos], thSpecific->Y[lastAddedPos], thSpecific->X[node], thSpecific->Y[node], inst);
 
         for (int i = 0; i < BASE_GRASP_BEST_SAVE_BUFFER_SIZE; i++)
-        {
             if (currentSucc.cost < bestSuccs[i].cost)
                 swapElems(bestSuccs[i], currentSucc)
-        }
     }
 
     // choose successor
@@ -503,10 +499,51 @@ static inline SuccessorData findSuccessor(ThreadSpecificData *thSpecific, int la
                 break;
     }
 
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-        bestSuccs[successorSubIndex].cost = computeEdgeCost(thSpecific->X[lastAddedPos], thSpecific->Y[lastAddedPos], thSpecific->X[bestSuccs[successorSubIndex].node], thSpecific->Y[bestSuccs[successorSubIndex].node], inst);
-    #endif
+    bestSuccs[successorSubIndex].cost = computeEdgeCost(thSpecific->X[lastAddedPos], thSpecific->Y[lastAddedPos], thSpecific->X[bestSuccs[successorSubIndex].node], thSpecific->Y[bestSuccs[successorSubIndex].node], inst);
 
     return bestSuccs[successorSubIndex];
 }
-#endif
+
+static inline SuccessorData findSuccessorMatrix(ThreadSpecificData *thSpecific, int lastAddedPos)
+{
+    Instance *inst = thSpecific->thShared->bestSol.instance;
+    int n = inst->nNodes;
+
+    // initialize array with stored best successors(1st best, 2nd best, 3rd best, ...)
+    SuccessorData bestSuccs[BASE_GRASP_BEST_SAVE_BUFFER_SIZE];
+    for (int i = 0; i < BASE_GRASP_BEST_SAVE_BUFFER_SIZE; i++)
+    {
+        bestSuccs[i].cost = INFINITY;
+        bestSuccs[i].node = -1;
+    }
+    
+    int lastAddedIndex = thSpecific->path[lastAddedPos];
+
+    int posToAdd = lastAddedPos + 1;
+
+    for (int node = posToAdd; node < n; node++)
+    {   
+        SuccessorData currentSucc = { .node=node };
+
+        currentSucc.cost = inst->edgeCostMat[(size_t)lastAddedIndex * (size_t)n + (size_t)thSpecific->path[node]];
+
+        for (int i = 0; i < BASE_GRASP_BEST_SAVE_BUFFER_SIZE; i++)
+            if (currentSucc.cost < bestSuccs[i].cost)
+                swapElems(bestSuccs[i], currentSucc)
+    }
+
+    // choose successor
+    int graspThreshold = (int)(inst->params.graspChance * (double)RAND_MAX);
+    int successorSubIndex = 0;
+
+    // if using GRASP_ALMOSTBEST this is the time to select with some probability one of the nodes saved in bestSuccs[]
+    if ((inst->params.graspType == GRASP_ALMOSTBEST) && (rand_r(&thSpecific->rndState) < graspThreshold) && (n - posToAdd > BASE_GRASP_BEST_SAVE_BUFFER_SIZE))
+    {
+        successorSubIndex = 1;
+        for (; successorSubIndex < BASE_GRASP_BEST_SAVE_BUFFER_SIZE - 1; successorSubIndex++)
+            if (rand_r(&thSpecific->rndState) > graspThreshold)
+                break;
+    }
+
+    return bestSuccs[successorSubIndex];
+}

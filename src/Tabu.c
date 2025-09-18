@@ -31,10 +31,8 @@ typedef struct
     int iterCount;
 
     Solution workingSol;
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
     float *X;
     float *Y;
-    #endif
     float *costCache;
     
     Edge *tenure;
@@ -51,13 +49,13 @@ typedef struct
 static ThreadSharedData initThreadSharedData (Solution *sol, int tenureSize, double timeLimit);
 // Destroy mutex
 static void destroyThreadSharedData (ThreadSharedData *thShared);
-// Initializes variables (and allocates memory on .X, .Y when using COMPUTE_OPTION_AVX)
+// Initializes variables (and allocates memory on .X, .Y when using COMP_AVX)
 static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, unsigned int rndState);
 // Frees memory allocated in X and Y if any
 static void destroyThreadSpecificData(ThreadSpecificData *thSpecific);
 // Method each thread run when executing Tabu Search until time limit
 static void *runTabu(void *arg);
-// Set the workingSol equal to thShared.bestSol and clears the tabu tenure(and rearranges .X, .Y accordingly when using COMPUTE_OPTION_AVX)
+// Set the workingSol equal to thShared.bestSol and clears the tabu tenure(and rearranges .X, .Y accordingly when using COMP_AVX)
 static void setupThSpecificOnBestSol(ThreadSpecificData *thSpecific);
 // Select an edge different than the "forbiddenNode" and which is not in the tenure in a random way.
 static inline int randomlySelectEdgeOutsideTenure(ThreadSpecificData *thSpecific, int forbiddenNode);
@@ -161,7 +159,9 @@ static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, un
         .rndState=rndState,
         .iterCount=0,
         .nextTenurePos=0,
-        .lastTenurePos=0
+        .lastTenurePos=0,
+        .X=NULL,
+        .Y=NULL
     };
 
     thSpecific.tenure = malloc(thShared->tenureSize * (sizeof(Edge) + sizeof(float)));
@@ -174,17 +174,20 @@ static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, un
 
     thSpecific.workingSol=newSolution(inst);
     
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+    if (inst->params.compType & (COMP_BASE|COMP_AVX))
+    {
         thSpecific.costCache = malloc((n + AVX_VEC_SIZE) * 3 * sizeof(int));
         if (!thSpecific.costCache)
             throwError("Tabu -> initThreadSpecificData: Failed to allocate memory");
         thSpecific.X = &thSpecific.costCache[n + AVX_VEC_SIZE];
         thSpecific.Y = &thSpecific.X[n + AVX_VEC_SIZE];
-    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+    }
+    else
+    {
         thSpecific.costCache = malloc((n + AVX_VEC_SIZE) * sizeof(float));
         if (!thSpecific.costCache)
             throwError("Tabu -> initThreadSpecificData: Failed to allocate memory");
-    #endif
+    }
 
     return thSpecific;
 }
@@ -198,9 +201,8 @@ static void destroyThreadSpecificData(ThreadSpecificData *thSpecific)
 
     thSpecific->tenure = NULL;
     thSpecific->costCache = NULL;
-    #if ((COMPUTATION_TYPE == COMPUTATE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-        thSpecific->X = thSpecific->Y = NULL;
-    #endif
+    thSpecific->X = NULL;
+    thSpecific->Y = NULL;
 }
 
 static void *runTabu(void *arg)
@@ -252,11 +254,7 @@ static void *runTabu(void *arg)
 
         int n2OptMoves;
         // use 2opt to optimize (setting edges in the costCache to -INFINITY effectively lock that edges)
-        #if ((COMPUTATION_TYPE == COMPUTATE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-            n2OptMoves = apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->X, thSpecific->Y, thSpecific->costCache);
-        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-            n2OptMoves = apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->costCache);
-        #endif
+        n2OptMoves = apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->X, thSpecific->Y, thSpecific->costCache);
 
         while (n2OptMoves > 0)
         {
@@ -266,11 +264,7 @@ static void *runTabu(void *arg)
                 checkThSpecificData(thSpecific);
             #endif
 
-            #if ((COMPUTATION_TYPE == COMPUTATE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-                n2OptMoves = apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->X, thSpecific->Y, thSpecific->costCache);
-            #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-                n2OptMoves = apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->costCache);
-            #endif
+            n2OptMoves = apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->X, thSpecific->Y, thSpecific->costCache);
         }
 
         if (nonImprovingIterCount > restartThreshold)
@@ -312,7 +306,8 @@ static void setupThSpecificOnBestSol(ThreadSpecificData *thSpecific)
     cloneSolution(thShared->bestSol, &thSpecific->workingSol);
     pthread_mutex_unlock(&thShared->mutex);
 
-    #if ((COMPUTATION_TYPE == COMPUTATE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+    if (inst->params.compType & (COMP_BASE|COMP_AVX))
+    {
         for (int i = 0; i < n; i++)
         {
             thSpecific->X[i] = inst->X[thSpecific->workingSol.indexPath[i]];
@@ -326,16 +321,16 @@ static void setupThSpecificOnBestSol(ThreadSpecificData *thSpecific)
             thSpecific->X[i] = INFINITY;
             thSpecific->Y[i] = INFINITY;
         }
-    #endif
 
-    for (int i = 0; i < n; i++) // build cost cache
-    {
-        #if ((COMPUTATION_TYPE == COMPUTATE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+        // build cost cache
+        for (int i = 0; i < n; i++)
             thSpecific->costCache[i] = computeEdgeCost(thSpecific->X[i], thSpecific->Y[i], thSpecific->X[i+1], thSpecific->Y[i+1], inst);
-        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-            int *path = thShared->bestSol->indexPath;
-            thSpecific->costCache[i] = inst->edgeCostMat[path[i] * n + path[i+1]];
-        #endif
+    }
+    else
+    {
+        // build cost cache
+        for (int i = 0; i < n; i++)
+            thSpecific->costCache[i] = inst->edgeCostMat[thShared->bestSol->indexPath[i] * n + thShared->bestSol->indexPath[i+1]];
     }
 
     for (int i = n+1; i < n + AVX_VEC_SIZE; i++)
@@ -431,14 +426,17 @@ static inline void performNonImproving2OptMove(ThreadSpecificData *thSpecific, i
 
     float altEdge0Cost, altEdge1Cost;
 
-    #if ((COMPUTATION_TYPE == COMPUTATE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+    if (inst->params.compType & (COMP_BASE|COMP_AVX))
+    {
         altEdge0Cost = computeEdgeCost(thSpecific->X[edge0], thSpecific->Y[edge0], thSpecific->X[edge1], thSpecific->Y[edge1], inst);
         altEdge1Cost = computeEdgeCost(thSpecific->X[edge0+1], thSpecific->Y[edge0+1], thSpecific->X[edge1+1], thSpecific->Y[edge1+1], inst);
-    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+    }
+    else
+    {
         int *indexPath = sol->indexPath;
         altEdge0Cost = inst->edgeCostMat[(size_t)indexPath[edge0] * (size_t)inst->nNodes + (size_t)indexPath[edge1]];
         altEdge1Cost = inst->edgeCostMat[(size_t)indexPath[edge0+1] * (size_t)inst->nNodes + (size_t)indexPath[edge1+1]];
-    #endif
+    }
 
     LOG(LOG_LVL_TRACE, "Tabu[%d]: Updating solution by switching edge (%d,%d) with edge (%d,%d) degrading cost by %f. New Cost = %lf", thSpecific->iterCount,
         thSpecific->workingSol.indexPath[edge0], thSpecific->workingSol.indexPath[edge0+1],
@@ -453,13 +451,16 @@ static inline void performNonImproving2OptMove(ThreadSpecificData *thSpecific, i
     while (smallID < bigID)
     {
         swapElems(sol->indexPath[smallID], sol->indexPath[bigID])
-        #if ((COMPUTATION_TYPE == COMPUTATE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-            swapElems(thSpecific->X[smallID], thSpecific->X[bigID])
-            swapElems(thSpecific->Y[smallID], thSpecific->Y[bigID])
-        #endif
-
         smallID++;
         bigID--;
+    }
+    if (inst->params.compType & (COMP_BASE|COMP_AVX))
+    {
+        for (int s = edge0+1, b=edge1; s < b; s++, b--)
+        {
+            swapElems(thSpecific->X[s], thSpecific->X[b])
+            swapElems(thSpecific->Y[s], thSpecific->Y[b])
+        }
     }
 
     // update cost cache
@@ -472,7 +473,6 @@ static inline void performNonImproving2OptMove(ThreadSpecificData *thSpecific, i
     while (smallID < bigID)
     {
         swapElems(thSpecific->costCache[smallID], thSpecific->costCache[bigID])
-
         smallID++;
         bigID--;
     }
@@ -483,6 +483,20 @@ static void checkThSpecificData(ThreadSpecificData *thSpecific)
 {
     Solution *sol = &thSpecific->workingSol;
     Instance *inst = sol->instance;
+
+    // check solution X and Y
+    if (inst->params.compType & (COMP_BASE|COMP_AVX))
+    {
+        for (int i = 0; i < inst->nNodes; i++)
+        {
+            int j = sol->indexPath[i];
+            if (thSpecific->X[i] != inst->X[j])
+                throwError("Tabu -> ThSpecific.X is not coherent at position %d", i);
+            if (thSpecific->Y[i] != inst->Y[j])
+                throwError("Tabu -> ThSpecific.X is not coherent at position %d", i);
+        }
+        
+    }
 
     // check tenure
     for (int i = thSpecific->lastTenurePos; i != thSpecific->nextTenurePos; i++)
@@ -521,11 +535,11 @@ static void checkThSpecificData(ThreadSpecificData *thSpecific)
             else
             {
                 float recomputedCost;
-                #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+                if (inst->params.compType & (COMP_BASE|COMP_AVX))
                     recomputedCost = computeEdgeCost(thSpecific->X[i], thSpecific->Y[i], thSpecific->X[i+1], thSpecific->Y[i+1], inst);
-                #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+                else
                     recomputedCost = inst->edgeCostMat[sol->indexPath[i] * inst->nNodes + sol->indexPath[i+1]];
-                #endif
+                
                 if (thSpecific->costCache[i] != recomputedCost)
                     throwError("Tabu -> checkTenureAndLocks: Cost cache is not coherent costCache[%d] = %f which is not %f", i, thSpecific->costCache[i], recomputedCost);
             }

@@ -12,10 +12,8 @@
 typedef struct
 {
     Solution *sol;
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-        float *X;
-        float *Y;
-    #endif
+    float *X;
+    float *Y;
     float *costCache;
     int iter;
 } _2optData;
@@ -42,10 +40,11 @@ void set2OptPerformanceBenchmarkLog(bool val)
 static inline bool updateSolution(_2optData *data, _2optMoveData bestFix);
 
 // Search for best possible 2opt move in data->sol
-static inline _2optMoveData _2OptBestFix(_2optData *data);
-#if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-static inline _2optMoveData _2OptBestFixApprox(_2optData *data); // allows almost 30% speedup in usa13509
-#endif
+static inline _2optMoveData _2OptBestFixBase(_2optData *data);
+static inline _2optMoveData _2OptBestFixMatrix(_2optData *data);
+static inline _2optMoveData _2OptBestFixAVX(_2optData *data);
+
+static inline _2optMoveData _2OptBestFixApproxAVX(_2optData *data);
 
 
 void apply2OptBestFix(Solution *sol)
@@ -53,17 +52,17 @@ void apply2OptBestFix(Solution *sol)
     Instance *inst = sol->instance;
     int n = inst->nNodes;
 
-    float *costCache = NULL;
+    float *costCache = NULL, *X = NULL, *Y = NULL;
 
     sol->indexPath[n] = sol->indexPath[0];
 
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-
+    if (inst->params.compType & (COMP_BASE|COMP_AVX))
+    {
         costCache = malloc((n + AVX_VEC_SIZE) * 3 * sizeof(float));
         if (costCache == NULL)
             throwError("apply2OptBestFix: Failed to allocate memory");
-        float *X = &costCache[n + AVX_VEC_SIZE];
-        float *Y = &X[n + AVX_VEC_SIZE];
+        X = &costCache[n + AVX_VEC_SIZE];
+        Y = &X[n + AVX_VEC_SIZE];
 
         for (int i = 0; i < n; i++) // fill X and Y
         {
@@ -78,90 +77,91 @@ void apply2OptBestFix(Solution *sol)
             X[i] = INFINITY;
             Y[i] = INFINITY;
         }
-
-    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-
+    }
+    else
+    {
         costCache = malloc((n + AVX_VEC_SIZE) * sizeof(float));
         if (costCache == NULL)
             throwError("apply2OptBestFix: Failed to allocate memory");
-
-    #endif
+    }
 
     // build cost cache
-    for (int i = 0; i < n; i++)
-        #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+    if (inst->params.compType & (COMP_BASE|COMP_AVX))
+        for (int i = 0; i < n; i++)
             costCache[i] = computeEdgeCost(X[i], Y[i], X[i + 1], Y[i + 1], inst);
-        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+    else
+        for (int i = 0; i < n; i++)
             costCache[i] = inst->edgeCostMat[sol->indexPath[i] * n + sol->indexPath[i+1]];
-        #endif
 
     for (int i = n + 1; i < n + AVX_VEC_SIZE; i++) // fill remaining slots with non-interfering values
         costCache[i] = INFINITY;
 
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-        apply2OptBestFix_fastIteratively(sol, X, Y, costCache);
-    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-        apply2OptBestFix_fastIteratively(sol, costCache);
-    #endif
+    apply2OptBestFix_fastIteratively(sol, X, Y, costCache);
 
     free(costCache);
 }
 
-#if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
 int apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *costCache)
-#elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-int apply2OptBestFix_fastIteratively(Solution *sol, float *costCache)
-#endif
 {
     struct timespec timeStruct;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double startTime = cvtTimespec2Double(timeStruct);
     double printTimeSec = startTime;
 
+    Instance *inst = sol->instance;
+
     // check solution correspondence with X and Y when debugging
     #ifdef DEBUG
-        Instance *inst = sol->instance;
         int n = inst->nNodes;
         
         if (!checkSolution(sol))
             throwError("apply2OptBestFix: Input solution is not valid");
         
-        #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
+        if (inst->params.compType & COMP_AVX)
+        {
             for (int i = 0; i <= n; i++)
                 if ((inst->X[sol->indexPath[i]] != X[i]) || (inst->Y[sol->indexPath[i]] != Y[i]))
                     throwError("apply2OptBestFix_fastIteratively: input mismatch between inst.X/Y[%d] = [%f, %f] and X/Y[indexPath[%d]] = [%f, %f]", i, inst->X[sol->indexPath[i]], X[i], i, inst->Y[sol->indexPath[i]], Y[i]);
-        #endif
+        }
 
         // check costCache
-        for (int i = 0; i < n; i++)
-            #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+        if (inst->params.compType & (COMP_BASE|COMP_AVX))
+        {
+            for (int i = 0; i < n; i++)
                 if ((costCache[i] != computeEdgeCost(inst->X[sol->indexPath[i]], inst->Y[sol->indexPath[i]], inst->X[sol->indexPath[i + 1]], inst->Y[sol->indexPath[i + 1]], inst)) && !((inst->params.mode == MODE_TABU) && (costCache[i] == -INFINITY)))
                     throwError("apply2OptBestFix_fastIteratively: input not valid: costCache isn't coherent with solution at position %d", i);
-            #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+        }
+        else
+            for (int i = 0; i < n; i++)
                 if ((costCache[i] != inst->edgeCostMat[sol->indexPath[i] * n + sol->indexPath[i+1]]) && !((inst->params.mode == MODE_TABU) && (costCache[i] == -INFINITY)))
                     throwError("apply2OptBestFix_fastIteratively: input not valid: costCache isn't coherent with solution at position %d", i);
-            #endif
+
     #endif
 
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-        _2optData data = { .sol=sol, .X=X, .Y=Y, .costCache=costCache, .iter=0 };
-    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-        _2optData data = { .sol=sol, .costCache=costCache, .iter=0 };
-    #endif
+    _2optData data = { .sol=sol, .X=X, .Y=Y, .costCache=costCache, .iter=0 };
     
 
     bool notFinishedFlag = true;
-    #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        bool approxSearch = false;
-    #endif
+    bool approxSearch = false;
     while (notFinishedFlag) // runs 2opt until no more moves are made in one iteration of 2opt
     {
-        #if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-            _2optMoveData bestFix;
+        _2optMoveData bestFix;
+        if (inst->params.compType & COMP_BASE)
+        {
+            bestFix = _2OptBestFixBase(&data);
+            notFinishedFlag = updateSolution(&data, bestFix);
+        }
+        else if (inst->params.compType & COMP_MATRIX)
+        {
+            bestFix = _2OptBestFixMatrix(&data);
+            notFinishedFlag = updateSolution(&data, bestFix);
+        }
+        else
+        {
             if (approxSearch)
-                bestFix = _2OptBestFixApprox(&data);
+                bestFix = _2OptBestFixApproxAVX(&data);
             else
-                bestFix = _2OptBestFix(&data);
+                bestFix = _2OptBestFixAVX(&data);
 
             bool result = updateSolution(&data, bestFix);
             if (!result && approxSearch)
@@ -173,10 +173,7 @@ int apply2OptBestFix_fastIteratively(Solution *sol, float *costCache)
             }
             else if (!result)
                 notFinishedFlag = false;
-        #elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
-            _2optMoveData bestFix = _2OptBestFix(&data);
-            notFinishedFlag = updateSolution(&data, bestFix);
-        #endif
+        }
 
         #ifdef DEBUG
             if (!checkSolution(data.sol))
@@ -216,15 +213,18 @@ static inline bool updateSolution(_2optData *data, _2optMoveData bestFix)
     //float oldEdge0Cost, oldEdge1Cost;
     float altEdge0Cost, altEdge1Cost;
 
-    #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+    if (inst->params.compType & (COMP_BASE|COMP_AVX))
+    {
         altEdge0Cost = computeEdgeCost(data->X[bestFix.edge0], data->Y[bestFix.edge0], data->X[bestFix.edge1], data->Y[bestFix.edge1], inst);
         altEdge1Cost = computeEdgeCost(data->X[bestFix.edge0+1], data->Y[bestFix.edge0+1], data->X[bestFix.edge1+1], data->Y[bestFix.edge1+1], inst);
-    #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+    }
+    else
+    {
         int *indexPath = sol->indexPath;
         int n = inst->nNodes;
         altEdge0Cost = inst->edgeCostMat[(size_t)indexPath[bestFix.edge0] * (size_t)n + (size_t)indexPath[bestFix.edge1]];
         altEdge1Cost = inst->edgeCostMat[(size_t)indexPath[bestFix.edge0+1] * (size_t)n + (size_t)indexPath[bestFix.edge1+1]];
-    #endif
+    }
 
     bestFix.costOffset = altEdge0Cost + altEdge1Cost;
     bestFix.costOffset -= (data->costCache[bestFix.edge0] + data->costCache[bestFix.edge1]);
@@ -242,13 +242,19 @@ static inline bool updateSolution(_2optData *data, _2optMoveData bestFix)
             -bestFix.costOffset, cvtCost2Double(sol->cost));
     }
 
-    for (int s = bestFix.edge0+1, b = bestFix.edge1; s < b; s++, b--)
+    if (inst->params.compType & (COMP_BASE|COMP_AVX))
     {
-        swapElems(sol->indexPath[s], sol->indexPath[b])
-        #if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+        for (int s = bestFix.edge0+1, b = bestFix.edge1; s < b; s++, b--)
+        {
             swapElems(data->X[s], data->X[b])
             swapElems(data->Y[s], data->Y[b])
-        #endif
+            swapElems(sol->indexPath[s], sol->indexPath[b])
+        }
+    }
+    else
+    {
+        for (int s = bestFix.edge0+1, b = bestFix.edge1; s < b; s++, b--)
+            swapElems(sol->indexPath[s], sol->indexPath[b])
     }
 
     // update cost cache
@@ -261,8 +267,69 @@ static inline bool updateSolution(_2optData *data, _2optMoveData bestFix)
     return true;
 }
 
-#if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-static inline _2optMoveData _2OptBestFix(_2optData *data)
+static inline _2optMoveData _2OptBestFixBase(_2optData *data)
+{
+    Solution *sol = data->sol;
+    Instance *inst = sol->instance;
+    int n = inst->nNodes;
+
+    _2optMoveData bestFix = { .costOffset=0, .edge0=-1, .edge1=-1 };
+
+    for (_2optMoveData currFix = { .edge0=0 }; currFix.edge0 < n - 1; currFix.edge0++) // check for one edge at a time every other edge(except already checked)
+    {
+        float partSolEdgeWgt = data->costCache[currFix.edge0];
+
+        for (currFix.edge1 = 2 + currFix.edge0; (currFix.edge1 < n - 1) || ((currFix.edge1 < n) && (currFix.edge0 > 0)); currFix.edge1++)
+        {
+            float solEdgeWgt = partSolEdgeWgt + data->costCache[currFix.edge1];
+
+            // check the combined weight other combination of edges
+            float altEdgeWgt;
+            altEdgeWgt = computeEdgeCost(data->X[currFix.edge0], data->Y[currFix.edge0], data->X[currFix.edge1], data->Y[currFix.edge1], inst) + 
+                            computeEdgeCost(data->X[currFix.edge0 + 1], data->Y[currFix.edge0 + 1], data->X[currFix.edge1 + 1], data->Y[currFix.edge1 + 1], inst);
+
+            currFix.costOffset = altEdgeWgt - solEdgeWgt;
+            // update local best if current one is better
+            if (bestFix.costOffset > currFix.costOffset)
+                bestFix = currFix;
+        }
+    }
+
+    return bestFix;
+}
+
+static inline _2optMoveData _2OptBestFixMatrix(_2optData *data)
+{
+    Solution *sol = data->sol;
+    Instance *inst = sol->instance;
+    int n = inst->nNodes;
+
+    _2optMoveData bestFix = { .costOffset=0, .edge0=-1, .edge1=-1 };
+
+    for (_2optMoveData currFix = { .edge0=0 }; currFix.edge0 < n - 1; currFix.edge0++) // check for one edge at a time every other edge(except already checked)
+    {
+        float partSolEdgeWgt = data->costCache[currFix.edge0];
+
+        for (currFix.edge1 = 2 + currFix.edge0; (currFix.edge1 < n - 1) || ((currFix.edge1 < n) && (currFix.edge0 > 0)); currFix.edge1++)
+        {
+            float solEdgeWgt = partSolEdgeWgt + data->costCache[currFix.edge1];
+
+            // check the combined weight other combination of edges
+            float altEdgeWgt;
+            altEdgeWgt = inst->edgeCostMat[(size_t)sol->indexPath[currFix.edge0] * (size_t)n + (size_t)sol->indexPath[currFix.edge1]] + 
+                            inst->edgeCostMat[(size_t)sol->indexPath[currFix.edge0 + 1] * (size_t)n + (size_t)sol->indexPath[currFix.edge1 + 1]];
+
+            currFix.costOffset = altEdgeWgt - solEdgeWgt;
+            // update local best if current one is better
+            if (bestFix.costOffset > currFix.costOffset)
+                bestFix = currFix;
+        }
+    }
+
+    return bestFix;
+}
+
+static inline _2optMoveData _2OptBestFixAVX(_2optData *data)
 {
     Solution *sol = data->sol;
     Instance *inst = sol->instance;
@@ -326,7 +393,7 @@ static inline _2optMoveData _2OptBestFix(_2optData *data)
     return bestFix;
 }
 
-static inline _2optMoveData _2OptBestFixApprox(_2optData *data)
+static inline _2optMoveData _2OptBestFixApproxAVX(_2optData *data)
 {
     Solution *sol = data->sol;
     Instance *inst = sol->instance;
@@ -391,41 +458,4 @@ static inline _2optMoveData _2OptBestFixApprox(_2optData *data)
 
 }
 
-#elif ((COMPUTATION_TYPE == COMPUTE_OPTION_BASE) || (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX))
-static inline _2optMoveData _2OptBestFix(_2optData *data)
-{
-    Solution *sol = data->sol;
-    Instance *inst = sol->instance;
-    int n = inst->nNodes;
-
-    _2optMoveData bestFix = { .costOffset=0, .edge0=-1, .edge1=-1 };
-
-    for (_2optMoveData currFix = { .edge0=0 }; currFix.edge0 < n - 1; currFix.edge0++) // check for one edge at a time every other edge(except already checked)
-    {
-        float partSolEdgeWgt = data->costCache[currFix.edge0];
-
-        for (currFix.edge1 = 2 + currFix.edge0; (currFix.edge1 < n - 1) || ((currFix.edge1 < n) && (currFix.edge0 > 0)); currFix.edge1++)
-        {
-            float solEdgeWgt = partSolEdgeWgt + data->costCache[currFix.edge1];
-
-            // check the combined weight other combination of edges
-            float altEdgeWgt;
-            #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
-                altEdgeWgt = computeEdgeCost(data->X[currFix.edge0], data->Y[currFix.edge0], data->X[currFix.edge1], data->Y[currFix.edge1], inst) + 
-                             computeEdgeCost(data->X[currFix.edge0 + 1], data->Y[currFix.edge0 + 1], data->X[currFix.edge1 + 1], data->Y[currFix.edge1 + 1], inst);
-            #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-                altEdgeWgt = inst->edgeCostMat[(size_t)sol->indexPath[currFix.edge0] * (size_t)n + (size_t)sol->indexPath[currFix.edge1]] + 
-                             inst->edgeCostMat[(size_t)sol->indexPath[currFix.edge0 + 1] * (size_t)n + (size_t)sol->indexPath[currFix.edge1 + 1]];
-            #endif
-
-            currFix.costOffset = altEdgeWgt - solEdgeWgt;
-            // update local best if current one is better
-            if (bestFix.costOffset > currFix.costOffset)
-                bestFix = currFix;
-        }
-    }
-
-    return bestFix;
-}
-#endif
 

@@ -9,7 +9,8 @@ typedef struct
 } MergingData;
 
 
-static inline MergingData findBestSubtourMerge(SubtoursData *sub, int subtoursCount, Instance *inst);
+static inline MergingData findBestSubtourMergeBase(SubtoursData *sub, int subtoursCount, Instance *inst);
+static inline MergingData findBestSubtourMergeMatrix(SubtoursData *sub, int subtoursCount, Instance *inst);
 
 __uint128_t PatchingHeuristic(SubtoursData *sub, Instance *inst)
 {
@@ -18,7 +19,11 @@ __uint128_t PatchingHeuristic(SubtoursData *sub, Instance *inst)
 	int subtoursCount = sub->subtoursCount;
 	while (subtoursCount > 1)
 	{
-		MergingData md = findBestSubtourMerge(sub, subtoursCount, inst);
+		MergingData md;
+		if (inst->params.compType & (COMP_BASE|COMP_AVX))
+			md = findBestSubtourMergeBase(sub, subtoursCount, inst);
+		else
+			md = findBestSubtourMergeMatrix(sub, subtoursCount, inst);
 
 		if (!md.invertOrientation)
 			swapElems(sub->successors[md.index0], sub->successors[md.index1])
@@ -63,11 +68,9 @@ __uint128_t PatchingHeuristic(SubtoursData *sub, Instance *inst)
 	return cost;
 }
 
-static inline MergingData findBestSubtourMerge(SubtoursData *sub, int subtoursCount, Instance *inst)
+static inline MergingData findBestSubtourMergeBase(SubtoursData *sub, int subtoursCount, Instance *inst)
 {
-	#if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-		float *X = inst->X, *Y =inst->Y;
-	#endif
+	float *X = inst->X, *Y =inst->Y;
 
 	float min = INFINITY;
 
@@ -103,11 +106,7 @@ static inline MergingData findBestSubtourMerge(SubtoursData *sub, int subtoursCo
 					// successor of j'th node
 					int succJ = sub->successors[j];
 					
-					#if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-						float cost = computeEdgeCost(X[i], Y[i], X[succJ], Y[succJ], inst) + computeEdgeCost(X[succI], Y[succI], X[j], Y[j], inst);
-					#elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-						float cost = inst->edgeCostMat[i * (size_t)inst->nNodes + succJ] + inst->edgeCostMat[succI * (size_t)inst->nNodes + j];
-					#endif
+					float cost = computeEdgeCost(X[i], Y[i], X[succJ], Y[succJ], inst) + computeEdgeCost(X[succI], Y[succI], X[j], Y[j], inst);
 
 					if (cost < min)
 					{
@@ -116,11 +115,7 @@ static inline MergingData findBestSubtourMerge(SubtoursData *sub, int subtoursCo
 						retVal.invertOrientation = false;
 					}
 					
-					#if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-						cost = computeEdgeCost(X[i], Y[i], X[j], Y[j], inst) + computeEdgeCost(X[succI], Y[succI], X[succJ], Y[succJ], inst);
-					#elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-						cost = inst->edgeCostMat[i * (size_t)inst->nNodes + j] + inst->edgeCostMat[succI * (size_t)inst->nNodes + succJ];
-					#endif
+					cost = computeEdgeCost(X[i], Y[i], X[j], Y[j], inst) + computeEdgeCost(X[succI], Y[succI], X[succJ], Y[succJ], inst);
 
 					if (cost < min)
 					{
@@ -139,3 +134,66 @@ static inline MergingData findBestSubtourMerge(SubtoursData *sub, int subtoursCo
 	return retVal;
 }
 
+static inline MergingData findBestSubtourMergeMatrix(SubtoursData *sub, int subtoursCount, Instance *inst)
+{
+	float min = INFINITY;
+
+	MergingData retVal = { .index0=0, .index1=0, .invertOrientation=false };
+
+	for (int subtourID = 0; subtourID < subtoursCount-1; subtourID++)
+	{
+		int first1 = 0;
+			while (sub->subtoursMap[first1] != subtourID)
+				first1++;
+
+		for (int subtourToCompare = subtourID+1; subtourToCompare < subtoursCount; subtourToCompare++)
+		{
+			int first2 = 0;
+			while (sub->subtoursMap[first2] != subtourToCompare)
+				first2++;
+			
+			bool finish1 = false;
+			int i = first1;
+			while ((!finish1) || (i != sub->successors[first1]))
+			{
+				if (sub->successors[i] == first1) finish1 = true;
+				
+				// successor of i'th node
+				int succI = sub->successors[i];
+
+				bool finish2 = false;
+				int j = first2;
+				while ((!finish2) || (j != sub->successors[first2]))
+				{
+					if (sub->successors[j] == first2) finish2 = true;
+
+					// successor of j'th node
+					int succJ = sub->successors[j];
+					
+					float cost = inst->edgeCostMat[i * (size_t)inst->nNodes + succJ] + inst->edgeCostMat[succI * (size_t)inst->nNodes + j];
+
+					if (cost < min)
+					{
+						min = cost;
+						retVal.index0 = i; retVal.index1 = j;
+						retVal.invertOrientation = false;
+					}
+
+					cost = inst->edgeCostMat[i * (size_t)inst->nNodes + j] + inst->edgeCostMat[succI * (size_t)inst->nNodes + succJ];
+
+					if (cost < min)
+					{
+						min = cost;
+						retVal.index0 = i; retVal.index1 = j;
+						retVal.invertOrientation = true;
+					}
+
+					j = succJ;
+				}
+				i = succI;
+			}
+		}
+	}
+
+	return retVal;
+}

@@ -43,11 +43,12 @@ CplexData initCplexData(Instance *inst)
 		for ( int j = i+1; j < n; j++ )
 		{
 			sprintf((char*)cname, "x(%d,%d)", i+1,j+1);  		// ... x(1,2), x(1,3) ....
-			#if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
-				double obj = computeEdgeCost(inst->X[i], inst->Y[i], inst->X[j], inst->Y[j], inst);
-			#elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
-				double obj = inst->edgeCostMat[i * n + j];
-			#endif
+			double obj;
+			if (inst->params.compType & (COMP_BASE|COMP_AVX))
+				obj = computeEdgeCost(inst->X[i], inst->Y[i], inst->X[j], inst->Y[j], inst);
+			else
+				obj = inst->edgeCostMat[i * n + j];
+			
 			double ub = 1.0;
 
 			errCode = CPXnewcols(cpxData.env, cpxData.lp, 1, &obj, NULL, &ub, &binary, &cnamePtr);
@@ -249,11 +250,11 @@ __uint128_t computeSuccessorsSolCost(int *successors, Instance *inst)
 	do
 	{
 		int succ = successors[i];
-		#if ((COMPUTATION_TYPE == COMPUTE_OPTION_AVX) || (COMPUTATION_TYPE == COMPUTE_OPTION_BASE))
+		if (inst->params.compType & (COMP_BASE|COMP_AVX))
 			cost += cvtFloat2Cost(computeEdgeCost(inst->X[i], inst->Y[i], inst->X[succ], inst->Y[succ], inst));
-		#elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+		else
 			cost += cvtFloat2Cost(inst->edgeCostMat[i * (size_t)n + succ]);
-		#endif
+		
 		i = succ;
 
 		if (counter > n)

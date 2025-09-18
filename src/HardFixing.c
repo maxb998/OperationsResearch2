@@ -282,17 +282,17 @@ static int smallestFix(HardfixAllocatedMem *hfAlloc)
     for (int i = n; i < 2*n + AVX_VEC_SIZE; i++)
         successors[i] = 0;
 
-    for (int i = 0; i < n; i++)
+    switch (inst->params.compType)
     {
-        #if (COMPUTATION_TYPE == COMPUTE_OPTION_BASE)
+    case COMP_BASE:
+        for (int i = 0; i < n; i++)
             tourEdgesCost[i] = computeEdgeCost(inst->X[i], inst->Y[i], inst->X[successors[i]], inst->Y[successors[i]], inst);
-        #elif (COMPUTATION_TYPE == COMPUTE_OPTION_USE_COST_MATRIX)
+        break;
+    case COMP_MATRIX:
+        for (int i = 0; i < n; i++)
             tourEdgesCost[i] = inst->edgeCostMat[ i * n + successors[i]];
-        #endif
-    }
-    
-    # if (COMPUTATION_TYPE == COMPUTE_OPTION_AVX)
-        // compute cost of each edge with avx instructions(not necessary since it's not a performance critical function)
+        break;
+    case COMP_AVX:
         for (int i = 0; i < n; i += AVX_VEC_SIZE)
         {
             __m256 x1 = _mm256_loadu_ps(&inst->X[i]), y1 = _mm256_loadu_ps(&inst->Y[i]);
@@ -304,7 +304,8 @@ static int smallestFix(HardfixAllocatedMem *hfAlloc)
 
             _mm256_storeu_ps(&tourEdgesCost[i], cost);
         }
-    # endif
+        break;
+    }
 
     // perform argsort on tourEdgesCost using minCostIndexes as output
     argsort(tourEdgesCost, hfAlloc->indexes, n);
