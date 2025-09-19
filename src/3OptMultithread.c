@@ -68,7 +68,7 @@ void set3OptPerformanceBenchmarkLogMT(bool val)
 static void *run3OptThread(void* arg);
 
 // Perform solution update accordingly (invert part of the solution between selected indexes(edge0,edge1) of the bestFix)
-static inline bool updateSolution(_3optData *data, _3optMoveData bestFix);
+static inline bool updateSolution(_3optData *data, _3optMoveData *bestFix);
 
 // Invert a section of the path of the solution adapting all data in data
 static inline void invertSection(_3optData *data, int firstEdgePos, int lastEdgePos);
@@ -235,7 +235,7 @@ static void *run3OptThread(void* arg)
                     if (data->bestFixes[i].costOffset < bestFix.costOffset)
                         bestFix = data->bestFixes[i];
                 
-                bool result = updateSolution(data, bestFix);
+                bool result = updateSolution(data, &bestFix);
                 if (!result && data->approxSearch)
                 {
                     if (printPerformanceLog)
@@ -312,14 +312,14 @@ static void *run3OptThread(void* arg)
     return NULL;
 }
 
-static inline bool updateSolution(_3optData *data, _3optMoveData bestFix)
+static inline bool updateSolution(_3optData *data, _3optMoveData *bestFix)
 {
     Solution *sol = data->sol;
     Instance *inst = sol->instance;
 
-    int e0 = bestFix.edge0, e1 = bestFix.edge1, e2 = bestFix.edge2;
+    int e0 = bestFix->edge0, e1 = bestFix->edge1, e2 = bestFix->edge2;
 
-    if (bestFix.costOffset > -EPSILON)
+    if (bestFix->costOffset > -EPSILON)
         return false;
 
     // compute necessary costs
@@ -399,8 +399,8 @@ static inline bool updateSolution(_3optData *data, _3optMoveData bestFix)
     #endif
 
     #ifdef DEBUG
-        if (bestOffset != bestFix.costOffset)
-            LOG(LOG_LVL_WARN, "3OptBestFix -> updateSolution[%d]: recomputed cost is different from the one specified (%f vs %f)", data->iter, bestOffset, bestFix.costOffset);
+        if (bestOffset != bestFix->costOffset)
+            LOG(LOG_LVL_WARN, "3OptBestFix -> updateSolution[%d]: recomputed cost is different from the one specified (%f vs %f)", data->iter, bestOffset, bestFix->costOffset);
     #endif
 
     // (check and) update cost
@@ -441,7 +441,7 @@ static inline bool updateSolution(_3optData *data, _3optMoveData bestFix)
 
     LOG(LOG_LVL_TRACE, "3Opt: [%d] Updating solution by switching edges (%d,%d,%d) with moveType %d improving cost by %f. New Cost = %lf", data->iter,
         e0, e1, e2, bestMoveType,
-        bestFix.costOffset, cvtCost2Double(sol->cost));
+        bestFix->costOffset, cvtCost2Double(sol->cost));
 
     // invert first section if necessary
     if (bestMoveType & (_3OPT_MOVE_13_24 | _3OPT_MOVE_13_25_46 | _3OPT_MOVE_14_53_26))
@@ -452,7 +452,7 @@ static inline bool updateSolution(_3optData *data, _3optMoveData bestFix)
 
     // swap sections if necessary
     #ifdef USE_MOVE_14_52_36
-        if (bestFix.movetype & (_3OPT_MOVE_14_53_26 | _3OPT_MOVE_15_42_36 | _3OPT_MOVE_14_52_36))
+        if (bestFix->movetype & (_3OPT_MOVE_14_53_26 | _3OPT_MOVE_15_42_36 | _3OPT_MOVE_14_52_36))
     #else
         if (bestMoveType & (_3OPT_MOVE_14_53_26 | _3OPT_MOVE_15_42_36 ))
     #endif
@@ -502,7 +502,7 @@ static inline bool updateSolution(_3optData *data, _3optMoveData bestFix)
     }
 
     #ifdef USE_MOVE_14_52_36
-        if (bestFix.movetype & _3OPT_MOVE_14_52_36)
+        if (bestFix->movetype & _3OPT_MOVE_14_52_36)
             LOG(LOG_LVL_WARN, "Finally found moveType: _3OPT_MOVE_14_52_36!");
     #endif
 

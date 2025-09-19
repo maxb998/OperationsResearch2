@@ -54,7 +54,7 @@ void set2OptPerformanceBenchmarkLogMT(bool val)
 
 
 // Perform solution update accordingly (invert part of the solution between selected indexes(edge0,edge1) of the bestFix)
-static inline bool updateSolution(_2optData *data, _2optMoveData bestFix);
+static inline bool updateSolution(_2optData *data, _2optMoveData *bestFix);
 
 // Search for best possible 2opt move in data->sol
 static inline void _2OptBestFixBase(wrapper *w, int edge0);
@@ -215,7 +215,7 @@ static void *run2OptThread(void* arg)
                     if (data->bestFixes[i].costOffset < bestFix.costOffset)
                         bestFix = data->bestFixes[i];
                 
-                bool result = updateSolution(data, bestFix);
+                bool result = updateSolution(data, &bestFix);
                 if (inst->params.compType & COMP_AVX)
                 {
                     if (!result && data->approxSearch)
@@ -286,7 +286,7 @@ static void *run2OptThread(void* arg)
     return NULL;
 }
 
-static inline bool updateSolution(_2optData *data, _2optMoveData bestFix)
+static inline bool updateSolution(_2optData *data, _2optMoveData *bestFix)
 {
     Solution *sol = data->sol;
     Instance *inst = sol->instance;
@@ -296,39 +296,39 @@ static inline bool updateSolution(_2optData *data, _2optMoveData bestFix)
 
     if (inst->params.compType & (COMP_BASE|COMP_AVX))
     {
-        altEdge0Cost = computeEdgeCost(data->X[bestFix.edge0], data->Y[bestFix.edge0], data->X[bestFix.edge1], data->Y[bestFix.edge1], inst);
-        altEdge1Cost = computeEdgeCost(data->X[bestFix.edge0+1], data->Y[bestFix.edge0+1], data->X[bestFix.edge1+1], data->Y[bestFix.edge1+1], inst);
+        altEdge0Cost = computeEdgeCost(data->X[bestFix->edge0], data->Y[bestFix->edge0], data->X[bestFix->edge1], data->Y[bestFix->edge1], inst);
+        altEdge1Cost = computeEdgeCost(data->X[bestFix->edge0+1], data->Y[bestFix->edge0+1], data->X[bestFix->edge1+1], data->Y[bestFix->edge1+1], inst);
     }
     else
     {
         int *indexPath = sol->indexPath;
         int n = inst->nNodes;
-        altEdge0Cost = inst->edgeCostMat[(size_t)indexPath[bestFix.edge0] * (size_t)n + (size_t)indexPath[bestFix.edge1]];
-        altEdge1Cost = inst->edgeCostMat[(size_t)indexPath[bestFix.edge0+1] * (size_t)n + (size_t)indexPath[bestFix.edge1+1]];
+        altEdge0Cost = inst->edgeCostMat[(size_t)indexPath[bestFix->edge0] * (size_t)n + (size_t)indexPath[bestFix->edge1]];
+        altEdge1Cost = inst->edgeCostMat[(size_t)indexPath[bestFix->edge0+1] * (size_t)n + (size_t)indexPath[bestFix->edge1+1]];
     }
 
-    bestFix.costOffset = altEdge0Cost + altEdge1Cost;
-    bestFix.costOffset -= (data->costCache[bestFix.edge0] + data->costCache[bestFix.edge1]);
-    if ((bestFix.costOffset > -EPSILON) || (bestFix.edge0 == -1))
+    bestFix->costOffset = altEdge0Cost + altEdge1Cost;
+    bestFix->costOffset -= (data->costCache[bestFix->edge0] + data->costCache[bestFix->edge1]);
+    if ((bestFix->costOffset > -EPSILON) || (bestFix->edge0 == -1))
         return false;
 
     // update cost
-    sol->cost += cvtFloat2Cost(altEdge0Cost) + cvtFloat2Cost(altEdge1Cost) - cvtFloat2Cost(data->costCache[bestFix.edge0]) - cvtFloat2Cost(data->costCache[bestFix.edge1]);
+    sol->cost += cvtFloat2Cost(altEdge0Cost) + cvtFloat2Cost(altEdge1Cost) - cvtFloat2Cost(data->costCache[bestFix->edge0]) - cvtFloat2Cost(data->costCache[bestFix->edge1]);
 
     if (print2OptLog)
     {
         LOG(LOG_LVL_TRACE, "2Opt: [%d] Updating solution by switching edge (%d,%d)[%d] with edge (%d,%d)[%d] reducing cost by %f. New Cost = %lf", data->iter,
-            sol->indexPath[bestFix.edge0], sol->indexPath[bestFix.edge0 + 1], bestFix.edge0,
-            sol->indexPath[bestFix.edge1], sol->indexPath[bestFix.edge1 + 1], bestFix.edge1,
-            -bestFix.costOffset, cvtCost2Double(sol->cost));
+            sol->indexPath[bestFix->edge0], sol->indexPath[bestFix->edge0 + 1], bestFix->edge0,
+            sol->indexPath[bestFix->edge1], sol->indexPath[bestFix->edge1 + 1], bestFix->edge1,
+            -bestFix->costOffset, cvtCost2Double(sol->cost));
     }
 
-    for (int s = bestFix.edge0+1, b = bestFix.edge1; s < b; s++, b--)
+    for (int s = bestFix->edge0+1, b = bestFix->edge1; s < b; s++, b--)
         swapElems(sol->indexPath[s], sol->indexPath[b])
     
     if (inst->params.compType & (COMP_BASE|COMP_AVX))
     {
-        for (int s = bestFix.edge0+1, b = bestFix.edge1; s < b; s++, b--)
+        for (int s = bestFix->edge0+1, b = bestFix->edge1; s < b; s++, b--)
         {
             swapElems(data->X[s], data->X[b])
             swapElems(data->Y[s], data->Y[b])
@@ -336,10 +336,10 @@ static inline bool updateSolution(_2optData *data, _2optMoveData bestFix)
     }
 
     // update cost cache
-    data->costCache[bestFix.edge0] = altEdge0Cost;
-    data->costCache[bestFix.edge1] = altEdge1Cost;
+    data->costCache[bestFix->edge0] = altEdge0Cost;
+    data->costCache[bestFix->edge1] = altEdge1Cost;
 
-    for (int s = bestFix.edge0+1, b = bestFix.edge1-1; s < b; s++, b--)
+    for (int s = bestFix->edge0+1, b = bestFix->edge1-1; s < b; s++, b--)
         swapElems(data->costCache[s], data->costCache[b])
 
     return true;
