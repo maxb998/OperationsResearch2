@@ -10,12 +10,12 @@
 #define SUBOPT_EM "em"
 #define SUBOPT_TABU "tabu"
 #define SUBOPT_VNS "vns"
-#define SUBOPT_ANNEALING "annealing"
-#define SUBOPT_GENETIC "genetic"
-#define SUBOPT_BENDERS "benders"
-#define SUBOPT_BRANCHCUT "branch-cut"
-#define SUBOPT_HARDFIX "hardfix"
-#define SUBOPT_LOCALBRANCHING "local-branching"
+#define SUBOPT_ANNEALING "anneal"
+#define SUBOPT_GENETIC "gene"
+#define SUBOPT_BENDERS "bnd"
+#define SUBOPT_BRANCHCUT "bc"
+#define SUBOPT_HARDFIX "hf"
+#define SUBOPT_LOCALBRANCHING "lb"
 
 #define SUBOPT_GRASP_ALMOSTBEST "almostbest"
 #define SUBOPT_GRASP_RANDOM "random"
@@ -66,6 +66,20 @@ static const char *modeStrings[] = {
     SUBOPT_LOCALBRANCHING
 };
 
+static const char *metaInitModeStrings[] = {
+    SUBOPT_NN,
+    SUBOPT_EM
+};
+
+static const char *cplexInitModeStrings[] = {
+    SUBOPT_NN,
+    SUBOPT_EM,
+    SUBOPT_TABU,
+    SUBOPT_VNS,
+    SUBOPT_ANNEALING,
+    SUBOPT_GENETIC
+};
+
 #define GRASP_DOC "\
 Specify to Grasp mode (DEFAULT=random)\n" \
 SUBOPT_BLANKSPACE SUBOPT_GRASP_ALMOSTBEST "\t: The Use of grasp will be limited to selecting another good choice with default probability value\n" \
@@ -78,7 +92,7 @@ Specify the heuristic that vns shall use at the start when finding the base solu
 DOC_NN DOC_EM
 #define METAHEURISTICS_INIT_MODES_COUNT HEURISTICS_MODES_COUNT
 
-#define MATHEUR_INIT_MODE_DOC "\
+#define CPLEX_INIT_MODE_DOC "\
 Specify which Heuristic/Metaheuristic to use as initialization for cplex\n" \
 DOC_NN DOC_EM DOC_TABU DOC_VNS DOC_ANNEALING DOC_GENETIC
 #define MATHEUR_INIT_MODES_COUNT (HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT)
@@ -154,6 +168,61 @@ static double parseDouble(char *arg, const char *paramName);
 
 static void checkEssentials(Instance *inst);
 
+enum ArgDType
+{
+    DTYPE_NONE, // flag type, no input
+    DTYPE_STRING,
+    DTYPE_UINT,
+    DTYPE_UINT_LIST, // list of unsigned integers with length to be specified
+    DTYPE_DOUBLE
+};
+
+struct ArgOption
+{
+    const char key; // Key character that can be used to set the option at the execution of the program as "-KEY" (set to 0 if not used)
+    const char *name; // Name of the option that is set when running the program and called with "--NAME"
+    const enum ArgDType dtype; // Datatype of the option
+    const int listLen; // Use to specify length of list types (separator is hardcoded ',')
+    const char *doc; // Documentation string
+    const char **subopts; // String array contaning the suboptions to match (only if dtype is string)
+};
+
+
+static const struct ArgOption optionNames[] = {
+    {.key='f', .name="file", .dtype=DTYPE_STRING, .doc="Location of the .tsp file containing the instance to use", .subopts=NULL},
+    {.key='t', .name="tlim", .dtype=DTYPE_DOUBLE, .doc="Specify time limit for the execution", .subopts=NULL},
+    {.key='m', .name="mode", .dtype=DTYPE_STRING, .doc=ARGP_MODE_DOC, .subopts=modeStrings},
+
+    {.key=0, .name="graspType", .dtype=DTYPE_STRING, .doc=GRASP_DOC, .subopts=graspStrings},
+    {.key=0, .name="graspChance", .dtype=DTYPE_DOUBLE, .doc="Chance of a grasp event to trigger", .subopts=NULL},
+    {.key=0, .name="nnTryall", .dtype=DTYPE_NONE, .doc="Specify to make Nearest Neighbor start from each node instead of chosing a random one each time", .subopts=NULL},
+    {.key=0, .name="emFarthest", .dtype=DTYPE_NONE, .doc="Specify to make Extra Mileage initialization the farthest nodes each time instead of a random one each time", .subopts=NULL},
+
+    {.key=0, .name="metaInit", .dtype=DTYPE_STRING, .doc=METAHEURISTICS_INIT_MODE_DOC, .subopts=metaInitModeStrings},
+    {.key=0, .name="metaRestartThreshold", .dtype=DTYPE_UINT, .doc="Specify the threshold for non-improving iterations of vns or tabu berfore restarting from best solution", .subopts=metaInitModeStrings},
+    {.key=0, .name="tabuTenureSize", .dtype=DTYPE_UINT, .doc="Specify how big the tenure should be in Tabu Search", .subopts=NULL},
+    {.key=0, .name="vnsKickSize", .dtype=DTYPE_UINT_LIST, .listLen=2, .doc="Specify the magnitude of the \"kick\" that randomizes the solution in vns. Eg: --vnsKickSize 2,6", .subopts=NULL},
+    {.key=0, .name="geneticParams", .dtype=DTYPE_UINT_LIST, .listLen=4, .doc="Specify the sizes of Population, Crossover, Mutation and Reintroduction in that order in the genetic algorithm. Eg: --geneticParams 50,25,25,5", .subopts=NULL},
+    {.key=0, .name="annealTemperature", .dtype=DTYPE_DOUBLE, .doc="Specify temperature exponent for Simulated Annealing procedure. Actual temperature is computed by 10^exp where exp is the value given here", .subopts=NULL},
+
+    {.key=0, .name="cplexInit", .dtype=DTYPE_STRING, .doc=CPLEX_INIT_MODE_DOC, .subopts=cplexInitModeStrings},
+    {.key=0, .name="cplexDisablePatching", .dtype=DTYPE_NONE, .doc="Disable the ability to find a way to merge subtours during benders and branch and cut to build a feasible solution", .subopts=NULL},
+    {.key=0, .name="cplexEnableWarmStart", .dtype=DTYPE_NONE, .doc="Enable the ability to find a solution by means of heuristic and metaheuristics and use it to \"warm start\" cplex when using benders of branch and cut methods", .subopts=NULL},
+    {.key=0, .name="cplexDisableSolPosting", .dtype=DTYPE_NONE, .doc="Disable the ability of cplex of posting the best feasible solution found at any point during the branch and cut method", .subopts=NULL},
+    {.key=0, .name="cplexDisableUsercuts", .dtype=DTYPE_NONE, .doc="Disable the ability of using concorde's functions to find connected components during cplex relaxation and add cuts that violate such components as usercuts", .subopts=NULL},
+
+    {.key=0, .name="2opt", .dtype=DTYPE_NONE, .doc="Specify to use 2-opt at the end of the selected heuristic", .subopts=NULL},
+    {.key=0, .name="3opt", .dtype=DTYPE_NONE, .doc="Specify to use 3-opt at the end of the selected heuristic", .subopts=NULL},
+
+    {.key=0, .name="seed", .dtype=DTYPE_UINT, .doc="Random Seed [0,MAX_INT32] to use as random seed for the current run. If -1 seed will be random", .subopts=NULL},
+    {.key='j', .name="threads", .dtype=DTYPE_UINT, .doc="Maximum number of threads to use. If not specified gets maximum automatically", .subopts=NULL},
+    {.key='r', .name="roundcosts", .dtype=DTYPE_NONE, .doc="Specify this if yout want to use rounded version of edge cost", .subopts=NULL},
+    {.key='p', .name="plot", .dtype=DTYPE_NONE, .doc="Specify this if yout want to plot final result", .subopts=NULL},
+    {.key='s', .name="save", .dtype=DTYPE_STRING, .doc="Specify this if yout want to save final result in run", .subopts=NULL},
+    {.key='l', .name="loglvl", .dtype=DTYPE_STRING, .doc=LOG_LEVEL_DOC, .subopts=logLevelStrings},
+    {.key='c', .name="computationtype", .dtype=DTYPE_STRING, .doc=COMPUTATION_TYPE_DOC, .subopts=compTypeStrings},
+};
+
 
 void argParse(Instance * inst, int argc, char *argv[])
 {
@@ -174,7 +243,7 @@ void argParse(Instance * inst, int argc, char *argv[])
         { .name="geneticParams", .key=ARGP_GENETIC_PARAMS, .arg="UINT,UINT,UINT", .flags=0, .doc="Specify the sizes of Population, Crossover, Mutation and Reintroduction in that order in the genetic algorithm. Eg: --geneticParams 50,25,25\n", .group=3 },
         { .name="annealTemperature", .key=ARGP_ANNEAL_TEMP, .arg="FLOAT", .flags=0, .doc="Specify temperature exponent for Simulated Annealing procedure. Actual temperature is computed by 10^exp where exp is the value given here\n", .group=3 },
 
-        { .name="cplexInit", .key=ARGP_CPLEX_INIT_MODE, .arg="STRING", .flags=0, .doc=MATHEUR_INIT_MODE_DOC, .group=4 },
+        { .name="cplexInit", .key=ARGP_CPLEX_INIT_MODE, .arg="STRING", .flags=0, .doc=CPLEX_INIT_MODE_DOC, .group=4 },
         { .name="cplexDisablePatching", .key=ARGP_CPLEX_PATCHING, .arg=NULL, .flags=0, .doc="Disable the ability to find a way to merge subtours during benders and branch and cut to build a feasible solution", .group=4 },
         { .name="cplexEnableWarmStart", .key=ARGP_CPLEX_WARMSTART, .arg=NULL, .flags=0, .doc="Enable the ability to find a solution by means of heuristic and metaheuristics and use it to \"warm start\" cplex when using benders of branch and cut methods", .group=4 },
         { .name="cplexDisableSolPosting", .key=ARGP_CPLEX_POSTING, .arg=NULL, .flags=0, .doc="Disable the ability of cplex of posting the best feasible solution found at any point during the branch and cut method", .group=4 },
