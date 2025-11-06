@@ -34,6 +34,7 @@ typedef struct
     bool approxSearch;
     bool notFinished;
     double printTimeSec;
+    bool printLog;
 
     _3optMoveData bestFixes[MAX_THREADS];
 } _3optData;
@@ -57,14 +58,6 @@ typedef struct
 } wrapper;
 
 
-// Decides whether to print LOG_LVL_NOTICE benchmarking information(n° of iterations and iter/sec) at the end of the run -> Used because when a metaheuristic calls 3Opt a lot those lines really clutter a lot the console
-static bool printPerformanceLog = false;
-// Set global varaible
-void set3OptPerformanceBenchmarkLogMT(bool val)
-{
-    printPerformanceLog = val;
-}
-
 static void *run3OptThread(void* arg);
 
 // Perform solution update accordingly (invert part of the solution between selected indexes(edge0,edge1) of the bestFix)
@@ -86,7 +79,7 @@ static inline void _3OptBestFixApproxAVX(wrapper *w, int edge0);
 
 
 
-void apply3OptBestFixMT(Solution *sol)
+void apply3OptBestFixMT(Solution *sol, bool printLog)
 {
     Instance *inst = sol->instance;
     int n = inst->nNodes;
@@ -138,12 +131,12 @@ void apply3OptBestFixMT(Solution *sol)
     for (int i = n + 1; i < n + AVX_VEC_SIZE; i++) // fill remaining slots with non-interfering values
         costCache[i] = INFINITY;
 
-    apply3OptBestFix_fastIterativelyMT(sol, X, Y, costCache, sectionCopy);
+    apply3OptBestFix_fastIterativelyMT(sol, X, Y, costCache, sectionCopy, printLog);
 
     free(costCache);
 }
 
-void apply3OptBestFix_fastIterativelyMT(Solution *sol, float *X, float *Y, float *costCache, int *sectionCopy)
+void apply3OptBestFix_fastIterativelyMT(Solution *sol, float *X, float *Y, float *costCache, int *sectionCopy, bool printLog)
 {
     struct timespec timeStruct;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
@@ -178,7 +171,21 @@ void apply3OptBestFix_fastIterativelyMT(Solution *sol, float *X, float *Y, float
         }
     #endif
 
-    _3optData data = { .sol=sol, .X=X, .Y=Y, .costCache=costCache, .sectionCopy=sectionCopy, .iter=0, .nThreads=sol->instance->params.nThreads, .threadsWaiting=0, .nextEdge=0, .approxSearch=false, .notFinished=true, .printTimeSec=startTime };
+    _3optData data = {
+        .sol=sol,
+        .X=X,
+        .Y=Y,
+        .costCache=costCache,
+        .sectionCopy=sectionCopy,
+        .iter=0,
+        .nThreads=sol->instance->params.nThreads,
+        .threadsWaiting=0,
+        .nextEdge=0,
+        .approxSearch=false,
+        .notFinished=true,
+        .printTimeSec=startTime,
+        .printLog=printLog
+    };
     if (inst->params.compType & COMP_AVX)
         data.approxSearch = true;
 
@@ -205,7 +212,7 @@ void apply3OptBestFix_fastIterativelyMT(Solution *sol, float *X, float *Y, float
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double elapsed = cvtTimespec2Double(timeStruct) - startTime;
-    if (printPerformanceLog)
+    if (printLog)
     {
         LOG(LOG_LVL_NOTICE, "Total number of iterations: %lu", data.iter);
         LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)data.iter/elapsed);
@@ -238,7 +245,7 @@ static void *run3OptThread(void* arg)
                 bool result = updateSolution(data, &bestFix);
                 if (!result && data->approxSearch)
                 {
-                    if (printPerformanceLog)
+                    if (data->printLog)
                         LOG(LOG_LVL_DEBUG, "apply3OptBestFix_fastIterativelyMT[%d]: Switching from Approximated Search to Exact Search", data->iter);
                     data->approxSearch = false;
                 }
@@ -254,7 +261,7 @@ static void *run3OptThread(void* arg)
 
                 clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
                 double currentTime = cvtTimespec2Double(timeStruct);
-                if (printPerformanceLog && (currentTime - data->printTimeSec > LOG_INTERVAL))
+                if (data->printLog && (currentTime - data->printTimeSec > LOG_INTERVAL))
                 {   
                     LOG(LOG_LVL_INFO, "3Opt running: cost is %lf at iteration %4lu with last optimization of %lf", cvtCost2Double(data->sol->cost), data->iter, -bestFix.costOffset);
                     data->printTimeSec = currentTime;

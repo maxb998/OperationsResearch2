@@ -270,7 +270,7 @@ static void * runSimulatedAnnealing(void * arg)
         LOG(LOG_LVL_DEBUG, "[%d] Giving up and running 2-Opt at temp=%e", thSpecific->iters, thSpecific->temperature);
 
         // "fake" remaining annealing move with very low temperature (only improving moves) using 2opt, way less time than just waiting for improving moves to come up at random
-        apply2OptBestFix_fastIteratively(sol, thSpecific->X, thSpecific->Y, thSpecific->costCache);
+        apply2OptBestFix_fastIteratively(sol, thSpecific->X, thSpecific->Y, thSpecific->costCache, false);
 
         LOG(LOG_LVL_DEBUG, "[%d] post 2-Opt solution cost = %lf", thSpecific->iters, cvtCost2Double(thSpecific->sol.cost));
 

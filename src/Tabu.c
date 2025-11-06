@@ -106,7 +106,7 @@ void TabuSearch(Solution *sol, double timeLimit)
 
     sol->indexPath[inst->nNodes] = sol->indexPath[0];
 
-    apply2OptBestFix(sol); // isn't necessary since it's solution should already be 2-optimized, but just to be sure
+    apply2OptBestFix(sol, false); // isn't necessary since it's solution should already be 2-optimized, but just to be sure
 
     ThreadSharedData thShared = initThreadSharedData(sol, inst->params.tabuTenureSize, startTime + timeLimit);
     ThreadSpecificData thSpecifics[MAX_THREADS];
@@ -254,7 +254,7 @@ static void *runTabu(void *arg)
 
         int n2OptMoves;
         // use 2opt to optimize (setting edges in the costCache to -INFINITY effectively lock that edges)
-        n2OptMoves = apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->X, thSpecific->Y, thSpecific->costCache);
+        n2OptMoves = apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->X, thSpecific->Y, thSpecific->costCache, false);
 
         while (n2OptMoves > 0)
         {
@@ -264,7 +264,7 @@ static void *runTabu(void *arg)
                 checkThSpecificData(thSpecific);
             #endif
 
-            n2OptMoves = apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->X, thSpecific->Y, thSpecific->costCache);
+            n2OptMoves = apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->X, thSpecific->Y, thSpecific->costCache, false);
         }
 
         if (nonImprovingIterCount > restartThreshold)

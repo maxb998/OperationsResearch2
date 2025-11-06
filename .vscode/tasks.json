@@ -16,12 +16,11 @@
             "detail": "Task to build all when testing"
         },
         {
-            "label": "Build Exec",
+            "label": "Build Release",
             "type": "shell",
             "command": "make",
             "args": [
-                "build",
-                "MODE=exec"
+                "build"
             ],
             "group": {
                 "kind": "build",

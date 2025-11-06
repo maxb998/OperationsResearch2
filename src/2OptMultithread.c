@@ -33,6 +33,7 @@ typedef struct
     bool approxSearch;
     bool notFinished;
     double printTimeSec;
+    bool printLog;
 
     _2optMoveData bestFixes[MAX_THREADS];
 } _2optData;
@@ -42,15 +43,6 @@ typedef struct
     _2optData *data;
     int threadID;
 } wrapper;
-
-
-// Decides whether to print LOG_LVL_NOTICE benchmarking information(n° of iterations and iter/sec) at the end of the run -> Used because when a metaheuristic calls 2opt a lot those lines really clutter a lot the console
-static bool print2OptLog = false;
-// Set global varaible
-void set2OptPerformanceBenchmarkLogMT(bool val)
-{
-    print2OptLog = val;
-}
 
 
 // Perform solution update accordingly (invert part of the solution between selected indexes(edge0,edge1) of the bestFix)
@@ -66,7 +58,7 @@ static inline void _2OptBestFixApproxAVX(wrapper *w, int edge0);
 static void *run2OptThread(void* arg);
 
 
-void apply2OptBestFixMT(Solution *sol)
+void apply2OptBestFixMT(Solution *sol, bool printLog)
 {
     Instance *inst = sol->instance;
     int n = inst->nNodes;
@@ -115,12 +107,12 @@ void apply2OptBestFixMT(Solution *sol)
     for (int i = n + 1; i < n + AVX_VEC_SIZE; i++) // fill remaining slots with non-interfering values
         costCache[i] = INFINITY;
 
-    apply2OptBestFix_fastIterativelyMT(sol, X, Y, costCache);
+    apply2OptBestFix_fastIterativelyMT(sol, X, Y, costCache, printLog);
 
     free(costCache);
 }
 
-int apply2OptBestFix_fastIterativelyMT(Solution *sol, float *X, float *Y, float *costCache)
+int apply2OptBestFix_fastIterativelyMT(Solution *sol, float *X, float *Y, float *costCache, bool printLog)
 {
     struct timespec timeStruct;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
@@ -157,7 +149,20 @@ int apply2OptBestFix_fastIterativelyMT(Solution *sol, float *X, float *Y, float 
         }
     #endif
         
-    _2optData data = { .sol=sol, .X=X, .Y=Y, .costCache=costCache, .iter=0, .nThreads=sol->instance->params.nThreads, .threadsWaiting=0, .nextEdge=0, .approxSearch=false, .notFinished=true, .printTimeSec=startTime };
+    _2optData data = {
+        .sol=sol,
+        .X=X,
+        .Y=Y,
+        .costCache=costCache,
+        .iter=0,
+        .nThreads=sol->instance->params.nThreads,
+        .threadsWaiting=0,
+        .nextEdge=0,
+        .approxSearch=false,
+        .notFinished=true,
+        .printTimeSec=startTime,
+        .printLog=printLog
+    };
     if (inst->params.compType & COMP_AVX)
         data.approxSearch = true;
 
@@ -184,7 +189,7 @@ int apply2OptBestFix_fastIterativelyMT(Solution *sol, float *X, float *Y, float 
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double elapsed = cvtTimespec2Double(timeStruct) - startTime;
-    if (print2OptLog)
+    if (printLog)
     {
         LOG(LOG_LVL_NOTICE, "Total number of iterations: %lu", data.iter);
         LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)data.iter/elapsed);
@@ -220,7 +225,7 @@ static void *run2OptThread(void* arg)
                 {
                     if (!result && data->approxSearch)
                     {
-                        if (print2OptLog)
+                        if (data->printLog)
                             LOG(LOG_LVL_DEBUG, "apply2OptBestFix_fastIterativelyMT[%d]: Switching from Approximated Search to Exact Search", data->iter);
                         data->approxSearch = false;
                     }
@@ -242,7 +247,7 @@ static void *run2OptThread(void* arg)
 
                 clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
                 double currentTime = cvtTimespec2Double(timeStruct);
-                if (print2OptLog && (currentTime - data->printTimeSec > LOG_INTERVAL))
+                if (data->printLog && (currentTime - data->printTimeSec > LOG_INTERVAL))
                 {   
                     LOG(LOG_LVL_INFO, "2Opt running: cost is %lf at iteration %4lu with last optimization of %lf", cvtCost2Double(data->sol->cost), data->iter, -bestFix.costOffset);
                     data->printTimeSec = currentTime;
@@ -315,7 +320,7 @@ static inline bool updateSolution(_2optData *data, _2optMoveData *bestFix)
     // update cost
     sol->cost += cvtFloat2Cost(altEdge0Cost) + cvtFloat2Cost(altEdge1Cost) - cvtFloat2Cost(data->costCache[bestFix->edge0]) - cvtFloat2Cost(data->costCache[bestFix->edge1]);
 
-    if (print2OptLog)
+    if (data->printLog)
     {
         LOG(LOG_LVL_TRACE, "2Opt: [%d] Updating solution by switching edge (%d,%d)[%d] with edge (%d,%d)[%d] reducing cost by %f. New Cost = %lf", data->iter,
             sol->indexPath[bestFix->edge0], sol->indexPath[bestFix->edge0 + 1], bestFix->edge0,

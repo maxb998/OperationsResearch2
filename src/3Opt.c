@@ -39,15 +39,6 @@ typedef struct
 } _3optMoveData;
 
 
-// Decides whether to print LOG_LVL_NOTICE benchmarking information(n° of iterations and iter/sec) at the end of the run -> Used because when a metaheuristic calls 3Opt a lot those lines really clutter a lot the console
-static bool printPerformanceLog = false;
-// Set global varaible
-void set3OptPerformanceBenchmarkLog(bool val)
-{
-    printPerformanceLog = val;
-}
-
-
 // Perform solution update accordingly (invert part of the solution between selected indexes(edge0,edge1) of the bestFix)
 static inline bool updateSolution(_3optData *data, _3optMoveData bestFix);
 
@@ -66,7 +57,7 @@ static inline _3optMoveData _3OptBestFixApproxAVX(_3optData *data);
 
 
 
-void apply3OptBestFix(Solution *sol)
+void apply3OptBestFix(Solution *sol, bool printLog)
 {
     Instance *inst = sol->instance;
     int n = inst->nNodes;
@@ -117,12 +108,12 @@ void apply3OptBestFix(Solution *sol)
     for (int i = n + 1; i < n + AVX_VEC_SIZE; i++) // fill remaining slots with non-interfering values
         costCache[i] = INFINITY;
 
-    apply3OptBestFix_fastIteratively(sol, X, Y, costCache, sectionCopy);
+    apply3OptBestFix_fastIteratively(sol, X, Y, costCache, sectionCopy, printLog);
 
     free(costCache);
 }
 
-void apply3OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *costCache, int *sectionCopy)
+void apply3OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *costCache, int *sectionCopy, bool printLog)
 {
     struct timespec timeStruct;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
@@ -223,7 +214,7 @@ void apply3OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *
 
         clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
         double currentTime = cvtTimespec2Double(timeStruct);
-        if (printPerformanceLog && (currentTime - printTimeSec > LOG_INTERVAL))
+        if (printLog && (currentTime - printTimeSec > LOG_INTERVAL))
         {   
             LOG(LOG_LVL_INFO, "3Opt running: cost is %lf at iteration %4lu with last optimization of %lf", cvtCost2Double(sol->cost), data.iter, -bestFix.costOffset);
             printTimeSec = currentTime;
@@ -233,7 +224,7 @@ void apply3OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *
 
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double elapsed = cvtTimespec2Double(timeStruct) - startTime;
-    if (printPerformanceLog)
+    if (printLog)
     {
         LOG(LOG_LVL_NOTICE, "Total number of iterations: %lu", data.iter);
         LOG(LOG_LVL_NOTICE, "Iterations-per-second: %lf", (double)data.iter/elapsed);

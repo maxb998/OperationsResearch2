@@ -192,67 +192,48 @@ Solution ExtraMileage(Instance *inst, double timeLimit);
 //###################################################################################################################################
 // 2OPT
 //###################################################################################################################################
-/*!
-* @brief Set the option to view performance related statistics on 2opt runs
-# @param val True to enable, false to disable
-*/
-void set2OptPerformanceBenchmarkLog(bool val);
-
-/*!
-* @brief Set the option to view performance related statistics on 2opt runs for MT version
-# @param val True to enable, false to disable
-*/
-void set2OptPerformanceBenchmarkLogMT(bool val);
 
 /*!
 * @brief  Applies 2Opt solution optimizer to sol.
 * @param sol Solution to optimize.
 */
-void apply2OptBestFix(Solution *sol);
+void apply2OptBestFix(Solution *sol, bool printLog);
 
 /*!
 * @brief  Applies 2Opt solution optimizer to sol using multiple threads.
 * @param sol Solution to optimize.
 */
-void apply2OptBestFixMT(Solution *sol);
-
+void apply2OptBestFixMT(Solution *sol, bool printLog);
 
 /*!
 * @brief  Same as apply2OptBestFix, but expects costCache array and, if using AVX, X and Y arrays all coherent with sol.indexPath. If not using AVX pass X = Y = NULL
 * @param sol Solution to optimize.
 * @result Number of optmizations made(iterations)
 */
-int apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *costCache);
+int apply2OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *costCache, bool printLog);
 
-int apply2OptBestFix_fastIterativelyMT(Solution *sol, float *X, float *Y, float *costCache);
+int apply2OptBestFix_fastIterativelyMT(Solution *sol, float *X, float *Y, float *costCache, bool printLog);
 
 //###################################################################################################################################
 // 3OPT
 //###################################################################################################################################
-/*!
-* @brief Set the option to view performance related statistics on 2opt runs
-# @param val True to enable, false to disable
-*/
-void set3OptPerformanceBenchmarkLog(bool val);
-
-void set3OptPerformanceBenchmarkLogMT(bool val);
 
 /*!
 * @brief  Applies 2Opt solution optimizer to sol.
 * @param sol Solution to optimize.
 */
-void apply3OptBestFix(Solution *sol);
+void apply3OptBestFix(Solution *sol, bool printLog);
 
-void apply3OptBestFixMT(Solution *sol);
+void apply3OptBestFixMT(Solution *sol, bool printLog);
 
 
 /*!
 * @brief  Same as apply2OptBestFix, but expects costCache array and, if using AVX, X and Y arrays all coherent with sol.indexPath. If not using AVX pass X = Y = NULL
 * @param sol Solution to optimize.
 */
-void apply3OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *costCache, int *sectionCopy);
+void apply3OptBestFix_fastIteratively(Solution *sol, float *X, float *Y, float *costCache, int *sectionCopy, bool printLog);
 
-void apply3OptBestFix_fastIterativelyMT(Solution *sol, float *X, float *Y, float *costCache, int *sectionCopy);
+void apply3OptBestFix_fastIterativelyMT(Solution *sol, float *X, float *Y, float *costCache, int *sectionCopy, bool printLog);
 
 
 //###################################################################################################################################
