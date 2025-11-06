@@ -26,7 +26,7 @@ Instance newInstance ()
         .X = NULL, .Y = NULL,
         .edgeCostMat = NULL,
         .params = {
-            .inputFile = { 0 },
+            .inputFile = NULL,
             .mode=MODE_NONE,
             .tlim=-1.,
             
