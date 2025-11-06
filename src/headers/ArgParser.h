@@ -27,7 +27,7 @@ typedef struct
     const char **subNames; // String array contaning the sub-options to match (only if dtype is string)
     const char **subDoc; // String array of documentation for each sub-option
     const unsigned int subCount; // Number of suboptions available
-    void (*func)(); // Pointer to the function to call after standard parsing is done (function params must be (char **args, int count; void *dataPtr))
+    void (*func)(); // Pointer to the function to call after standard parsing is done (function params must be (char *arg, void *dataPtr; void *funcData))
     void *funcData; // Pointer to data that will be given to the function called after the standard parsing
 } ArgOption;
 
