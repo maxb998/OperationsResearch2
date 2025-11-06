@@ -94,7 +94,7 @@ struct GeneticParams
 // data structures
 typedef struct
 {
-	char inputFile[1000];
+	char *inputFile;
 	enum Mode mode;
 	double tlim;
 

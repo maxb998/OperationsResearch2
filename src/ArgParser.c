@@ -1,429 +1,410 @@
-#include "Tsp.h"
+#include "ArgParser.h"
 
-#include <argp.h>
 #include <unistd.h>
 #include <string.h>
-
-#define SUBOPT_BLANKSPACE " "
-
-#define SUBOPT_NN "nn"
-#define SUBOPT_EM "em"
-#define SUBOPT_TABU "tabu"
-#define SUBOPT_VNS "vns"
-#define SUBOPT_ANNEALING "annealing"
-#define SUBOPT_GENETIC "genetic"
-#define SUBOPT_BENDERS "benders"
-#define SUBOPT_BRANCHCUT "branch-cut"
-#define SUBOPT_HARDFIX "hardfix"
-#define SUBOPT_LOCALBRANCHING "local-branching"
-
-#define SUBOPT_GRASP_ALMOSTBEST "almostbest"
-#define SUBOPT_GRASP_RANDOM "random"
-
-#define SUBOPT_LOG_ERROR "error"
-#define SUBOPT_LOG_CRITICAL "critical"
-#define SUBOPT_LOG_WARNING "warning"
-#define SUBOPT_LOG_NOTICE "notice"
-#define SUBOPT_LOG_INFO "info"
-#define SUBOPT_LOG_DEBUG "debug"
-#define SUBOPT_LOG_TRACE "trace"
-
-// #define SUBOPT_COMP_AUTO "auto"
-#define SUBOPT_COMP_BASIC "base"
-#define SUBOPT_COMP_MATRIX "matrix"
-#define SUBOPT_COMP_AVX "avx"
-
-#define DOC_NN SUBOPT_BLANKSPACE SUBOPT_NN "\t\t: Use Nearest Neighbor\n"
-#define DOC_EM SUBOPT_BLANKSPACE SUBOPT_EM "\t\t: Use Extra Mileage\n"
-#define DOC_TABU SUBOPT_BLANKSPACE SUBOPT_TABU "\t\t: Use Tabu Search\n"
-#define DOC_VNS SUBOPT_BLANKSPACE SUBOPT_VNS "\t\t: Use Variable Neighborhood Search\n"
-#define DOC_ANNEALING SUBOPT_BLANKSPACE SUBOPT_ANNEALING "\t\t: Use Simulated Annealing\n"
-#define DOC_GENETIC SUBOPT_BLANKSPACE SUBOPT_GENETIC "\t\t: Use Genetic Algorithm\n"
-#define DOC_BENDERS SUBOPT_BLANKSPACE SUBOPT_BENDERS "\t: Use Benders method\n"
-#define DOC_BRANCHCUT SUBOPT_BLANKSPACE SUBOPT_BRANCHCUT "\t: Use cplex generic callback to perform Branch & Cut\n"
-#define DOC_HARDFIX SUBOPT_BLANKSPACE SUBOPT_HARDFIX "\t: Use Hard Fixing Matheuristic\n"
-#define DOC_LOCALBRANCHING SUBOPT_BLANKSPACE SUBOPT_LOCALBRANCHING "\t: Use Local Branching Matheuristic\n"
-
-#define ARGP_MODE_DOC "\
-Specify the type of solver to use \n"\
-DOC_NN DOC_EM DOC_TABU DOC_VNS DOC_ANNEALING DOC_GENETIC DOC_BENDERS DOC_BRANCHCUT DOC_HARDFIX DOC_LOCALBRANCHING
-
-#define HEURISTICS_MODES_COUNT 3
-#define METAHEUR_MODES_COUNT 3
-#define CPLEX_SOLVERS_COUNT 4
-
-#define MODES_COUNT (HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT + CPLEX_SOLVERS_COUNT)
-static const char *modeStrings[] = {
-    SUBOPT_NN,
-    SUBOPT_EM,
-    SUBOPT_TABU,
-    SUBOPT_VNS,
-    SUBOPT_ANNEALING,
-    SUBOPT_GENETIC,
-    SUBOPT_BENDERS,
-    SUBOPT_BRANCHCUT,
-    SUBOPT_HARDFIX,
-    SUBOPT_LOCALBRANCHING
-};
-
-#define GRASP_DOC "\
-Specify to Grasp mode (DEFAULT=random)\n" \
-SUBOPT_BLANKSPACE SUBOPT_GRASP_ALMOSTBEST "\t: The Use of grasp will be limited to selecting another good choice with default probability value\n" \
-SUBOPT_BLANKSPACE SUBOPT_GRASP_RANDOM "\t: At every iteration have a completely random choice with default probability\n"
-
-static const char *graspStrings[] = { SUBOPT_GRASP_ALMOSTBEST, SUBOPT_GRASP_RANDOM };
-
-#define METAHEURISTICS_INIT_MODE_DOC "\
-Specify the heuristic that vns shall use at the start when finding the base solution (DEFAULT=nn)\n" \
-DOC_NN DOC_EM
-#define METAHEURISTICS_INIT_MODES_COUNT HEURISTICS_MODES_COUNT
-
-#define MATHEUR_INIT_MODE_DOC "\
-Specify which Heuristic/Metaheuristic to use as initialization for cplex\n" \
-DOC_NN DOC_EM DOC_TABU DOC_VNS DOC_ANNEALING DOC_GENETIC
-#define MATHEUR_INIT_MODES_COUNT (HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT)
-
-#define LOG_LEVEL_DOC "\
-Specify the log level (DEFAULT=log)\n" \
-SUBOPT_BLANKSPACE SUBOPT_LOG_ERROR "\t\t: Show only error messages\n" \
-SUBOPT_BLANKSPACE SUBOPT_LOG_CRITICAL "\t: Show critical messages and all above\n" \
-SUBOPT_BLANKSPACE SUBOPT_LOG_WARNING "\t: Show warning and all above\n" \
-SUBOPT_BLANKSPACE SUBOPT_LOG_NOTICE "\t: Show notice messages and all above\n" \
-SUBOPT_BLANKSPACE SUBOPT_LOG_INFO "\t\t: Show info messages and all above\n" \
-SUBOPT_BLANKSPACE SUBOPT_LOG_DEBUG "\t\t: Show debug messages and all above\n" \
-SUBOPT_BLANKSPACE SUBOPT_LOG_TRACE "\t\t: Show all messages\n"
-
-static const char *logLevelStrings[] = { SUBOPT_LOG_ERROR, SUBOPT_LOG_CRITICAL, SUBOPT_LOG_WARNING, SUBOPT_LOG_NOTICE, SUBOPT_LOG_INFO, SUBOPT_LOG_DEBUG, SUBOPT_LOG_TRACE };
-#define LOGLVLSCOUNT sizeof(logLevelStrings)/sizeof(*logLevelStrings)
-
-#define COMPUTATION_TYPE_DOC "\
-Specify the way cost computations are performed\n"\
-SUBOPT_BLANKSPACE SUBOPT_COMP_BASIC "\t\t: Standard way of perfoming cost computations one at a time\n"\
-SUBOPT_BLANKSPACE SUBOPT_COMP_MATRIX "\t: Use a matrix to precompute all the costs in the beginning only\n"\
-SUBOPT_BLANKSPACE SUBOPT_COMP_AVX "\t\t: Use a avx instructions to perform cost computations where possible\n"\
-// SUBOPT_BLANKSPACE SUBOPT_COMP_AUTO "\t\t: Automatically choose the best option based on the size of the instance\n"
-
-static const char *compTypeStrings[] = {SUBOPT_COMP_BASIC, SUBOPT_COMP_MATRIX, SUBOPT_COMP_AVX};
-#define COMPTYPECOUNT sizeof(compTypeStrings)/sizeof(*compTypeStrings)
-
-enum argpKeys{
-    ARGP_FILE='f',
-    ARGP_MODE='m',
-    ARGP_TLIM='t',
-
-    ARGP_GRASP_MODE=300,
-    ARGP_GRASP_CHANCE,
-    ARGP_NN_TRYALL,
-    ARGP_EM_FARTHEST,
-    
-    ARGP_META_INIT_MODE,
-    ARGP_RESTART_THRESHOLD,
-    ARGP_TABU_TENURESIZE,
-    ARGP_VNS_KICKSIZE,
-    ARGP_GENETIC_PARAMS,
-    ARGP_ANNEAL_TEMP,
-
-    ARGP_CPLEX_INIT_MODE,
-    ARGP_CPLEX_PATCHING,
-    ARGP_CPLEX_WARMSTART,
-    ARGP_CPLEX_POSTING,
-    ARGP_CPLEX_USERCUTS,
-
-    ARGP_2OPT='2',
-    ARGP_3OPT='3',
-
-    ARGP_SEED=299,
-    ARGP_NTHREADS='j',
-    ARGP_ROUND='r',
-    ARGP_PLOT='p',
-    ARGP_SAVE='s',
-    ARGP_LOG_LEVEL='l',
-
-    ARGP_COMPUTATION_TYPE='c',
-};
-
-error_t argpParser(int key, char *arg, struct argp_state *state);
-
-static void parseModeOption(char *arg, enum Mode *savePtr, const char **optionsSet, const int from, const int to, const char *optionName);
-static void parseEnumOption(char *arg, int *savePtr, const char **optionsSet, const int from, const int to, const char *optionName);
-
-static int parseUint(char *arg, char expectedEndChr, const char *paramName);
-static void parseUintList(char*arg, const char separator, int *savePtr, int listLenght, const char *paramName);
-static double parseDouble(char *arg, const char *paramName);
+#include <sys/ioctl.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdbool.h>
+#include <stdarg.h>
 
 
-static void checkEssentials(Instance *inst);
+static void parserError (char * line, ...);
+
+static void parseList(char *arg, const char separator, void *savePtr, int listLen, const char *paramName, void parserFunc());
+
+static void parseUint(char *arg, char *expectedEndPtr, int *savePtr, int index, const char *paramName);
+
+static void parseDouble(char *arg, char *expectedEndPtr, double *savePtr, int index, const char *paramName);
+
+static void parseStringSubopts(char *arg, const char *subOptList[], int *savePtr, int subOptCount, const char *paramName);
+
+static void printOptDoc(const char *doc, char *strBuff, int startPos, int terminalWidth);
+
+static void printSuboptDoc(const char *doc, char *strBuff, int startPos, int terminalWidth);
+
+static void printHelp(ArgOption *opt, ArgGroup *groups);
 
 
-void argParse(Instance * inst, int argc, char *argv[])
+void parser(ArgOption *opt, ArgGroup *groups, int argc, char *argv[])
 {
-    static struct argp_option argpOptions[] = {
-        { .name="file", .key=ARGP_FILE, .arg="FILENAME", .flags=0, .doc="Location of the .tsp file containing the instance to use\n", .group=1 },
-        { .name="mode", .key=ARGP_MODE, .arg="MODE", .flags=0, .doc=ARGP_MODE_DOC, .group=1 },
-        { .name="tlim", .key=ARGP_TLIM, .arg="FLOAT", .flags=0, .doc="Specify time limit for the execution\n", .group=1 },
-
-        { .name="graspType", .key=ARGP_GRASP_MODE, .arg="STRING", .flags=0, .doc=GRASP_DOC, .group=2 },
-        { .name="graspChance", .key=ARGP_GRASP_CHANCE, .arg="FLOAT", .flags=0, .doc="Probability for a \"gras event\" to happen", .group=2 },
-        { .name="nnTryall", .key=ARGP_NN_TRYALL, .arg=NULL, .flags=0, .doc="Specify to make Nearest Neighbor start from each node instead of chosing a random one each time\n", .group=2 },
-        { .name="emFarthest", .key=ARGP_EM_FARTHEST, .arg=NULL, .flags=0, .doc="Specify to make Extra Mileage initialization the farthest nodes each time instead of a random one each time\n", .group=2 },
-
-        { .name="metaRestartThreshold", .key=ARGP_RESTART_THRESHOLD, .arg="UINT", .flags=0, .doc="Specify the threshold for non-improving iterations of vns or tabu berfore restarting from best solution\n", .group=3 },
-        { .name="metaInit", .key=ARGP_META_INIT_MODE, .arg="STRING", .flags=0, .doc=METAHEURISTICS_INIT_MODE_DOC, .group=3 },
-        { .name="tabuTenureSize", .key=ARGP_TABU_TENURESIZE, .arg="UINT", .flags=0, .doc="Specify how big the tenure should be in Tabu Search\n", .group=3 },
-        { .name="vnsKickSize", .key=ARGP_VNS_KICKSIZE, .arg="UINT,UINT", .flags=0, .doc="Specify the size of the random \"kick\" that randomizes the solution in vns. Eg: --vnsKickSize 2,6\n", .group=3 },
-        { .name="geneticParams", .key=ARGP_GENETIC_PARAMS, .arg="UINT,UINT,UINT", .flags=0, .doc="Specify the sizes of Population, Crossover, Mutation and Reintroduction in that order in the genetic algorithm. Eg: --geneticParams 50,25,25\n", .group=3 },
-        { .name="annealTemperature", .key=ARGP_ANNEAL_TEMP, .arg="FLOAT", .flags=0, .doc="Specify temperature exponent for Simulated Annealing procedure. Actual temperature is computed by 10^exp where exp is the value given here\n", .group=3 },
-
-        { .name="cplexInit", .key=ARGP_CPLEX_INIT_MODE, .arg="STRING", .flags=0, .doc=MATHEUR_INIT_MODE_DOC, .group=4 },
-        { .name="cplexDisablePatching", .key=ARGP_CPLEX_PATCHING, .arg=NULL, .flags=0, .doc="Disable the ability to find a way to merge subtours during benders and branch and cut to build a feasible solution", .group=4 },
-        { .name="cplexEnableWarmStart", .key=ARGP_CPLEX_WARMSTART, .arg=NULL, .flags=0, .doc="Enable the ability to find a solution by means of heuristic and metaheuristics and use it to \"warm start\" cplex when using benders of branch and cut methods", .group=4 },
-        { .name="cplexDisableSolPosting", .key=ARGP_CPLEX_POSTING, .arg=NULL, .flags=0, .doc="Disable the ability of cplex of posting the best feasible solution found at any point during the branch and cut method", .group=4 },
-        { .name="cplexDisableUsercuts", .key=ARGP_CPLEX_USERCUTS, .arg=NULL, .flags=0, .doc="Disable the ability of using concorde's functions to find connected components during cplex relaxation and add cuts that violate such components as usercuts", .group=4 },
-
-        { .name="2opt", .key=ARGP_2OPT, .arg=NULL, .flags=0, .doc="Specify to use 2-opt at the end of the selected heuristic\n", .group=5 },
-        { .name="3opt", .key=ARGP_3OPT, .arg=NULL, .flags=0, .doc="Specify to use 3-opt at the end of the selected heuristic\n", .group=5 },
-
-        { .name="seed", .key=ARGP_SEED, .arg="UINT", .flags=0, .doc="Random Seed [0,MAX_INT32] to use as random seed for the current run. If -1 seed will be random\n", .group=6 },
-        { .name="threads", .key=ARGP_NTHREADS, .arg="UINT", .flags=0, .doc="Maximum number of threads to use. If not specified gets maximum automatically\n", .group=6 },
-        { .name="roundcosts", .key=ARGP_ROUND, .arg=NULL, .flags=0, .doc="Specify this if yout want to use rounded version of edge cost\n", .group=6 },
-        { .name="plot", .key=ARGP_PLOT, .arg=NULL, .flags=0, .doc="Specify this if yout want to plot final result\n", .group=6 },
-        { .name="save", .key=ARGP_SAVE, .arg=NULL, .flags=0, .doc="Specify this if yout want to save final result in run/\n", .group=6 },
-        { .name="loglvl", .key=ARGP_LOG_LEVEL, .arg="STRING", .flags=0, .doc=LOG_LEVEL_DOC, .group=6 },
-        { .name="computationtype", .key=ARGP_COMPUTATION_TYPE, .arg="STRING", .flags=0, .doc=COMPUTATION_TYPE_DOC, .group=6 },
-        { 0 }
-    };
-
-    static struct argp argpData = {
-        .options = argpOptions,
-        .parser=argpParser, 
-    };
-
-    argp_parse(&argpData, argc, argv, 0, 0, inst);
-}
-
-error_t argpParser(int key, char *arg, struct argp_state *state)
-{
-    Instance *inst = state->input;
-
-    switch (key)
+    // Data structure check
+    for (int i = 0; groups[i].priority != -1; i++)
     {
-    case ARGP_FILE: // get the input filename
-        if (access(arg, R_OK)) // check if file exists and is accessible
-        {
-            LOG(LOG_LVL_ERROR, "File \"%s\" cannot be accessed or does not exist", arg);
-            return ARGP_ERR_UNKNOWN;
-        }
-        strncpy(inst->params.inputFile, arg, strlen(arg));
-        break;
+        if (groups[i].priority < 0)
+            parserError("groups must have all unique priorities greater than zero");
 
-    case ARGP_MODE:
-        parseModeOption(arg, &inst->params.mode, modeStrings, 0, MODES_COUNT, "mode");
-        break;
-
-    case ARGP_TLIM:
-        inst->params.tlim = parseDouble(arg, "tlim");
-        if (inst->params.tlim <= 0)
-            throwError("Time limit cannot be zero or negative");
-        break;
-
-    case ARGP_GRASP_MODE:
-        parseEnumOption(arg, (int*)&inst->params.graspType, graspStrings, 0, 2, "graspType");
-        break;
-    
-    case ARGP_GRASP_CHANCE:
-        inst->params.graspChance = parseDouble(arg, "graspChance");
-        if ((inst->params.graspChance < 0.) || (inst->params.graspChance > 1.))
-            throwError("Grasp Chance must be inside the interval [0,1]");
-        break;
-
-    case ARGP_NN_TRYALL:
-        inst->params.nnFirstNodeOption = NN_FIRST_TRYALL;
-        break;
-    
-    case ARGP_EM_FARTHEST:
-        inst->params.emInitOption = EM_INIT_FARTHEST_POINTS;
-        break;
-    
-    case ARGP_META_INIT_MODE:
-        parseModeOption(arg, &inst->params.metaheurInitMode, modeStrings, 0, HEURISTICS_MODES_COUNT, "metaInit");
-        break;
-
-    case ARGP_RESTART_THRESHOLD:
-        inst->params.metaRestartThreshold = parseUint(arg, 0, "metaRestartThreshold");
-        break;
-
-    case ARGP_TABU_TENURESIZE:
-        inst->params.tabuTenureSize = parseUint(arg, 0, "tabuTenureSize");
-        if (inst->params.tabuTenureSize == 0)
-            throwError("tabuTenureSize cannot be set to 0");
-        break;
-    
-    case ARGP_VNS_KICKSIZE:
-        parseUintList(arg, ',', (int*)&inst->params.vnsKickSize, 2, "vnsKickSize");
-
-        if ((inst->params.vnsKickSize.Max < 2) || inst->params.vnsKickSize.Min < 2)
-            throwError("vnsKickSize components must be both positive greater than two");
-        if (inst->params.vnsKickSize.Max < inst->params.vnsKickSize.Min)
-            throwError("vnsKickSize must be specified in the current format: MIN-KICK,MAX-KICK. Eg. 5,20   MIN_KICK cannot be greater or equal than MAX_KICK");
-        break;
-    
-    case ARGP_GENETIC_PARAMS:
-        parseUintList(arg, ',', (int*)&inst->params.geneticParams, 4, "geneticParams");
-        break;
-    
-    case ARGP_ANNEAL_TEMP:
-        inst->params.annealingTemperature = pow(10., parseDouble(arg, "annealTemperature"));
-        break;
-
-    case ARGP_CPLEX_INIT_MODE:
-        parseModeOption(arg, &inst->params.matheurInitMode, modeStrings, 0, HEURISTICS_MODES_COUNT + METAHEUR_MODES_COUNT, "cplexInit");
-        break;
-
-    case ARGP_CPLEX_PATCHING:
-        inst->params.cplexPatching = false;
-        break;
-
-    case ARGP_CPLEX_WARMSTART:
-        inst->params.cplexWarmStart = true;
-        break;
-    
-    case ARGP_CPLEX_POSTING:
-        inst->params.cplexSolPosting = false;
-        break;
-
-    case ARGP_CPLEX_USERCUTS:
-        inst->params.cplexUsercuts = false;
-        break;
-
-    case ARGP_2OPT:
-        inst->params.use2Opt = true;
-        break;
-    
-    case ARGP_3OPT:
-        inst->params.use3Opt = true;
-        break;
-
-    case ARGP_SEED:
-        inst->params.randomSeed = parseUint(arg, 0, "seed");
-        break;
-
-    case ARGP_NTHREADS:
-        inst->params.nThreads = parseUint(arg, 0, "nThreads");
-        break;
-
-    case ARGP_ROUND:
-        inst->params.roundWeights = true;
-        break;
-
-    case ARGP_PLOT:
-        inst->params.showPlot = true;
-        break;
-    
-    case ARGP_SAVE:
-        inst->params.saveSolution = true;
-        break;
-    
-    case ARGP_LOG_LEVEL:
-        parseEnumOption(arg, (int*)&inst->params.logLevel, logLevelStrings, 0, LOGLVLSCOUNT, "loglvl");
-        setLogLevel(inst->params.logLevel);
-        break;
-    
-    case ARGP_COMPUTATION_TYPE:
-        parseEnumOption(arg, (int*)&inst->params.compType, compTypeStrings, 0, COMPTYPECOUNT, "computationtype");
-        inst->params.compType = 1 << inst->params.compType;
-    
-    case ARGP_KEY_END:
-        // check if necessary flags have been provided
-        checkEssentials(inst);
-        break;
-
-    default:
-        return ARGP_ERR_UNKNOWN;
+        for (int j = i+1; groups[j].priority != -1; j++)
+            if (groups[i].priority == groups[j].priority)
+                parserError("groups must have all unique priorities greater than zero");
     }
 
-    return 0;
-}
-
-static void parseModeOption(char *arg, enum Mode *savePtr, const char **optionsSet, const int from, const int to, const char *optionName)
-{
-    for (int i = from; i < to; i++)
+    // help msg
+    for (int i = 1; i < argc; i++)
     {
-        if (strcmp(arg, optionsSet[i]) == 0)
+        if ((strcmp(argv[i], "--help") == 0) || (strcmp(argv[i], "-?") == 0))
         {
-            *savePtr = (int)powl(2, i);
-            return;
+            printHelp(opt, groups);
+            exit(0);
         }
     }
+
+    for (int i = 0; opt[i].key != -1; i++)
+    {
+        if (*(opt[i].name) == 0)
+            parserError("option number %d does not have a name", i);
+        if (opt[i].group == NULL)
+            parserError("option number %d does not have a group", i);
+        if (opt[i].count < 0)
+            parserError("option \"%s\" has a listLen value of %d that is not valid", opt[i].name, opt[i].count);
+        if (opt[i].subCount && (opt[i].dtype != DTYPE_STRING))
+            parserError("option \"%s\" specifies a number of suboptions when its specified datatype is not string", opt[i].name);
+        if ((opt[i].subCount < 0) || (opt[i].subCount == 1))
+            parserError("option \"%s\" has a subCount value of %d that is not valid", opt[i].name, opt[i].subCount);
+        if (opt[i].subCount && (opt[i].subNames == NULL))
+            parserError("option \"%s\" has suboptions but no names were given", opt[i].name);
+        if (opt[i].subCount && (opt[i].subDoc == NULL))
+            parserError("option \"%s\" has suboptions but no documentation for them where provided", opt[i].name);
+        if ((opt[i].dataPtr == NULL) && (opt[i].func == NULL))
+            parserError("option \"%s\" has null dataPtr and func. This makes the option meaningless", opt[i].name);
+    }
     
-    throwError("%s: argument not valid", optionName);
+    for (int i = 1; i < argc; i++) // start from 1 ignoring exec path
+    {
+        int optID = 0;
+        if ((argv[i][0] == '-') && (argv[i][1] == '-'))
+            while ((strcmp(opt[optID].name, &(argv[i][2])) != 0) && (opt[optID].key != -1))
+                optID++;
+        else if (argv[i][0] == '-')
+            while ((opt[optID].key != argv[i][2]) && (opt[optID].key != -1))
+                optID++;
+        else // positional arg -> TODO
+            parserError("positional arguments are not yet supported");
+        
+        if (opt[optID].key == -1)
+            parserError("option \"%s\" is not valid", argv[i]);
+
+        int listLen = opt[optID].count;
+        if (listLen == 0) listLen = 1;
+
+        if (opt[optID].dataPtr)
+        {
+            switch (opt[optID].dtype)
+            {
+            case DTYPE_NONE:
+                *(bool*)opt[optID].dataPtr = true;
+                i--;
+                break;
+            case DTYPE_UINT:
+                parseList(argv[i+1], ',', opt[optID].dataPtr, listLen, argv[i], parseUint);
+                break;
+            case DTYPE_DOUBLE:
+                parseList(argv[i+1], ',', opt[optID].dataPtr, listLen, argv[i], parseDouble);
+                break;
+            case DTYPE_STRING:
+                if (opt[optID].subCount == 0) // single string option
+                {
+                    char **ptr = opt[optID].dataPtr;
+                    *ptr = argv[i+1];
+                }
+                else
+                    parseStringSubopts(argv[i+1], opt[optID].subNames, opt[optID].dataPtr, opt[optID].subCount, argv[i]);
+                break;
+            }
+        }
+
+        i++;
+
+        if (opt[optID].func)
+            opt[optID].func(argv[i], opt[optID].dataPtr, opt[optID].funcData);
+    }
 }
 
-static void parseEnumOption(char *arg, int *savePtr, const char **optionsSet, const int from, const int to, const char *optionName)
+static void parserError (char * line, ...)
 {
-    for (int i = from; i < to; i++)
+    printf("ArgParser Error: ");
+
+    va_list params;
+    va_start(params, line);
+    vprintf(line, params);
+    va_end(params);
+
+    printf("\n");
+
+    exit(1);
+}
+
+static void parseList(char *arg, const char separator, void *savePtr, int listLen, const char *paramName, void parserFunc())
+{
+    char *endPtr = arg, *startPtr = arg;
+    for (int i = 0; i < listLen; i++)
     {
-        if (strcmp(arg, optionsSet[i]) == 0)
+        if (startPtr == NULL)
+            parserError("missing and element for the option %s. Check --help", paramName);
+        
+        while ((*endPtr != separator) && (*endPtr != 0))
+            endPtr++;
+
+        parserFunc(arg, endPtr, savePtr, i, paramName);
+
+        endPtr++;
+        startPtr = endPtr;
+    }
+}
+
+static void parseUint(char *arg, char *expectedEndPtr, int *savePtr, int index, const char *paramName)
+{
+    char *endPtr;
+    long num = strtol(arg, &endPtr, 10);
+    if (num < 0)
+        parserError("the value specified as \"%s\" cannot be negative", paramName);
+    if (endPtr != expectedEndPtr)
+        parserError("there are extra character after the %s value", paramName);
+
+    savePtr[index] = num;
+}
+
+static void parseDouble(char *arg, char *expectedEndPtr, double *savePtr, int index, const char *paramName)
+{
+    char *endPtr;
+    double num = strtod(arg, &endPtr);
+    if (num <= 0)
+        parserError("the value specified as %s must be a real number", paramName);
+    if (endPtr != expectedEndPtr)
+        parserError("there are extra character after the %s value", paramName);
+
+    savePtr[index] = num;
+}
+
+static void parseStringSubopts(char *arg, const char *subOptList[], int *savePtr, int subOptCount, const char *paramName)
+{
+    for (int i = 0; i < subOptCount; i++)
+    {
+        if (strcmp(arg, subOptList[i]) == 0)
         {
             *savePtr = i;
             return;
         }
     }
+    parserError("suboption %s specified with option %s was not recognized", arg, paramName);
+}
+
+static int printDocLineAndResetBuffer(char strBuff[], int writeIndex, int rstLen)
+{
+    strBuff[writeIndex] = 0;
+    printf("%s\n", strBuff);
     
-    throwError("%s: argument not valid", optionName);
+    writeIndex = 0;
+    while (writeIndex < rstLen)
+        strBuff[writeIndex++] = ' ';
+    
+    return writeIndex;
 }
 
-static int parseUint(char *arg, char expectedEndChr, const char *paramName)
+static void printOptDoc(const char *doc, char *strBuff, int startPos, int terminalWidth)
 {
-    char *endPtr;
-    long cvt = strtol(arg, &endPtr, 10);
-    if (cvt < 0)
-        throwError("The value specified as %s cannot be negative", paramName);
-    if (*endPtr != expectedEndChr)
-        throwError("There are extra character after the %s value or formatting is not correct. Check formats with --help", paramName);
-
-    return (int)cvt;
-}
-
-static void parseUintList(char*arg, const char separator, int *savePtr, int listLenght, const char *paramName)
-{
-    char *endPtr = arg, *startPtr = arg;
-    for (int i = 0; i < listLenght; i++)
+    int writeIndex = startPos;
+    int i = 0;
+    int doclen = strlen(doc);
+    while (i < doclen)
     {
-        if (startPtr == NULL)
-            throwError("Missing and element for the option %s. Check --help", paramName);
-
-        savePtr[i] = (int)strtol(startPtr, &endPtr, 10);
-        if (savePtr[i] < 0)
-            throwError("Cannot use negative numbers in %s option", paramName);
-        if ((*endPtr != separator) && (*endPtr != 0))
-            throwError("Option %s not formatted correctly. Check correct format in --help", paramName);
-
-        startPtr = endPtr + 1;
+        // word detector
+        int wordlen = 0;
+        while ((i+wordlen < doclen) && (doc[i+wordlen] != ' '))
+            wordlen++;
+        
+        // if word doesn't fit terminal width print and start new line
+        if (writeIndex + wordlen > terminalWidth)
+        {
+            writeIndex = printDocLineAndResetBuffer(strBuff, writeIndex, startPos);
+        }
+        else
+        {
+            strncpy(&strBuff[writeIndex], &doc[i], wordlen+1);
+            i += wordlen+1;
+            writeIndex += wordlen+1;
+        }
     }
+
+    // print last word in doc string
+    writeIndex = printDocLineAndResetBuffer(strBuff, writeIndex, terminalWidth);
 }
 
-static double parseDouble(char *arg, const char *paramName)
+static void printSuboptDoc(const char *doc, char *strBuff, int startPos, int terminalWidth)
 {
-    char *endPtr;
-    double cvt = strtod(arg, &endPtr);
-    if (cvt <= 0)
-        throwError("The value specified as %s must be a real number", paramName);
-    if (endPtr != &arg[strlen(arg)])
-        LOG(LOG_LVL_WARN, "There are extra character after the %s value", paramName);
+    int writeIndex = startPos;
+    int i = 0;
+    int doclen = strlen(doc);
+    while (i < doclen)
+    {
+        // word detector
+        int wordlen = 0;
+        while ((i+wordlen < doclen) && (doc[i+wordlen] != ' '))
+            wordlen++;
+        
+        // if word doesn't fit terminal width print and start new line
+        if (writeIndex + wordlen > terminalWidth)
+        {
+            writeIndex = printDocLineAndResetBuffer(strBuff, writeIndex, startPos);
+        }
+        else
+        {
+            strncpy(&strBuff[writeIndex], &doc[i], wordlen+1);
+            i += wordlen+1;
+            writeIndex += wordlen+1;
+        }
+    }
 
-    return cvt;
+    // print last word in doc string
+    writeIndex = printDocLineAndResetBuffer(strBuff, writeIndex, terminalWidth);
 }
 
+static void printHelp(ArgOption *opt, ArgGroup *groups)
+{
+    static const char *dtypeHelpStr[] = {
+        " ",
+        " <STRING> ",
+        " <UINT> ",
+        " <DOUBLE> "
+    };
+
+    // get terminal width
+    unsigned short terminalWidth;
+    {
+        struct winsize w;
+        ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+        terminalWidth = w.ws_col;
+    }
+
+    int nGroups = 0;
+    while (groups[nGroups].priority >= 0)
+        nGroups++;
+
+    ArgGroup **gsorted = malloc(sizeof(ArgGroup*)*nGroups);
+    if (gsorted == NULL)
+        parserError("failed to allocate memory for %u bytes", sizeof(ArgGroup*)*nGroups);
+
+    for (int i = 0; i < nGroups; i++)
+        gsorted[i] = &groups[i];
+
+    // sort
+    for (int i = 0; i < nGroups; i++)
+    {
+        for (int j = i+1; j < nGroups; j++)
+        {
+            if (gsorted[j]->priority < gsorted[i]->priority)
+            {
+                register ArgGroup *temp = gsorted[i];
+                gsorted[i] = gsorted[j];
+                gsorted[j] = temp;
+            }
+        }
+    }
+
+    char *strBuff = malloc(1024);
+    if (strBuff == NULL)
+        parserError("failed to allocate memory for %u bytes", 1024);
+
+    for (int g = 0; g < nGroups; g++)
+    {
+        strncpy(strBuff, gsorted[g]->description, terminalWidth);
+        printDocLineAndResetBuffer(strBuff, strlen(gsorted[g]->description), terminalWidth);
+
+        // identify max length option to generate spacing
+        int maxOptLen = 0;
+        for (int i = 0; opt[i].key != -1; i++)
+        {
+            if (opt[i].group->priority != gsorted[g]->priority)
+                continue;
+
+            int currLen = 2;
+            if (opt[i].key != 0)
+                currLen += 3;
+            currLen += strlen(opt[i].name) + 2;
+            currLen += strlen(dtypeHelpStr[opt[i].dtype]);
+
+            if (currLen > maxOptLen)
+                maxOptLen = currLen;
+        }
+        if (maxOptLen == 0)
+            parserError("internal error, maxOptLen == 0");
+
+        for (int k = 0; opt[k].key != -1; k++)
+        {
+            if (opt[k].group->priority != gsorted[g]->priority)
+                continue;
+
+            int writeIndex = 2;
+            if (opt[k].key != 0)
+            {
+                strBuff[writeIndex++] = '-';
+                strBuff[writeIndex++] = opt[k].key;
+                strBuff[writeIndex++] = ' ';
+            }
+
+            strBuff[writeIndex++] = '-';
+            strBuff[writeIndex++] = '-';
+            strcpy(&strBuff[writeIndex], opt[k].name);
+            writeIndex += strlen(opt[k].name);
+            
+            strcpy(&strBuff[writeIndex], dtypeHelpStr[opt[k].dtype]);
+            writeIndex += strlen(dtypeHelpStr[opt[k].dtype]);
+
+            while (writeIndex < maxOptLen)
+                strBuff[writeIndex++] = ' ';
+            
+            printOptDoc(opt[k].doc, strBuff, maxOptLen, terminalWidth);
+            
+            // print sub-options doc
+            if (opt[k].subCount)
+            {
+                int maxSuboptLen = 0;
+                for (int i = 0; i < opt[k].subCount; i++)
+                {
+                    int currLen = 3;
+                    currLen += strlen(opt[k].subNames[i]) + 3;
+
+                    if (currLen > maxSuboptLen)
+                        maxSuboptLen = currLen;
+                }
+
+                for (int s = 0; s < opt[k].subCount; s++)
+                {
+                    writeIndex = maxOptLen;
+                    strBuff[writeIndex++] = ' ';
+                    strBuff[writeIndex++] = ' ';
+                    strBuff[writeIndex++] = ' ';
+
+                    strcpy(&strBuff[writeIndex], opt[k].subNames[s]);
+                    writeIndex += strlen(opt[k].subNames[s]);
+                    strBuff[writeIndex++] = ':';
+
+                    while (writeIndex < maxOptLen + maxSuboptLen)
+                        strBuff[writeIndex++] = ' ';
+
+                    printSuboptDoc(opt[k].subDoc[s], strBuff, writeIndex, terminalWidth);
+                }
+                printf("\n");
+            }
+        }
+
+        printf("\n");
+    }
+
+    free(strBuff);
+    free(gsorted);
+}
+
+/*
 static void checkEssentials(Instance *inst)
 {
     if (inst->params.mode == MODE_NONE)
-        throwError("Missing --mode (-m) option in arguments. A mode must be specified. Check --help or --usage to check what modes are avilable");
+        parserError("Missing --mode (-m) option in arguments. A mode must be specified. Check --help or --usage to check what modes are avilable");
     if (inst->params.inputFile[0] == 0)
-        throwError("Missing --file (-f) option in arguments. An input file must be specified");
+        parserError("Missing --file (-f) option in arguments. An input file must be specified");
     if (inst->params.tlim == -1.)
-        throwError("Missing --tlim (-t) option in arguments. A time limit must be specified");
+        parserError("Missing --tlim (-t) option in arguments. A time limit must be specified");
 }
-
 
 void printInfo(Instance *inst)
 {
@@ -441,7 +422,7 @@ void printInfo(Instance *inst)
     // input file
     printf("\t" "Input File/Problem: \"%s\"\n", p->inputFile);
     // mode
-    printf("\t" "Current running mode is %s\n", modeStrings[(int)log2l(p->mode)]);
+    printf("\t" "Current running mode is %s\n", modeNames[(int)log2l(p->mode)]);
 
     // time limit
     if (p->tlim != -1)
@@ -455,7 +436,7 @@ void printInfo(Instance *inst)
         if (p->graspType == GRASP_NONE)
             printf("\tGrasp is off\n");
         else
-            printf("\tGrasp is on, grasp mode id is %s with chance %lf\n", graspStrings[p->graspType], p->graspChance);
+            printf("\tGrasp is on, grasp mode id is %s with chance %lf\n", graspNames[p->graspType], p->graspChance);
     }
     // 2Opt
     if (p->use2Opt || (p->mode & (MODE_TABU | MODE_VNS)))
@@ -465,11 +446,11 @@ void printInfo(Instance *inst)
     if ((p->mode & (MODE_TABU | MODE_VNS | MODE_ANNEALING)) ||
         ((p->mode & (MODE_BENDERS | MODE_BRANCH_CUT)) && p->cplexWarmStart) ||
         (p->mode & (MODE_HARDFIX | MODE_LOCAL_BRANCHING) & p->matheurInitMode & (MODE_TABU | MODE_VNS | MODE_ANNEALING)))
-        printf("\tMetaheuristics initialization set to: %s\n", modeStrings[(int)log2l(p->metaheurInitMode)]);
+        printf("\tMetaheuristics initialization set to: %s\n", modeNames[(int)log2l(p->metaheurInitMode)]);
     // matheuristics modes
     if (((p->mode & (MODE_BENDERS | MODE_BRANCH_CUT)) && p->cplexWarmStart) || 
         (p->mode & (MODE_HARDFIX | MODE_LOCAL_BRANCHING)))
-        printf("\tMatheuristics/Cplex initialization set to: %s\n", modeStrings[(int)log2l(p->matheurInitMode)]);
+        printf("\tMatheuristics/Cplex initialization set to: %s\n", modeNames[(int)log2l(p->matheurInitMode)]);
 
     // nn options
     if (useNN)
@@ -505,7 +486,7 @@ void printInfo(Instance *inst)
     if (p->saveSolution)
         printf("\tFinal solution of this run will be saved in a .tour file inside OperationsResearch2/runs\n");
     // log level
-    printf("\tLog level = %s", logLevelStrings[p->logLevel]);
+    printf("\tLog level = %s", logLevelNames[p->logLevel]);
 
     printf("\n");
-}
+}*/

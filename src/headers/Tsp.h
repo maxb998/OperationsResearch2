@@ -6,7 +6,7 @@
 
 #include "limits.h"
 
-//#define DEBUG
+// #define DEBUG
 
 //###################################################################################################################################
 // ARG_PARSER 
@@ -14,15 +14,9 @@
 
 /*!
 * @brief Parse arguments and store them in inst->params
-* @param inst Pointer initialized instance(newInstance())
+* @result Parsed arguments inside Parameters struct
 */
-void argParse(Instance * inst, int argc, char *argv[]);
-
-/*!
-* @brief Print parameters and defaults value for the run. Call this after argParse
-* @param inst Instance
-*/
-void printInfo(Instance *inst);
+Parameters argParse(int argc, char *argv[]);
 
 //###################################################################################################################################
 // TSP_IOUTILS

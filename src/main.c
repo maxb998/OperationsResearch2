@@ -10,6 +10,7 @@
 #define MATHEUR_METAHEUR_INIT_RATIO 0.1
 #define MATHEUR_INIT_RATIO 0.01
 
+
 static Solution runHeuristic(Instance *inst, enum Mode mode, double tlim);
 static void runMetaheuristic(Solution *sol, enum Mode mode, double tlim);
 static void runExactSolver(Solution *sol, enum Mode mode, double tlim);
@@ -22,7 +23,7 @@ static void run3Opt(Solution *sol);
 int main (int argc, char *argv[])
 {
     Instance inst = newInstance();
-    argParse(&inst, argc, argv);
+    inst.params = argParse(argc, argv);
 
     if ((inst.params.compType & (COMP_BASE|COMP_MATRIX|COMP_AVX)) == 0)
         inst.params.compType = COMP_BASE;
@@ -32,7 +33,7 @@ int main (int argc, char *argv[])
     else
         srand(time(NULL));
 
-    printInfo(&inst);
+    // printInfo(&inst);
 
     double fileReadTime = readFile(&inst);
     LOG (LOG_LVL_NOTICE, "file %s has been loaded succesfully in %lf milliseconds", inst.params.inputFile, fileReadTime * 1000.);
