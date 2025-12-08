@@ -73,7 +73,7 @@ void VariableNeighborhoodSearch(Solution *sol, double timeLimit)
 
     sol->indexPath[inst->nNodes] = sol->indexPath[0];
 
-    apply2OptBestFix(sol); // isn't necessary since it's solution should already be 2-optimized, but just to be sure
+    apply2OptBestFix(sol, false); // isn't necessary since it's solution should already be 2-optimized, but just to be sure
 
     ThreadSharedData thShared = initThreadSharedData(sol, startTime + timeLimit);
     ThreadSpecificData thSpecifics[MAX_THREADS];
@@ -205,7 +205,7 @@ static void *runVns(void *arg)
 
         LOG(LOG_LVL_TRACE, "runVns: [%d] solution has been kicked. Cost=%lf", cvtCost2Double(thSpecific->workingSol.cost));
 
-        apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->X, thSpecific->Y, thSpecific->costCache);
+        apply2OptBestFix_fastIteratively(&thSpecific->workingSol, thSpecific->X, thSpecific->Y, thSpecific->costCache, false);
 
         LOG(LOG_LVL_TRACE, "runVns: [%d] solution has been optimized. Cost=%lf", thSpecific->iterCount, cvtCost2Double(thSpecific->workingSol.cost));
 

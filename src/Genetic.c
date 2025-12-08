@@ -263,10 +263,10 @@ static void * runGenetic(void *arg)
             if (rand_r(&thSpecific->rndState) < (int)(_2OPT_PROBABILITY * RAND_MAX))
             {
                 thSpecific->population[i].cost = computeSolutionCost(&thSpecific->population[i]);
-                apply2OptBestFix(&thSpecific->population[i]);
+                apply2OptBestFix(&thSpecific->population[i], false);
 
                 if (rand_r(&thSpecific->rndState) < (int)(_3OPT_PROBABILITY * RAND_MAX))
-                    apply3OptBestFix(&thSpecific->population[i]);
+                    apply3OptBestFix(&thSpecific->population[i], false);
                     
                 *(float*)&thSpecific->population[i].cost = fitness(thSpecific, &thSpecific->population[i]);
             }
