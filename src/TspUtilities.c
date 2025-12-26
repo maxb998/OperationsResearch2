@@ -30,16 +30,17 @@ Instance newInstance ()
             .mode=MODE_NONE,
             .tlim=-1.,
             
-            .graspType=GRASP_NONE,
+            .graspType=GRASP_ALMOSTBEST,
+            .graspChance = -1,
             .nnFirstNodeOption = NN_FIRST_RANDOM,
             .emInitOption = EM_INIT_RANDOM,
 
             .metaheurInitMode = MODE_NN,
             .metaRestartThreshold = 1000,
-            .tabuTenureSize = -1,
-            .vnsKickSize = { .Max=20, .Min=5},
-            .geneticParams = { .populationSize=50, .crossoverAmount=25, .mutationAmount=25 },
-            .annealingTemperature = -1,
+            .tabuTenureSize = 0,
+            .vnsKickSize = { .Max=0 },
+            .geneticParams = { .populationSize=0 },
+            .annealingTemperature = 0,
             
             .matheurInitMode = MODE_NN,
             .cplexPatching=true,
@@ -48,6 +49,7 @@ Instance newInstance ()
             .cplexUsercuts = true,
 
             .use2Opt=false,
+            .use3Opt=false,
 
             .randomSeed = -1,
             .nThreads = nProcessors(),
@@ -59,7 +61,6 @@ Instance newInstance ()
 
             .edgeWeightType  = -1,
             .name = { 0 },
-            .graspChance = -1
         }
     };
 

@@ -68,6 +68,12 @@ void VariableNeighborhoodSearch(Solution *sol, double timeLimit)
     if (inst->params.logLevel == LOG_LVL_DEBUG)
         srand(inst->params.randomSeed);
 
+    if (inst->params.vnsKickSize.Max == 0)
+    {
+        inst->params.vnsKickSize.Min = 5;
+        inst->params.vnsKickSize.Max = 10;
+    }
+
     if (!checkSolution(sol))
         throwError("VariableNeighborhood: Input solution is not valid");
 
@@ -135,10 +141,10 @@ static ThreadSpecificData initThreadSpecificData (ThreadSharedData *thShared, un
         throwError("Vns maximum kick cannot be greater than the size of the instance, at most equal");
 
     size_t memToAlloc_kick;
-    if (PERMUTATION_THRESHOLD(inst->params.vnsKickSize.Max) < n)
-        memToAlloc_kick = inst->params.vnsKickSize.Max * sizeof(int);
-    else
+    if (n < PERMUTATION_THRESHOLD(inst->params.vnsKickSize.Max))
         memToAlloc_kick = (n - 1) * sizeof(int);
+    else
+        memToAlloc_kick = inst->params.vnsKickSize.Max * sizeof(int);
 
     size_t memToAlloc_other = n + AVX_VEC_SIZE;
     if (inst->params.compType & (COMP_BASE|COMP_AVX))

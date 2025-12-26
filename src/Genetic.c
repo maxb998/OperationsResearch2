@@ -89,6 +89,14 @@ Solution GeneticAlgorithm(Instance *inst, double timeLimit)
         srand(inst->params.randomSeed);
     #endif
 
+    if (inst->params.geneticParams.populationSize == 0)
+    {
+        inst->params.geneticParams.populationSize = 50;
+        inst->params.geneticParams.crossoverAmount = 10;
+        inst->params.geneticParams.mutationAmount = 20;
+        inst->params.geneticParams.reintroductionAmount = 10;
+    }
+
     ThreadSharedData thShared = initThreadSharedData(inst, startTime + timeLimit);
 
     ThreadSpecificData thSpecific[MAX_THREADS];

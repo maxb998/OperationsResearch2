@@ -145,7 +145,7 @@ static void parseList(char *arg, const char separator, void *savePtr, int listLe
         while ((*endPtr != separator) && (*endPtr != 0))
             endPtr++;
 
-        parserFunc(arg, endPtr, savePtr, i, paramName);
+        parserFunc(startPtr, endPtr, savePtr, i, paramName);
 
         endPtr++;
         startPtr = endPtr;

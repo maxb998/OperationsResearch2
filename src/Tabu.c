@@ -76,33 +76,30 @@ static void printTenure(ThreadSpecificData *thSpecific, char *strOut);
 
 void TabuSearch(Solution *sol, double timeLimit)
 {
-    Instance *inst = sol->instance;
-
-    if (inst->params.tabuTenureSize == -1) // auto tenure size
-        inst->params.tabuTenureSize = 2;
-    else if (inst->params.tabuTenureSize >= sol->instance->nNodes)
-        throwError("Specified Tenure size[%d] is bigger or equal to the instance size[%d]", inst->params.tabuTenureSize, sol->instance->nNodes);
-    else if (inst->params.tabuTenureSize >= sol->instance->nNodes * 97/100)
-        LOG(LOG_LVL_WARN, "Specified Tenure size[%d] is big considering the size of the instance[%d]. Tabu might get stuck and not respect the time limit", inst->params.tabuTenureSize, sol->instance->nNodes);
-
-    LOG(LOG_LVL_NOTICE, "Tabu tenure size is set to %d", inst->params.tabuTenureSize);
-
-
     // time limit management
     struct timespec timeStruct;
     clock_gettime(_POSIX_MONOTONIC_CLOCK, &timeStruct);
     double startTime = cvtTimespec2Double(timeStruct);
-
-    // must save solution time since 2opt is gonna increase it inconsistently with vns
     double initialSolutionRuntime = sol->execTime;
+
+    Instance *inst = sol->instance;
+
+    if (inst->params.tabuTenureSize == 0) // auto tenure size
+        inst->params.tabuTenureSize = 2;
+    else if (inst->params.tabuTenureSize >= sol->instance->nNodes)
+        throwError("Specified Tenure size[%d] is bigger or equal to the instance size[%d]", inst->params.tabuTenureSize, sol->instance->nNodes);
+    else if (inst->params.tabuTenureSize >= sol->instance->nNodes * 90/100)
+        LOG(LOG_LVL_WARN, "Specified Tenure size[%d] is big considering the size of the instance[%d]. Tabu might get stuck and not respect the time limit", inst->params.tabuTenureSize, sol->instance->nNodes);
+
+    LOG(LOG_LVL_NOTICE, "Tabu tenure size is set to %d", inst->params.tabuTenureSize);
 
     // reset seed if debugging
     #ifdef DEBUG
         srand(inst->params.randomSeed);
-
-        if (!checkSolution(sol))
-            throwError("Tabu Search: Input solution is not valid");
     #endif
+
+    if (!checkSolution(sol))
+        throwError("Tabu Search: Input solution is not valid");
 
     sol->indexPath[inst->nNodes] = sol->indexPath[0];
 

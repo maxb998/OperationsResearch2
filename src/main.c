@@ -23,7 +23,7 @@ static void run3Opt(Solution *sol);
 int main (int argc, char *argv[])
 {
     Instance inst = newInstance();
-    inst.params = argParse(argc, argv);
+    argParse(&inst.params, argc, argv);
 
     if ((inst.params.compType & (COMP_BASE|COMP_MATRIX|COMP_AVX)) == 0)
         inst.params.compType = COMP_BASE;

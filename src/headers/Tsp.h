@@ -16,7 +16,7 @@
 * @brief Parse arguments and store them in inst->params
 * @result Parsed arguments inside Parameters struct
 */
-Parameters argParse(int argc, char *argv[]);
+void argParse(Parameters *p, int argc, char *argv[]);
 
 //###################################################################################################################################
 // TSP_IOUTILS

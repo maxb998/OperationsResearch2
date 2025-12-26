@@ -86,7 +86,7 @@ void SimulatedAnnealing(Solution *sol, double timeLimit)
     if (!checkSolution(sol))
         throwError("SimulatedAnnealing: Input solution is not valid");
 
-    if (sol->instance->params.annealingTemperature == -1)
+    if (sol->instance->params.annealingTemperature == 0)
         sol->instance->params.annealingTemperature = pow(sol->instance->nNodes, 1.4); // kind of random for now
     
     LOG(LOG_LVL_NOTICE, "Starting temperature = %lf", sol->instance->params.annealingTemperature);
