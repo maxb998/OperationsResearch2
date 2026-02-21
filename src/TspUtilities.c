@@ -59,7 +59,7 @@ Instance newInstance ()
             .logLevel=LOG_LVL_INFO,
             .compType=0,
 
-            .edgeWeightType  = -1,
+            .edgeWeightType = EUC_2D,
             .name = { 0 },
         }
     };

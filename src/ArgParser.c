@@ -5,7 +5,6 @@
 #include <sys/ioctl.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <stdbool.h>
 #include <stdarg.h>
 
 
@@ -49,6 +48,7 @@ void parser(ArgOption *opt, ArgGroup *groups, int argc, char *argv[])
         }
     }
 
+    int optionsCount = 0;
     for (int i = 0; opt[i].key != -1; i++)
     {
         if (*(opt[i].name) == 0)
@@ -67,8 +67,19 @@ void parser(ArgOption *opt, ArgGroup *groups, int argc, char *argv[])
             parserError("option \"%s\" has suboptions but no documentation for them where provided", opt[i].name);
         if ((opt[i].dataPtr == NULL) && (opt[i].func == NULL))
             parserError("option \"%s\" has null dataPtr and func. This makes the option meaningless", opt[i].name);
+        optionsCount++;
     }
-    
+
+    bool *requiredMap = malloc(optionsCount*2);
+    if (requiredMap == NULL)
+        parserError("Failed to allocate %d bytes of memory", optionsCount*2);
+    bool *alreadyParsed = &(requiredMap[optionsCount]);
+    for (int i = 0; opt[i].key != -1; i++)
+    {
+        requiredMap[i] = opt[i].required;
+        alreadyParsed[i] = 0;
+    }
+
     for (int i = 1; i < argc; i++) // start from 1 ignoring exec path
     {
         int optID = 0;
@@ -76,11 +87,16 @@ void parser(ArgOption *opt, ArgGroup *groups, int argc, char *argv[])
             while ((strcmp(opt[optID].name, &(argv[i][2])) != 0) && (opt[optID].key != -1))
                 optID++;
         else if (argv[i][0] == '-')
-            while ((opt[optID].key != argv[i][2]) && (opt[optID].key != -1))
+            while ((opt[optID].key != argv[i][1]) && (opt[optID].key != -1))
                 optID++;
         else // positional arg -> TODO
             parserError("positional arguments are not yet supported");
-        
+
+        requiredMap[optID] = false;
+        if (alreadyParsed[optID])
+            parserError("option \"--%s\"(or \"-%c\") can only be used once each execution", opt[optID].name, opt[optID].key);
+        alreadyParsed[optID] = true;
+
         if (opt[optID].key == -1)
             parserError("option \"%s\" is not valid", argv[i]);
 
@@ -118,6 +134,13 @@ void parser(ArgOption *opt, ArgGroup *groups, int argc, char *argv[])
         if (opt[optID].func)
             opt[optID].func(argv[i], opt[optID].dataPtr, opt[optID].funcData);
     }
+
+    for (int i = 0; i < optionsCount; i++)
+        if (requiredMap[i])
+            parserError("missing required argument \"%s\"", opt[i].name);
+    
+
+    free(requiredMap);
 }
 
 static void parserError (char * line, ...)
@@ -140,7 +163,7 @@ static void parseList(char *arg, const char separator, void *savePtr, int listLe
     for (int i = 0; i < listLen; i++)
     {
         if (startPtr == NULL)
-            parserError("missing and element for the option %s. Check --help", paramName);
+            parserError("missing and element for the option \"%s\". Check --help", paramName);
         
         while ((*endPtr != separator) && (*endPtr != 0))
             endPtr++;
@@ -159,7 +182,7 @@ static void parseUint(char *arg, char *expectedEndPtr, int *savePtr, int index, 
     if (num < 0)
         parserError("the value specified as \"%s\" cannot be negative", paramName);
     if (endPtr != expectedEndPtr)
-        parserError("there are extra character after the %s value", paramName);
+        parserError("there are extra character after the \"%s\" value", paramName);
 
     savePtr[index] = num;
 }
@@ -169,9 +192,9 @@ static void parseDouble(char *arg, char *expectedEndPtr, double *savePtr, int in
     char *endPtr;
     double num = strtod(arg, &endPtr);
     if (num <= 0)
-        parserError("the value specified as %s must be a real number", paramName);
+        parserError("the value specified as \"%s\" must be a real number", paramName);
     if (endPtr != expectedEndPtr)
-        parserError("there are extra character after the %s value", paramName);
+        parserError("there are extra character after the \"%s\" value", paramName);
 
     savePtr[index] = num;
 }
@@ -186,7 +209,7 @@ static void parseStringSubopts(char *arg, const char *subOptList[], int *savePtr
             return;
         }
     }
-    parserError("suboption %s specified with option %s was not recognized", arg, paramName);
+    parserError("suboption \"%s\" specified with option \"%s\" was not recognized", arg, paramName);
 }
 
 static int printDocLineAndResetBuffer(char strBuff[], int writeIndex, int rstLen)
@@ -394,99 +417,3 @@ static void printHelp(ArgOption *opt, ArgGroup *groups)
     free(strBuff);
     free(gsorted);
 }
-
-/*
-static void checkEssentials(Instance *inst)
-{
-    if (inst->params.mode == MODE_NONE)
-        parserError("Missing --mode (-m) option in arguments. A mode must be specified. Check --help or --usage to check what modes are avilable");
-    if (inst->params.inputFile[0] == 0)
-        parserError("Missing --file (-f) option in arguments. An input file must be specified");
-    if (inst->params.tlim == -1.)
-        parserError("Missing --tlim (-t) option in arguments. A time limit must be specified");
-}
-
-void printInfo(Instance *inst)
-{
-    Parameters *p = &inst->params;
-
-    bool useNN = (p->mode & MODE_NN) || 
-        (p->mode & (MODE_TABU | MODE_VNS | MODE_ANNEALING) & (p->metaheurInitMode & MODE_NN)) || 
-        (p->mode & (MODE_BENDERS | MODE_BRANCH_CUT) && p->cplexWarmStart && ((p->matheurInitMode & MODE_NN) | (p->metaheurInitMode & MODE_NN) && (p->matheurInitMode & (MODE_TABU | MODE_VNS | MODE_ANNEALING))));
-    bool useEM = (p->mode & MODE_EM) || 
-        (p->mode & (MODE_TABU | MODE_VNS | MODE_ANNEALING) & (p->metaheurInitMode & MODE_EM)) || 
-        (p->mode & (MODE_BENDERS | MODE_BRANCH_CUT) && p->cplexWarmStart && ((p->matheurInitMode & MODE_EM) | (p->metaheurInitMode & MODE_EM) && (p->matheurInitMode & (MODE_TABU | MODE_VNS | MODE_ANNEALING))));
-
-    printf("SETTINGS:\n");
-
-    // input file
-    printf("\t" "Input File/Problem: \"%s\"\n", p->inputFile);
-    // mode
-    printf("\t" "Current running mode is %s\n", modeNames[(int)log2l(p->mode)]);
-
-    // time limit
-    if (p->tlim != -1)
-        printf("\tTime limit of %lf seconds\n", p->tlim);
-    else
-        printf("\tTime limit is not set\n");
-
-    // grasp
-    if (useNN | useNN)
-    {
-        if (p->graspType == GRASP_NONE)
-            printf("\tGrasp is off\n");
-        else
-            printf("\tGrasp is on, grasp mode id is %s with chance %lf\n", graspNames[p->graspType], p->graspChance);
-    }
-    // 2Opt
-    if (p->use2Opt || (p->mode & (MODE_TABU | MODE_VNS)))
-        printf("\tUsing 2Opt\n");
-    
-    // metaheuristics modes
-    if ((p->mode & (MODE_TABU | MODE_VNS | MODE_ANNEALING)) ||
-        ((p->mode & (MODE_BENDERS | MODE_BRANCH_CUT)) && p->cplexWarmStart) ||
-        (p->mode & (MODE_HARDFIX | MODE_LOCAL_BRANCHING) & p->matheurInitMode & (MODE_TABU | MODE_VNS | MODE_ANNEALING)))
-        printf("\tMetaheuristics initialization set to: %s\n", modeNames[(int)log2l(p->metaheurInitMode)]);
-    // matheuristics modes
-    if (((p->mode & (MODE_BENDERS | MODE_BRANCH_CUT)) && p->cplexWarmStart) || 
-        (p->mode & (MODE_HARDFIX | MODE_LOCAL_BRANCHING)))
-        printf("\tMatheuristics/Cplex initialization set to: %s\n", modeNames[(int)log2l(p->matheurInitMode)]);
-
-    // nn options
-    if (useNN)
-        printf("\tNearest Neighbor starting node set to: %s\n", inst->params.nnFirstNodeOption == NN_FIRST_RANDOM ? "random" : "tryall");
-    // em options
-    if (useEM)
-        printf("\tExtra Mileage initialization set to: %s\n", inst->params.emInitOption == EM_INIT_RANDOM ? "random" : "farthest");
-    // cplex options
-    if (p->mode & (MODE_BENDERS | MODE_BRANCH_CUT | MODE_LOCAL_BRANCHING | MODE_HARDFIX))
-    {
-        if (!p->cplexPatching)
-            printf("\tSolutions with more than subtours found running cplex won't be patched using the Patching Heurisitic\n");
-        if (p->cplexWarmStart)
-            printf("\tCplex will be warm started using an heuristic/metaheuristic solution\n");
-    }
-    if (p->mode & (MODE_BRANCH_CUT | MODE_LOCAL_BRANCHING | MODE_HARDFIX))
-    {
-        if (!p->cplexSolPosting)
-            printf("\tCplex solution posting is disabled\n");
-        if (!p->cplexWarmStart)
-            printf("\tCplex usercuts are disabled\n");
-    }
-
-    // seed
-    if (p->randomSeed != -1)
-        printf("\tRandom Seed = %d\n", p->randomSeed);
-    // threads
-    printf("\tThreads used = %d\n", p->nThreads);
-    // roundcosts
-    if (p->roundWeights)
-        printf("\tEdge Cost is rounded according to tsplib documentation file\n");
-    // save
-    if (p->saveSolution)
-        printf("\tFinal solution of this run will be saved in a .tour file inside OperationsResearch2/runs\n");
-    // log level
-    printf("\tLog level = %s", logLevelNames[p->logLevel]);
-
-    printf("\n");
-}*/

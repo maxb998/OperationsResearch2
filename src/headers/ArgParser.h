@@ -1,6 +1,8 @@
 #ifndef ARG_PARSER
 #define ARGP_PARSER
 
+#include <stdbool.h>
+
 enum ArgDType
 {
     DTYPE_NONE, // flag type, no input
@@ -19,6 +21,7 @@ typedef struct
 {
     const char key; // Key character that can be used to set the option at the execution of the program as "-KEY" (set to 0 if not used)
     const char *name; // Name of the option that is set when running the program and called with "--NAME"
+    const bool required; // Specifies if the argument is required or not
     const enum ArgDType dtype; // Datatype of the option
     const ArgGroup *group; // pointer to group for grouping of options in help message
     void *dataPtr; // Pointer to the memory location in which save the parsed argument

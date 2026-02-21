@@ -449,3 +449,49 @@ void plotSolution(Solution *sol, const char * plotPixelSize, const char * pointC
     // close stream
     pclose(gnuplotPipe);
 }
+
+void printParams(Parameters *p)
+{
+    if (p == NULL)
+        throwError("printParams: cannot pass null as parameter");
+    
+    printf("file: %s\n", p->inputFile);
+    int idx = (int)log2f((float)p->mode);
+    printf("mode: %s (%s)\n", modeNames[idx], modeSubDocs[idx]);
+    printf("tlim: %lf\n\n", p->tlim);
+
+    printf("GRASP option: %s\n", graspNames[p->graspType+1]);
+    printf("GRASP chance: %lf\n\n", p->graspChance);
+    
+    printf("nnTryall: %d\n", p->nnFirstNodeOption);
+    printf("emFarthest: %d\n\n", p->emInitOption);
+
+    idx = (int)log2f((float)p->metaheurInitMode);
+    printf("meta init-mode: %s (%s)\n", modeNames[idx], modeSubDocs[idx]);
+    printf("meta restart-threshold: %d\n", p->metaRestartThreshold);
+    printf("tabu tenure-size: %d\n", p->tabuTenureSize);
+    printf("vns kick-size: %d,%d\n", p->vnsKickSize.Min, p->vnsKickSize.Max);
+    printf("genetic params: %d,%d,%d,%d\n", p->geneticParams.populationSize, p->geneticParams.crossoverAmount, p->geneticParams.mutationAmount, p->geneticParams.reintroductionAmount);
+    printf("annealing temperature: %lf\n\n", p->annealingTemperature);
+
+    idx = (int)log2f((float)p->matheurInitMode);
+    printf("cplex init-mode: %s (%s)\n", modeNames[idx], modeSubDocs[idx]);
+    printf("cplex patching: %d\n", p->cplexPatching);
+    printf("cplex warm-start: %d\n", p->cplexWarmStart);
+    printf("cplex posting: %d\n", p->cplexSolPosting);
+    printf("cplex usercuts: %d\n\n", p->cplexUsercuts);
+
+    printf("2opt: %d\n", p->use2Opt);
+    printf("3opt: %d\n\n", p->use3Opt);
+
+    printf("rnd-seed: %d\n", p->randomSeed);
+    printf("n-threads: %d\n", p->nThreads);
+    printf("round-weights: %d\n", p->roundWeights);
+    printf("show-plot: %d\n", p->showPlot);
+    printf("save-solution: %d\n", p->saveSolution);
+    printf("log-level: %s\n", logLevelNames[p->logLevel]);
+    printf("computation-type: %s\n\n", compTypeNames[p->compType]);
+
+    printf("edge-weight-type: %s\n", wgtTypeStr[p->edgeWeightType]);
+    printf("name: %s\n\n", p->name);
+}

@@ -1,10 +1,12 @@
 #include "Tsp.h"
 #include "ArgParser.h"
 
+#include <stdio.h>
 
-static const char *modeDoc = "Specify the type of solver to use";
-static const char *modeNames[] = {"nn", "em", "tabu", "vns", "anneal", "gene", "bnd", "bc", "hf", "lb"};
-static const char *modeSubDocs[] = {
+
+const char *modeDoc = "Specify the type of solver to use";
+const char *modeNames[] = {"nn", "em", "tabu", "vns", "anneal", "gene", "bnd", "bc", "hf", "lb"};
+const char *modeSubDocs[] = {
     "Nearest Neighbor",
     "Extra Mileage",
     "Tabu Search",
@@ -17,23 +19,23 @@ static const char *modeSubDocs[] = {
     "Local Branching (CPLEX)"
 };
 
-static const char *metaInitDoc = "Specify which initialization method to use before running a metaheuristic (DEFAULT=nn)";
+const char *metaInitDoc = "Specify which initialization method to use before running a metaheuristic (DEFAULT=nn)";
 #define  META_INIT_COUNT 2
 
-static const char *cplexInitDoc = "Specify which initialization method to warm start CPLEX";
+const char *cplexInitDoc = "Specify which initialization method to warm start CPLEX";
 #define CPLEX_INIT_COUNT 6
 
-static const char *graspDoc = "Specify to Grasp mode (DEFAULT=almostbest)";
-static const char *graspNames[] = { "none", "almostbest", "random" };
-static const char *graspSubDocs[] = {
+const char *graspDoc = "Specify to Grasp mode (DEFAULT=almostbest)";
+const char *graspNames[] = { "none", "almostbest", "random" };
+const char *graspSubDocs[] = {
     "Do not use GRASP",
     "The Use of grasp will be limited to selecting another good choice with default probability value",
     "At every iteration have a completely random choice with default probability"
 };
 
-static const char *logLevelDoc = "Specify the log level (DEFAULT=log)";
-static const char *logLevelNames[] = { "error", "critical", "warning", "notice", "info", "debug", "trace" };
-static const char *logLevelSubDocs[] = {
+const char *logLevelDoc = "Specify the log level (DEFAULT=log)";
+const char *logLevelNames[] = { "error", "critical", "warning", "notice", "info", "debug", "trace" };
+const char *logLevelSubDocs[] = {
     "Show only error messages",
     "Show critical messages and all above",
     "Show warning and all above",
@@ -43,15 +45,16 @@ static const char *logLevelSubDocs[] = {
     "Show all messages"
 };
 
-static const char *compTypeDoc = "Specify the way cost computations are performed";
-static const char *compTypeNames[] = {"base", "matrix", "avx"};
-static const char *compTypeSubDocs[] = {
+const char *compTypeDoc = "Specify the way cost computations are performed";
+const char *compTypeNames[] = {"base", "matrix", "avx"};
+const char *compTypeSubDocs[] = {
     "Standard way of perfoming cost computations one at a time",
     "Use a matrix to precompute all the costs in the beginning only",
     "Use a avx instructions to perform cost computations where possible"
 };
 
 
+// perform 2 exp by bitshifting
 static void intExp2(char *arg, void *dataPtr, void *funcData);
 
 
@@ -69,9 +72,9 @@ void argParse(Parameters *p, int argc, char *argv[])
     };
 
     ArgOption optionNames[] = {
-        {.key='f', .name="file", .dtype=DTYPE_STRING, .group=&groups[0], .doc="Location of the .tsp file containing the instance to use", .dataPtr=&p->inputFile},
-        {.key='t', .name="tlim", .dtype=DTYPE_DOUBLE, .group=&groups[0], .doc="Specify time limit for the execution", .dataPtr=&p->tlim},
-        {.key='m', .name="mode", .dtype=DTYPE_STRING, .group=&groups[0], .doc=modeDoc, .subNames=modeNames, .subDoc=modeSubDocs, .subCount=SIZE_CONST_ARR(modeNames), .dataPtr=&p->mode, .func=intExp2},
+        {.key='f', .name="file", .required=true, .dtype=DTYPE_STRING, .group=&groups[0], .doc="Location of the .tsp file containing the instance to use", .dataPtr=&p->inputFile},
+        {.key='t', .name="tlim", .required=true, .dtype=DTYPE_DOUBLE, .group=&groups[0], .doc="Specify time limit for the execution", .dataPtr=&p->tlim},
+        {.key='m', .name="mode", .required=true, .dtype=DTYPE_STRING, .group=&groups[0], .doc=modeDoc, .subNames=modeNames, .subDoc=modeSubDocs, .subCount=SIZE_CONST_ARR(modeNames), .dataPtr=&p->mode, .func=intExp2},
 
         {.key=0, .name="graspType", .dtype=DTYPE_STRING, .group=&groups[1], .doc=graspDoc, .subNames=graspNames, .subDoc=graspSubDocs, .subCount=SIZE_CONST_ARR(graspNames), .dataPtr=&p->graspType},
         {.key=0, .name="graspChance", .dtype=DTYPE_DOUBLE, .group=&groups[1], .doc="Chance of a grasp event to trigger", .dataPtr=&p->graspChance, .func=NULL},
@@ -106,8 +109,6 @@ void argParse(Parameters *p, int argc, char *argv[])
     };
 
     parser(optionNames, groups, argc, argv);
-
-    return p;
 }
 
 static void intExp2(char *arg, void *dataPtr, void *funcData)

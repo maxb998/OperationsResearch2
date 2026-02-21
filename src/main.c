@@ -33,7 +33,8 @@ int main (int argc, char *argv[])
     else
         srand(time(NULL));
 
-    // printInfo(&inst);
+    printParams(&inst.params);
+    exit(EXIT_SUCCESS);
 
     double fileReadTime = readFile(&inst);
     LOG (LOG_LVL_NOTICE, "file %s has been loaded succesfully in %lf milliseconds", inst.params.inputFile, fileReadTime * 1000.);

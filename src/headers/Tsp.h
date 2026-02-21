@@ -18,6 +18,18 @@
 */
 void argParse(Parameters *p, int argc, char *argv[]);
 
+/*!
+* @brief Print list of all parameters
+* @param p Pointer to object to print
+*/
+void printParams(Parameters *p);
+
+extern const char *modeNames[];
+extern const char *modeSubDocs[];
+extern const char *graspNames[];
+extern const char *logLevelNames[];
+extern const char *compTypeNames[];
+
 //###################################################################################################################################
 // TSP_IOUTILS
 //###################################################################################################################################
